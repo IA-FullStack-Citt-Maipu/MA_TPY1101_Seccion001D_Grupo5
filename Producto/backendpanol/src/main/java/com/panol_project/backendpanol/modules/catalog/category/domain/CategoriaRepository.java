@@ -20,6 +20,8 @@ public interface CategoriaRepository {
 
     void deactivate(UUID uuid);
 
+    void activate(UUID uuid);
+
     void deleteByUuid(UUID uuid);
 
     int countImplementsByCategoryUuid(UUID categoryUuid);

@@ -9,6 +9,7 @@ public record IndividualV2Response(
         String assetCode,
         String status,
         String condition,
+        String notes,
         @JsonProperty("current_location_uuid")
         UUID currentLocationUuid,
         Boolean active

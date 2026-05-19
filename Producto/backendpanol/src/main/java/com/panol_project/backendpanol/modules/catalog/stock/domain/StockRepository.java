@@ -22,7 +22,14 @@ public interface StockRepository {
 
     void replaceStock(UUID implementUuid, int total, int available, int reserved, int loaned, int damaged);
 
-    void updateIndividualsState(List<UUID> individualUuids, String statusLiteral, String conditionLiteral, UUID locationUuid, Boolean active);
+    void updateIndividualsState(
+            List<UUID> individualUuids,
+            String statusLiteral,
+            String conditionLiteral,
+            String notes,
+            UUID locationUuid,
+            Boolean active
+    );
 
     record ImplementStockContext(UUID implementUuid, UUID locationUuid, StockItemType itemType, Boolean active) {
     }

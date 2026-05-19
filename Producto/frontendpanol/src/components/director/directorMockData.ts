@@ -14,7 +14,7 @@ export interface InventoryStatusItem {
 }
 
 export interface AlertItem {
-  id: string;
+  uuid: string;
   severity: "critical" | "warning" | "info";
   text: string;
 }
@@ -54,10 +54,10 @@ export const inventoryStatusData: InventoryStatusItem[] = [
 ];
 
 export const alertsData: AlertItem[] = [
-  { id: "a1", severity: "critical", text: "Guantes talla M bajo stock minimo" },
-  { id: "a2", severity: "warning", text: "5 prestamos con atraso" },
-  { id: "a3", severity: "critical", text: "2 implementos criticos no disponibles" },
-  { id: "a4", severity: "info", text: "Balanza digital enviada a mantenimiento 4 veces" },
+  { uuid: "a1", severity: "critical", text: "Guantes talla M bajo stock minimo" },
+  { uuid: "a2", severity: "warning", text: "5 prestamos con atraso" },
+  { uuid: "a3", severity: "critical", text: "2 implementos criticos no disponibles" },
+  { uuid: "a4", severity: "info", text: "Balanza digital enviada a mantenimiento 4 veces" },
 ];
 
 export const requestsBySubjectData: SubjectRequest[] = [

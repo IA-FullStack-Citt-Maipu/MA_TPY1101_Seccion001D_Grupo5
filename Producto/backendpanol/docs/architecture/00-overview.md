@@ -1,8 +1,10 @@
 ﻿# Arquitectura Overview
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-05-15
-- Fuente de verdad: `ArchitectureTest`, estructura de paquetes en `src/main/java`
+- Ultima verificacion: 2026-05-17
+- Fuente de verdad: `ArchitectureTest`, estructura de paquetes en `src/main/java` y `db/migration/v25/V25__schema_alignment_big_bang.sql`
+
+Nota operativa: PostgreSQL es la base canónica y única del sistema en este tramo.
 
 ## Patrones adoptados
 
@@ -31,10 +33,10 @@
 - `catalog/location`
 - `catalog/implement`
 - `catalog/stock`
+- `loan`
 
 ## Referencias
 
 - `docs/architecture/00-matriz-canonica-vigente.md`
 - `docs/architecture/development-guidelines/09-contratos-cross-modulo.md`
 - `src/test/java/com/panol_project/backendpanol/ArchitectureTest.java`
-

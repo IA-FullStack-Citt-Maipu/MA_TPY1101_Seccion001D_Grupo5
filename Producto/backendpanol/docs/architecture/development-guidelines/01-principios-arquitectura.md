@@ -24,13 +24,14 @@ Asegurar que cada incremento preserve decisiones base:
 3. **Estado canónico en SQL**
 - Entidades transaccionales críticas se resuelven en PostgreSQL.
 
-4. **Eventos para trazabilidad, no para verdad transaccional**
-- Mongo/eventos complementan, no reemplazan estado canónico.
+4. **Eventos para integración, no para verdad transaccional**
+- `outbox_event` y el transporte eventual habilitan integración/trazabilidad.
+- La verdad transaccional principal está en PostgreSQL.
 
-5. **Evolución incremental sin big-bang**
-- Refactors arquitectónicos por módulo, con feature parity.
+5. **Migraciones por corte controlado**
+- Priorizar cambios incrementales por módulo, con feature parity.
+- Los cambios masivos de esquema deben ir con plan de corte, rollback y validación (ej. `db/migration/v25/V25__schema_alignment_big_bang.sql`).
 
 ## Regla de oro
 
 Si una decisión mezcla reglas de negocio con detalles técnicos (DB, HTTP, framework), separar antes de mergear.
-

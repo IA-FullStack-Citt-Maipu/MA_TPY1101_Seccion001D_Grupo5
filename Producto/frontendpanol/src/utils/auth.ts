@@ -10,18 +10,26 @@ interface TokenPayload {
 }
 
 const ACCESS_TOKEN_KEY = "access_token";
+const LEGACY_TOKEN_KEY = "token";
 
 export function getAccessToken(): string | null {
-  return localStorage.getItem(ACCESS_TOKEN_KEY) ?? sessionStorage.getItem(ACCESS_TOKEN_KEY);
+  return (
+    localStorage.getItem(ACCESS_TOKEN_KEY) ??
+    localStorage.getItem(LEGACY_TOKEN_KEY) ??
+    sessionStorage.getItem(ACCESS_TOKEN_KEY) ??
+    sessionStorage.getItem(LEGACY_TOKEN_KEY)
+  );
 }
 
 export function setAccessToken(token: string, rememberMe: boolean) {
   clearSession();
   if (rememberMe) {
     localStorage.setItem(ACCESS_TOKEN_KEY, token);
+    localStorage.setItem(LEGACY_TOKEN_KEY, token);
     return;
   }
   sessionStorage.setItem(ACCESS_TOKEN_KEY, token);
+  sessionStorage.setItem(LEGACY_TOKEN_KEY, token);
 }
 
 function parseTokenPayload(): TokenPayload | null {
@@ -77,5 +85,7 @@ export function getUserUuidFromToken(): string | null {
 
 export function clearSession() {
   localStorage.removeItem(ACCESS_TOKEN_KEY);
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
   sessionStorage.removeItem(ACCESS_TOKEN_KEY);
+  sessionStorage.removeItem(LEGACY_TOKEN_KEY);
 }

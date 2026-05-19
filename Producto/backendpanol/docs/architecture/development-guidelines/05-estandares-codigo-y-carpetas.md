@@ -1,5 +1,5 @@
 ﻿- Estado del documento: vigente
-- Ultima verificacion: 2026-05-15
+- Ultima verificacion: 2026-05-16
 - Fuente de verdad: ver matriz canonica vigente y codigo fuente actual
 
 # 05 - Estándares de Código y Estructura
@@ -30,7 +30,7 @@
 ## Testing
 
 - Unit: `application/domain` (rápido, sin DB).
-- Integración: adapters SQL/Mongo.
+- Integración: adapters SQL.
 - Contract/API: endpoints críticos.
 
 ## Documentación
@@ -39,4 +39,3 @@ Cada cambio relevante debe incluir:
 - impacto en arquitectura,
 - decisión tomada,
 - deuda técnica (si aplica).
-

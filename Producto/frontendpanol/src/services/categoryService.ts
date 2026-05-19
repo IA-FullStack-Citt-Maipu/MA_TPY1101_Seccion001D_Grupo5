@@ -38,6 +38,11 @@ export async function updateCategoria(
   return response.data;
 }
 
+export async function activateCategoria(categoryUuid: string): Promise<Categoria> {
+  const response = await apiClient.patch<Categoria>(`${basePathV2}/${categoryUuid}/activate`);
+  return response.data;
+}
+
 export async function deactivateCategoria(
   categoryUuid: string,
   force: boolean,

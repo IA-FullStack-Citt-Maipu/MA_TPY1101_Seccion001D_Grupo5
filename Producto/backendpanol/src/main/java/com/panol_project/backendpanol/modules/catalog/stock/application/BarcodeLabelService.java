@@ -64,10 +64,10 @@ public class BarcodeLabelService {
     private List<LabelData> resolveLabels(ImplementLookupContract.ImplementLookupSummary implemento, LabelScope scope, Integer quantity, UUID individualUuid) {
         if (scope == LabelScope.INDIVIDUAL) {
             StockItemType itemType = StockItemType.fromLiteral(implemento.itemTypeLiteral()).orElse(null);
-            if (itemType != StockItemType.INDIVIDUAL) {
+            if (itemType != StockItemType.NO_FUNGIBLE) {
                 throw new BadRequestException(
                         "LABEL_SCOPE_INVALID",
-                        "Solo los implementos de tipo individual permiten etiquetas individuales"
+                        "Solo los implementos de tipo no_fungible permiten etiquetas individuales"
                 );
             }
             if (individualUuid != null) {

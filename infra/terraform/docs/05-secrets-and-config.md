@@ -13,7 +13,6 @@
 
 - `DB_SUPABASE_PASSWORD`
 - `APP_AUTH_JWT_SECRET`
-- `MONGODB_URI`
 
 ### Variables no sensibles (Cloud Run env vars)
 
@@ -37,7 +36,6 @@
 - `GCP_SERVICE_ACCOUNT_DEV`
 - `DB_SUPABASE_PASSWORD_DEV`
 - `APP_AUTH_JWT_SECRET_DEV`
-- `MONGODB_URI_DEV`
 
 ### prod
 
@@ -45,7 +43,6 @@
 - `GCP_SERVICE_ACCOUNT_PROD`
 - `DB_SUPABASE_PASSWORD_PROD`
 - `APP_AUTH_JWT_SECRET_PROD`
-- `MONGODB_URI_PROD`
 
 ## GitHub Variables requeridas
 

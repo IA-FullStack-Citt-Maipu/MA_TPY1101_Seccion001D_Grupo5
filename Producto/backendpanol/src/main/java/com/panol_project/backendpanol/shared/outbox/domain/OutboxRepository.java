@@ -7,7 +7,8 @@ import java.util.UUID;
 public interface OutboxRepository {
     void addPending(UUID eventId, String aggregateType, UUID aggregateId, String eventType, String payload, OffsetDateTime occurredAt);
     List<OutboxEvent> findPending(int limit);
-    void markProcessed(UUID eventId, OffsetDateTime processedAt);
+    void markProcessing(UUID eventId);
+    void markSent(UUID eventId, OffsetDateTime processedAt);
     void markRetry(UUID eventId, int retryCount, OutboxEventStatus status);
     int countByStatus(OutboxEventStatus status);
     int countWithRetries();

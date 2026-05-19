@@ -5,6 +5,7 @@ interface CategoryTableProps {
   associations: Record<string, CategoriaAssociationSummary>;
   loading: boolean;
   onEdit: (category: Categoria) => void;
+  onActivate: (category: Categoria) => void;
   onDeactivate: (category: Categoria) => void;
   onDelete: (category: Categoria) => void;
 }
@@ -22,6 +23,7 @@ export function CategoryTable({
   associations,
   loading,
   onEdit,
+  onActivate,
   onDeactivate,
   onDelete,
 }: CategoryTableProps) {
@@ -78,6 +80,16 @@ export function CategoryTable({
                         onClick={() => onDeactivate(category)}
                       >
                         Desactivar
+                      </button>
+                    ) : null}
+
+                    {!category.activa ? (
+                      <button
+                        type="button"
+                        className="button button--table"
+                        onClick={() => onActivate(category)}
+                      >
+                        Activar
                       </button>
                     ) : null}
 

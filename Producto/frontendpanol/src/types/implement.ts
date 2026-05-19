@@ -1,5 +1,5 @@
 export interface InventoryMovementDetail {
-  id: string;
+  uuid: string;
   action: string;
   quantity: number;
   timestamp: string;
@@ -11,7 +11,7 @@ export interface InventoryMovementDetail {
 export interface ImplementCreatePayload {
   name: string;
   categoryUuid: string;
-  item_type: "consumable" | "reusable" | "individual";
+  item_type: "fungible" | "no_fungible";
   locationUuid: string;
   description: string | null;
   barcode: string | null;
@@ -24,7 +24,7 @@ export interface ImplementUpdatePayload {
   name: string;
   categoryUuid: string;
   locationUuid: string;
-  item_type: "consumable" | "reusable" | "individual";
+  item_type: "fungible" | "no_fungible";
   description: string | null;
   barcode: string | null;
   img_url: string | null;
@@ -66,8 +66,7 @@ export type ImplementStockFilterStatus =
   | "available"
   | "reserved"
   | "loaned"
-  | "damaged"
-  | "blocked";
+  | "damaged";
 
 export const STOCK_STATUS_LABELS: Record<ImplementStockFilterStatus, string> = {
   all: "Todos los estados",
@@ -75,7 +74,6 @@ export const STOCK_STATUS_LABELS: Record<ImplementStockFilterStatus, string> = {
   reserved: "Reservado",
   loaned: "Prestado",
   damaged: "Dañado",
-  blocked: "Bloqueado",
 };
 
 export interface ImplementFilters {
@@ -88,7 +86,7 @@ export interface ImplementDetail {
   uuid: string;
   name: string;
   description: string | null;
-  item_type: "consumable" | "reusable" | "individual" | null;
+  item_type: "fungible" | "no_fungible" | null;
   display_location?: string | null;
   category: {
     uuid: string;

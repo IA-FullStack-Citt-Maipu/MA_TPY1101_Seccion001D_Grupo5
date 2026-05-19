@@ -66,14 +66,14 @@ function buildDashboardData(
 
   const alerts: AlertItem[] = [
     ...lowStockImplements.slice(0, 3).map((row, idx) => ({
-      id: `low-stock-${row.uuid}-${idx}`,
+      uuid: `low-stock-${row.uuid}-${idx}`,
       severity: "critical" as const,
       text: `${row.name} bajo stock minimo`,
     })),
     ...(movementRows.length > 0
       ? [
           {
-            id: "movement-count",
+            uuid: "movement-count",
             severity: "info" as const,
             text: `${movementRows.length} movimientos registrados`,
           },

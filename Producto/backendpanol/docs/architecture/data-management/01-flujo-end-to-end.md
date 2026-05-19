@@ -1,33 +1,30 @@
-﻿# 01 - Flujo End-to-End de Datos
+﻿# 01 - Flujo End-to-End de Datos (V25)
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-05-15
-- Fuente de verdad: servicios de aplicacion + `shared/outbox` + migracion `V20__outbox_events.sql`
+- Ultima verificacion: 2026-05-17
+- Fuente de verdad: casos de uso V2 + `shared/outbox` + `db/migration/v25/V25__schema_alignment_big_bang.sql`
 
-## Flujo vigente
+## Flujo operativo actual
 
-1. Cliente llama endpoint `/api/v2/**`.
-2. Backend valida auth, autorizacion y reglas de negocio.
-3. Caso de uso abre transaccion SQL.
+1. Cliente llama endpoint `/api/v2/**` con UUIDs.
+2. Backend autentica, autoriza y valida reglas de negocio.
+3. Caso de uso resuelve UUID externo a `id` interno cuando necesita relacionar tablas.
 4. Se persiste estado canonico en PostgreSQL.
-5. Si el caso requiere integracion asincrona, se encola evento en `outbox_events` dentro de la misma transaccion.
-6. Se confirma transaccion.
-7. Worker de outbox procesa `PENDING` y publica a Mongo (u otro destino).
-8. Estado outbox se actualiza a `PROCESSED` o reintenta/falla controladamente.
+5. Si aplica integracion asincrona, se inserta evento en `outbox_event` en la misma transaccion.
+6. Commit: estado de negocio y outbox quedan consistentes.
+7. Worker procesa outbox con ciclo `PENDING -> PROCESSING -> SENT` o `FAILED`.
 
-## Regla de oro
+## Regla de identidad
 
-- Estado transaccional: PostgreSQL.
-- Entrega de eventos: Outbox.
-- Proyecciones y trazabilidad operativa: Mongo.
+- Interno DB/jOOQ: `id`.
+- Externo API/frontend: `uuid`.
 
 ## Manejo de fallas
 
-- Si falla SQL: no hay commit de negocio ni outbox.
-- Si SQL confirma y falla publicacion: queda `PENDING`/retry sin perder evento.
-- Si supera max reintentos: `FAILED` para tratamiento operativo.
+- Si falla SQL: no hay commit ni outbox.
+- Si SQL confirma y falla publicacion: evento queda pendiente para retry.
+- Si supera reintentos: estado `FAILED` para tratamiento operativo.
 
-## Nota de compatibilidad
+## Compatibilidad de rutas
 
-No usar rutas legacy (`/api/categorias`, `/api/implements`, `/api/v1/**`) como contrato operativo actual.
-
+No usar rutas legacy (`/api/categorias`, `/api/implements`, `/api/v1/**`) en contratos vigentes.

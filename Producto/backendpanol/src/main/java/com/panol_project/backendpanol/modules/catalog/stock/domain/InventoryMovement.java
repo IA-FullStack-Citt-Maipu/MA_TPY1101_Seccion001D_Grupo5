@@ -15,6 +15,8 @@ public class InventoryMovement {
 
     private UUID performedByUuid;
 
+    private String performedByName;
+
     private Instant timestamp;
 
     private String notes;
@@ -69,6 +71,14 @@ public class InventoryMovement {
 
     public void setPerformedByUuid(UUID performedByUuid) {
         this.performedByUuid = performedByUuid;
+    }
+
+    public String getPerformedByName() {
+        return performedByName;
+    }
+
+    public void setPerformedByName(String performedByName) {
+        this.performedByName = performedByName;
     }
 
     public Instant getTimestamp() {

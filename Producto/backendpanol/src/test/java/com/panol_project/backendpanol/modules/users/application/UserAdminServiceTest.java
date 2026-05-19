@@ -11,10 +11,10 @@ import com.panol_project.backendpanol.modules.users.application.dto.CreateUserCo
 import com.panol_project.backendpanol.modules.users.domain.UserAdminRepository;
 import com.panol_project.backendpanol.modules.users.domain.UserAdminSummary;
 import com.panol_project.backendpanol.shared.outbox.application.OutboxService;
+import com.panol_project.backendpanol.shared.security.CurrentUserUuidResolver;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -32,25 +32,28 @@ class UserAdminServiceTest {
     @Mock
     private OutboxService outboxService;
 
+    @Mock
+    private CurrentUserUuidResolver currentUserUuidResolver;
+
     @Test
     void createUserDebeRegistrarAuditoriaYOutbox() {
-        UserAdminService service = new UserAdminService(repository, auditLogPort, outboxService);
+        UserAdminService service = new UserAdminService(repository, auditLogPort, outboxService, currentUserUuidResolver);
         CreateUserCommand command = new CreateUserCommand("Ana", "12.345.678-9", "ana@test.cl", "COORDINADOR", "secret");
-        UUID roleUuid = UUID.randomUUID();
+        Long roleId = 2L;
 
-        when(repository.findRoleUuid("COORDINADOR")).thenReturn(roleUuid);
-        when(repository.countUsersByRutOrEmail("123456789", "ana@test.cl")).thenReturn(0);
+        when(repository.findRoleId("COORDINADOR")).thenReturn(roleId);
+        when(repository.countUsersByRutOrEmail("12345678", "ana@test.cl")).thenReturn(0);
 
-        service.createUser(command, null);
+        service.createUser(command);
 
-        verify(repository).createUser(eq("Ana"), eq("123456789"), eq("ana@test.cl"), anyString(), eq(roleUuid), eq(true));
-        verify(auditLogPort).log("user_created", null, null, Map.of("rut", "123456789", "email", "ana@test.cl", "role", "COORDINADOR"));
-        verify(outboxService).enqueue("user", null, "UserCreated", null, Map.of("rut", "123456789", "email", "ana@test.cl", "role", "COORDINADOR"));
+        verify(repository).createUser(eq("Ana"), eq("12345678"), eq("ana@test.cl"), anyString(), eq(roleId), eq(true));
+        verify(auditLogPort).log("user_created", null, null, Map.of("rut", "12345678", "email", "ana@test.cl", "role", "COORDINADOR"));
+        verify(outboxService).enqueue("user", null, "UserCreated", null, Map.of("rut", "12345678", "email", "ana@test.cl", "role", "COORDINADOR"));
     }
 
     @Test
     void listUsersDebeNormalizarRolYRetornarResumen() {
-        UserAdminService service = new UserAdminService(repository, auditLogPort, outboxService);
+        UserAdminService service = new UserAdminService(repository, auditLogPort, outboxService, currentUserUuidResolver);
         OffsetDateTime now = OffsetDateTime.now();
         when(repository.listUsers()).thenReturn(List.of(
                 new UserAdminSummary("u1", "Luis", "111", "luis@test.cl", "rol_coord", true, now)

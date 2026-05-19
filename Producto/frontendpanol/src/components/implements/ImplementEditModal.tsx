@@ -8,7 +8,7 @@ import type { ActiveCategoryOption } from "../../types/categoryActive";
 import type { LocationOption } from "../../types/location";
 import type { ImplementDetail } from "../../types/implement";
 
-type ItemType = "consumable" | "reusable" | "individual";
+type ItemType = "fungible" | "no_fungible";
 
 interface FieldErrors {
   name?: string;
@@ -24,9 +24,8 @@ interface FieldErrors {
 }
 
 const ITEM_TYPE_OPTIONS: Array<{ value: ItemType; label: string }> = [
-  { value: "consumable", label: "Consumible" },
-  { value: "reusable", label: "Reutilizable" },
-  { value: "individual", label: "Individual" },
+  { value: "fungible", label: "Fungible" },
+  { value: "no_fungible", label: "No fungible" },
 ];
 
 interface ImplementEditModalProps {

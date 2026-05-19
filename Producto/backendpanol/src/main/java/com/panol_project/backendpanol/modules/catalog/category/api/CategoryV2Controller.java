@@ -79,6 +79,13 @@ public class CategoryV2Controller {
         return toResponse(updated);
     }
 
+    @PatchMapping("/{categoryUuid}/activate")
+    @PreAuthorize("hasRole('COORDINADOR')")
+    public CategoryManagementV2Response activate(@PathVariable UUID categoryUuid) {
+        var updated = categoriaService.activar(categoryUuid);
+        return toResponse(updated);
+    }
+
     @DeleteMapping("/{categoryUuid}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasRole('COORDINADOR')")

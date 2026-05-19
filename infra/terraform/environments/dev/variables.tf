@@ -121,12 +121,6 @@ variable "runtime_sa_user_members" {
   default = []
 }
 
-variable "mongodb_uri_secret_value" {
-  type      = string
-  default   = ""
-  sensitive = true
-}
-
 variable "db_supabase_password_secret_value" {
   type      = string
   default   = ""

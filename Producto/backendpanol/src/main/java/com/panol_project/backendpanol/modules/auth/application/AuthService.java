@@ -153,8 +153,15 @@ public class AuthService {
     }
 
     private String normalizeRut(String rutRaw) {
-        if (rutRaw == null) return "";
-        return rutRaw.replaceAll("\\D", "").trim();
+        String compactRut = rutRaw == null ? "" : rutRaw.replaceAll("[.\\-\\s]", "").trim();
+        if (compactRut.length() < 2) {
+            return "";
+        }
+
+        String rutWithoutVerifier = compactRut.substring(0, compactRut.length() - 1);
+        if (rutWithoutVerifier.isBlank() || !rutWithoutVerifier.chars().allMatch(Character::isDigit)) {
+            return "";
+        }
+        return rutWithoutVerifier;
     }
 }
-

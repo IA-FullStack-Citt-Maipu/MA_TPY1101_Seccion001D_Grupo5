@@ -13,7 +13,7 @@
 
 ## Regla de dependencia
 
-- `domain` no conoce Spring, JOOQ, Mongo, HTTP.
+- `domain` no conoce Spring, JOOQ, HTTP ni detalles de infraestructura concreta.
 - `application` no conoce detalles de wire-protocol.
 - `infrastructure` implementa puertos de `domain`.
 
@@ -43,4 +43,3 @@ Un caso de uso se considera alineado cuando:
 - compila sin depender de infraestructura concreta,
 - tiene tests unitarios con dobles de puertos,
 - su adapter se prueba por integración separada.
-

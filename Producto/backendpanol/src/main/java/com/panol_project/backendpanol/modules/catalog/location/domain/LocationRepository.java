@@ -6,9 +6,9 @@ import java.util.UUID;
 
 public interface LocationRepository {
 
-    List<LocationOption> findAll();
+    List<LocationOption> findAllActive();
 
-    List<LocationOption> findAllForManagement();
+    List<LocationOption> findAll();
 
     Optional<LocationOption> findByUuid(UUID uuid);
 
@@ -22,5 +22,6 @@ public interface LocationRepository {
     LocationOption update(UUID uuid, String name, String description);
 
     int updateActive(UUID uuid, boolean active);
-}
 
+    int softDelete(UUID uuid);
+}

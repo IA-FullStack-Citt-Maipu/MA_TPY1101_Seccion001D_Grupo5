@@ -1,9 +1,7 @@
 package com.panol_project.backendpanol.modules.catalog.implement.application;
 
 import com.panol_project.backendpanol.modules.catalog.stock.application.contract.InventoryMovementQueryContract;
-import com.panol_project.backendpanol.modules.users.application.contract.UserDirectoryContract;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -11,14 +9,9 @@ import org.springframework.stereotype.Service;
 public class ImplementDetailFacadeService implements ImplementDetailFacade {
 
     private final InventoryMovementQueryContract inventoryMovementQueryContract;
-    private final UserDirectoryContract userDirectoryContract;
 
-    public ImplementDetailFacadeService(
-            InventoryMovementQueryContract inventoryMovementQueryContract,
-            UserDirectoryContract userDirectoryContract
-    ) {
+    public ImplementDetailFacadeService(InventoryMovementQueryContract inventoryMovementQueryContract) {
         this.inventoryMovementQueryContract = inventoryMovementQueryContract;
-        this.userDirectoryContract = userDirectoryContract;
     }
 
     @Override
@@ -31,14 +24,10 @@ public class ImplementDetailFacadeService implements ImplementDetailFacade {
                         movement.action(),
                         movement.quantity(),
                         movement.performedByUuid(),
+                        movement.performedByName(),
                         movement.timestamp(),
                         movement.notes()
                 ))
                 .toList();
-    }
-
-    @Override
-    public Map<UUID, String> getUserNamesByUuid(List<UUID> userUuids) {
-        return userDirectoryContract.getNombresUsuariosByUuid(userUuids);
     }
 }

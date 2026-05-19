@@ -1,5 +1,8 @@
 package com.panol_project.backendpanol.modules.auth.infrastructure;
 
+import static com.panol_project.backendpanol.jooq.tables.TokenRevocation.TOKEN_REVOCATION;
+import static com.panol_project.backendpanol.jooq.tables.User.USER;
+
 import com.panol_project.backendpanol.modules.auth.domain.AuthUser;
 import com.panol_project.backendpanol.modules.auth.domain.TokenRevocationPort;
 import com.panol_project.backendpanol.modules.auth.domain.UserAuthPort;
@@ -8,10 +11,6 @@ import java.util.Optional;
 import java.util.UUID;
 import org.jooq.DSLContext;
 import org.springframework.stereotype.Repository;
-
-import static org.jooq.impl.DSL.field;
-import static org.jooq.impl.DSL.name;
-import static org.jooq.impl.DSL.table;
 
 @Repository
 public class AuthJooqRepository implements UserAuthPort, TokenRevocationPort {
@@ -24,61 +23,47 @@ public class AuthJooqRepository implements UserAuthPort, TokenRevocationPort {
 
     @Override
     public Optional<AuthUser> findAuthUserByRut(String rut) {
-        var userTable = table(name("user"));
-        var roleTable = table(name("role"));
-        var normalizedRutField = field(
-                "replace(replace(replace({0}, '.', ''), '-', ''), ' ', '')",
-                String.class,
-                field(name("user", "rut")));
-        return dsl.select(
-                        field(name("user", "uuid"), UUID.class),
-                        field(name("user", "rut"), String.class),
-                        field(name("user", "password_hash"), String.class),
-                        field(name("role", "name"), String.class),
-                        field(name("user", "failed_login_attempts"), Integer.class),
-                        field(name("user", "blocked_until"), OffsetDateTime.class))
-                .from(userTable)
-                .join(roleTable).on(field(name("role", "uuid")).eq(field(name("user", "role_uuid"))))
-                .where(normalizedRutField.eq(rut))
-                .and(field(name("user", "active")).eq(true))
+        return dsl.resultQuery("""
+                        select user_uuid, rut, password_hash, role_name, failed_login_attempts, blocked_until
+                        from public.fn_auth_find_user_by_rut(?)
+                        """, rut)
                 .fetchOptional(record -> new AuthUser(
-                        record.value1(),
-                        record.value2(),
-                        record.value3(),
-                        record.value4(),
-                        record.value5() == null ? 0 : record.value5(),
-                        record.value6()
+                        record.get("user_uuid", UUID.class),
+                        record.get("rut", String.class),
+                        record.get("password_hash", String.class),
+                        record.get("role_name", String.class),
+                        record.get("failed_login_attempts", Integer.class) == null ? 0 : record.get("failed_login_attempts", Integer.class),
+                        record.get("blocked_until", OffsetDateTime.class)
                 ));
     }
 
     @Override
     public void registerFailedAttempt(UUID userUuid, int attempts, OffsetDateTime blockedUntil) {
-        dsl.update(table(name("user")))
-                .set(field(name("failed_login_attempts")), attempts)
-                .set(field(name("blocked_until")), blockedUntil)
-                .where(field(name("uuid")).eq(userUuid))
+        dsl.update(USER)
+                .set(USER.FAILED_LOGIN_ATTEMPTS, attempts)
+                .set(USER.BLOCKED_UNTIL, blockedUntil)
+                .where(USER.UUID.eq(userUuid))
                 .execute();
     }
 
     @Override
     public void resetLoginAttempts(UUID userUuid, OffsetDateTime lastLoginAt) {
-        dsl.update(table(name("user")))
-                .set(field(name("failed_login_attempts")), 0)
-                .set(field(name("blocked_until")), (OffsetDateTime) null)
-                .set(field(name("last_login_at")), lastLoginAt)
-                .where(field(name("uuid")).eq(userUuid))
+        dsl.update(USER)
+                .set(USER.FAILED_LOGIN_ATTEMPTS, 0)
+                .set(USER.BLOCKED_UNTIL, (OffsetDateTime) null)
+                .set(USER.LAST_LOGIN_AT, lastLoginAt)
+                .where(USER.UUID.eq(userUuid))
                 .execute();
     }
 
     @Override
     public void revokeToken(String jti, UUID userUuid, OffsetDateTime expiresAt) {
-        dsl.insertInto(table(name("token_revocation")))
-                .columns(
-                        field(name("jti")),
-                        field(name("user_uuid")),
-                        field(name("expires_at")))
-                .values(jti, userUuid, expiresAt)
-                .onConflict(field(name("jti")))
+        Long userId = findUserIdByUuid(userUuid);
+        dsl.insertInto(TOKEN_REVOCATION)
+                .set(TOKEN_REVOCATION.JTI, jti)
+                .set(TOKEN_REVOCATION.USER_ID, userId)
+                .set(TOKEN_REVOCATION.EXPIRES_AT, expiresAt)
+                .onConflict(TOKEN_REVOCATION.JTI)
                 .doNothing()
                 .execute();
     }
@@ -89,10 +74,20 @@ public class AuthJooqRepository implements UserAuthPort, TokenRevocationPort {
             return false;
         }
         Integer count = dsl.selectCount()
-                .from(table(name("token_revocation")))
-                .where(field(name("jti")).eq(jti))
+                .from(TOKEN_REVOCATION)
+                .where(TOKEN_REVOCATION.JTI.eq(jti))
                 .fetchOne(0, Integer.class);
         return count != null && count > 0;
     }
-}
 
+    private Long findUserIdByUuid(UUID userUuid) {
+        if (userUuid == null) {
+            return null;
+        }
+        return dsl.select(USER.ID)
+                .from(USER)
+                .where(USER.UUID.eq(userUuid))
+                .fetchOne(USER.ID);
+    }
+
+}

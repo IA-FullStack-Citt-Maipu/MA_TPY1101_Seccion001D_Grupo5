@@ -1,7 +1,7 @@
 ﻿# Modulo: catalog/stock
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-05-15
+- Ultima verificacion: 2026-05-17
 - Fuente de verdad: `StockV2Controller`, `InventoryMovementV2Controller`, `BarcodeLabelV2Controller`
 
 ## Responsabilidad
@@ -24,3 +24,13 @@ Gestion de stock por implemento, movimientos de inventario y generacion de etiqu
 - Sin dependencia a API de otros modulos.
 - Emision de eventos de stock/movimientos via outbox.
 
+## Contrato de identidad y tipos
+
+- El modulo resuelve UUID externo a `id` interno para operaciones SQL.
+- `movement_type` y `action` aceptan solo:
+  - `STOCK_IN`
+  - `STOCK_OUT`
+  - `LOAN_DELIVERY`
+  - `LOAN_RETURN`
+  - `DAMAGE_REPORT`
+  - `MANUAL_ADJUSTMENT`

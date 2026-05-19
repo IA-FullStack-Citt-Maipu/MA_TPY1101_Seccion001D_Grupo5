@@ -19,7 +19,6 @@ Secretos reales (Secret Manager):
 
 - `DB_SUPABASE_PASSWORD`
 - `APP_AUTH_JWT_SECRET`
-- `MONGODB_URI`
 
 Variables no sensibles (env vars Terraform / Cloud Run):
 

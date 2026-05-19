@@ -21,12 +21,12 @@ public class LocationService implements LocationValidationContract {
 
     @Transactional(readOnly = true)
     public List<LocationOption> listarSelector() {
-        return repository.findAll();
+        return repository.findAllActive();
     }
 
     @Transactional(readOnly = true)
     public List<LocationOption> listarGestion() {
-        return repository.findAllForManagement();
+        return repository.findAll();
     }
 
     @Transactional
@@ -58,6 +58,15 @@ public class LocationService implements LocationValidationContract {
         }
         repository.updateActive(uuid, active);
         return requireLocation(uuid);
+    }
+
+    @Transactional
+    public void eliminar(UUID uuid) {
+        LocationOption existing = requireLocation(uuid);
+        if (!Boolean.TRUE.equals(existing.active())) {
+            return;
+        }
+        repository.softDelete(uuid);
     }
 
     @Override
@@ -92,4 +101,3 @@ public class LocationService implements LocationValidationContract {
         return normalized.isEmpty() ? null : normalized;
     }
 }
-

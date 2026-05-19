@@ -19,7 +19,7 @@ public record UpdateImplementV2Request(
         UUID locationUuid,
         @JsonProperty("item_type")
         @NotBlank(message = "El tipo de implemento es obligatorio")
-        @Pattern(regexp = "^(consumable|reusable|individual)$", message = "El tipo de implemento debe ser consumable, reusable o individual")
+        @Pattern(regexp = "^(fungible|no_fungible)$", message = "El tipo de implemento debe ser fungible o no_fungible")
         String itemType,
         @JsonProperty("min_stock")
         @NotNull(message = "El stock minimo es obligatorio")

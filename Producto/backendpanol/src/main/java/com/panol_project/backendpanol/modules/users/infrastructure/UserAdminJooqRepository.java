@@ -1,17 +1,15 @@
 package com.panol_project.backendpanol.modules.users.infrastructure;
 
+import static com.panol_project.backendpanol.jooq.tables.Role.ROLE;
+import static com.panol_project.backendpanol.jooq.tables.User.USER;
+
 import com.panol_project.backendpanol.modules.users.domain.UserAdminRepository;
 import com.panol_project.backendpanol.modules.users.domain.UserAdminSummary;
-import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 import org.jooq.DSLContext;
 import org.jooq.impl.DSL;
 import org.springframework.stereotype.Repository;
-
-import static org.jooq.impl.DSL.field;
-import static org.jooq.impl.DSL.name;
-import static org.jooq.impl.DSL.table;
 
 @Repository
 public class UserAdminJooqRepository implements UserAdminRepository {
@@ -23,33 +21,27 @@ public class UserAdminJooqRepository implements UserAdminRepository {
     }
 
     @Override
-    public UUID findRoleUuid(String normalizedRole) {
-        var roleUuid = field(name("uuid"), UUID.class);
-        var roleName = field(name("name"), String.class);
+    public Long findRoleId(String normalizedRole) {
         String roleKey = roleKey(normalizedRole);
-        return dsl.select(roleUuid)
-                .from(table(name("role")))
-                .where(roleName.equalIgnoreCase(normalizedRole)
-                        .or(roleName.likeIgnoreCase('%' + roleKey + '%')))
+        return dsl.select(ROLE.ID)
+                .from(ROLE)
+                .where(ROLE.NAME.equalIgnoreCase(normalizedRole)
+                        .or(ROLE.NAME.likeIgnoreCase('%' + roleKey + '%')))
                 .orderBy(
-                        DSL.when(roleName.equalIgnoreCase(normalizedRole), DSL.inline(0)).otherwise(DSL.inline(1)),
-                        roleName.asc()
+                        DSL.when(ROLE.NAME.equalIgnoreCase(normalizedRole), DSL.inline(0)).otherwise(DSL.inline(1)),
+                        ROLE.NAME.asc()
                 )
                 .limit(1)
-                .fetchOne(0, UUID.class);
+                .fetchOne(ROLE.ID);
     }
 
     @Override
     public int countUsersByRutOrEmail(String normalizedRut, String normalizedEmail) {
-        var normalizedRutField = field(
-                "replace(replace(replace({0}, '.', ''), '-', ''), ' ', '')",
-                String.class,
-                field(name("rut")));
-        var duplicateCondition = normalizedRutField.eq(normalizedRut);
+        var duplicateCondition = USER.RUT.eq(normalizedRut);
         if (normalizedEmail != null) {
-            duplicateCondition = duplicateCondition.or(field(name("email")).eq(normalizedEmail));
+            duplicateCondition = duplicateCondition.or(USER.EMAIL.eq(normalizedEmail));
         }
-        Integer duplicated = dsl.selectCount().from(table(name("user")))
+        Integer duplicated = dsl.selectCount().from(USER)
                 .where(duplicateCondition)
                 .fetchOne(0, Integer.class);
         return duplicated == null ? 0 : duplicated;
@@ -57,51 +49,51 @@ public class UserAdminJooqRepository implements UserAdminRepository {
 
     @Override
     public int countUsersByRutOrEmailExcludingUser(String normalizedRut, String normalizedEmail, UUID userUuid) {
-        var normalizedRutField = field(
-                "replace(replace(replace({0}, '.', ''), '-', ''), ' ', '')",
-                String.class,
-                field(name("rut")));
-        var duplicateCondition = normalizedRutField.eq(normalizedRut);
+        var duplicateCondition = USER.RUT.eq(normalizedRut);
         if (normalizedEmail != null) {
-            duplicateCondition = duplicateCondition.or(field(name("email")).eq(normalizedEmail));
+            duplicateCondition = duplicateCondition.or(USER.EMAIL.eq(normalizedEmail));
         }
         Integer duplicated = dsl.selectCount()
-                .from(table(name("user")))
+                .from(USER)
                 .where(duplicateCondition)
-                .and(field(name("uuid"), UUID.class).ne(userUuid))
+                .and(USER.UUID.ne(userUuid))
                 .fetchOne(0, Integer.class);
         return duplicated == null ? 0 : duplicated;
     }
 
     @Override
-    public void createUser(String name, String rut, String email, String passwordHash, UUID roleUuid, boolean active) {
-        dsl.insertInto(table(name("user")))
-                .columns(field(name("name")), field(name("rut")), field(name("email")), field(name("password_hash")), field(name("role_uuid")), field(name("active")))
-                .values(name, rut, email, passwordHash, roleUuid, active)
+    public void createUser(String name, String rut, String email, String passwordHash, Long roleId, boolean active) {
+        dsl.insertInto(USER)
+                .set(USER.NAME, name)
+                .set(USER.RUT, rut)
+                .set(USER.EMAIL, email)
+                .set(USER.PASSWORD_HASH, passwordHash)
+                .set(USER.ROLE_ID, roleId)
+                .set(USER.ACTIVE, active)
                 .execute();
     }
 
     @Override
-    public int updateUserRole(UUID userUuid, UUID roleUuid) {
-        return dsl.update(table(name("user")))
-                .set(field(name("role_uuid"), UUID.class), roleUuid)
-                .where(field(name("uuid"), UUID.class).eq(userUuid))
+    public int updateUserRole(UUID userUuid, Long roleId) {
+        return dsl.update(USER)
+                .set(USER.ROLE_ID, roleId)
+                .where(USER.UUID.eq(userUuid))
                 .execute();
     }
 
     @Override
     public List<UserAdminSummary> listUsers() {
         return dsl.select(
-                        field(name("user", "uuid"), UUID.class),
-                        field(name("user", "name"), String.class),
-                        field(name("user", "rut"), String.class),
-                        field(name("user", "email"), String.class),
-                        field(name("role", "name"), String.class),
-                        field(name("user", "active"), Boolean.class),
-                        field(name("user", "created_at"), OffsetDateTime.class))
-                .from(table(name("user")))
-                .join(table(name("role"))).on(field(name("role", "uuid")).eq(field(name("user", "role_uuid"))))
-                .orderBy(field(name("user", "created_at")).desc())
+                        USER.UUID,
+                        USER.NAME,
+                        USER.RUT,
+                        USER.EMAIL,
+                        ROLE.NAME,
+                        USER.ACTIVE,
+                        USER.CREATED_AT)
+                .from(USER)
+                .join(ROLE).on(ROLE.ID.eq(USER.ROLE_ID))
+                .orderBy(USER.CREATED_AT.desc())
                 .fetch(record -> new UserAdminSummary(
                         record.value1() == null ? null : record.value1().toString(),
                         record.value2(),
@@ -114,28 +106,28 @@ public class UserAdminJooqRepository implements UserAdminRepository {
 
     @Override
     public int updateUserActive(UUID userUuid, boolean active) {
-        return dsl.update(table(name("user")))
-                .set(field(name("active")), active)
-                .where(field(name("uuid"), UUID.class).eq(userUuid))
+        return dsl.update(USER)
+                .set(USER.ACTIVE, active)
+                .where(USER.UUID.eq(userUuid))
                 .execute();
     }
 
     @Override
     public boolean existsUserByUuid(UUID userUuid) {
         Integer count = dsl.selectCount()
-                .from(table(name("user")))
-                .where(field(name("uuid")).eq(userUuid))
+                .from(USER)
+                .where(USER.UUID.eq(userUuid))
                 .fetchOne(0, Integer.class);
         return count != null && count > 0;
     }
 
     @Override
     public int updateUser(UUID userUuid, String name, String rut, String email) {
-        return dsl.update(table(name("user")))
-                .set(field(name("name")), name)
-                .set(field(name("rut")), rut)
-                .set(field(name("email")), email)
-                .where(field(name("uuid"), UUID.class).eq(userUuid))
+        return dsl.update(USER)
+                .set(USER.NAME, name)
+                .set(USER.RUT, rut)
+                .set(USER.EMAIL, email)
+                .where(USER.UUID.eq(userUuid))
                 .execute();
     }
 

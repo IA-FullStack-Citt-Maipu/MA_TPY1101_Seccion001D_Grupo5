@@ -31,7 +31,7 @@ class BarcodeLabelServiceTest {
                         implementUuid,
                         "Guantes",
                         "ABC123",
-                        "consumable"
+                        "fungible"
                 ));
 
         BarcodeLabelService service = new BarcodeLabelService(implementLookupContract, stockRepository);

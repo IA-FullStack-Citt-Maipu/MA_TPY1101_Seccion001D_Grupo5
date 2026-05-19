@@ -41,7 +41,10 @@ function formatRutDisplay(value: string): string {
 }
 
 function isValidRutDigits(value: string): boolean {
-  return digitsOnly(value).length === 9;
+  const clean = digitsOnly(value);
+  if (clean.length < 8 || clean.length > 9) return false;
+  const rutWithoutDv = clean.slice(0, -1);
+  return /^\d+$/.test(rutWithoutDv) && (rutWithoutDv.length === 7 || rutWithoutDv.length === 8);
 }
 
 export function DirectorCreateUserPage({ embedded = false }: { embedded?: boolean }) {
@@ -77,7 +80,6 @@ export function DirectorCreateUserPage({ embedded = false }: { embedded?: boolea
 
   function validateCreateForm(): string | null {
     if (!form.name.trim()) return "El nombre es obligatorio.";
-    if (!isValidRutDigits(form.rut)) return "El RUT debe contener exactamente 9 digitos.";
     if (!form.email.trim()) return "El correo es obligatorio.";
     if (!form.password.trim()) return "La contraseña es obligatoria.";
     if (form.password.trim().length < 6) return "La contraseña debe tener al menos 6 caracteres.";
@@ -95,11 +97,17 @@ export function DirectorCreateUserPage({ embedded = false }: { embedded?: boolea
       return;
     }
 
+    const cleanDigits = digitsOnly(form.rut);
+    if (!isValidRutDigits(form.rut)) {
+      setError("El RUT no es válido.");
+      return;
+    }
+
     setSubmitting(true);
     try {
       await createUser({
         name: form.name.trim(),
-        rut: digitsOnly(form.rut),
+        rut: cleanDigits.slice(0, -1),
         email: form.email.trim().toLowerCase(),
         password: form.password.trim(),
         role: form.role,
@@ -171,8 +179,9 @@ export function DirectorCreateUserPage({ embedded = false }: { embedded?: boolea
       return;
     }
 
+    const cleanEditingDigits = digitsOnly(editingUser.rut);
     if (!isValidRutDigits(editingUser.rut)) {
-      setError("El RUT debe contener exactamente 9 digitos.");
+      setError("El RUT no es válido.");
       return;
     }
     if (!(editingUser.email ?? "").trim()) {
@@ -187,7 +196,7 @@ export function DirectorCreateUserPage({ embedded = false }: { embedded?: boolea
     try {
       await updateUser(userRef, {
         name: editingUser.name.trim(),
-        rut: digitsOnly(editingUser.rut),
+        rut: cleanEditingDigits.slice(0, -1),
         email: (editingUser.email ?? "").trim().toLowerCase(),
       });
       setSuccess(`Usuario ${editingUser.name} actualizado.`);

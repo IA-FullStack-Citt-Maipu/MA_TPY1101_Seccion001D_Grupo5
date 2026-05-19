@@ -49,12 +49,10 @@ module "secret_manager" {
   project_id = var.gcp_project_id
   secrets = [
     "DB_SUPABASE_PASSWORD",
-    "MONGODB_URI",
     "APP_AUTH_JWT_SECRET"
   ]
   secret_values = {
     DB_SUPABASE_PASSWORD = var.db_supabase_password_secret_value
-    MONGODB_URI          = var.mongodb_uri_secret_value
     APP_AUTH_JWT_SECRET  = var.app_auth_jwt_secret_value
   }
 }
@@ -93,10 +91,6 @@ module "backend_service" {
     DB_SUPABASE_PASSWORD = {
       secret  = module.secret_manager.secret_ids["DB_SUPABASE_PASSWORD"]
       version = "latest"
-    }
-    MONGODB_URI = {
-      secret  = module.secret_manager.secret_ids["MONGODB_URI"]
-      version = try(module.secret_manager.secret_versions["MONGODB_URI"], "latest")
     }
     APP_AUTH_JWT_SECRET = {
       secret  = module.secret_manager.secret_ids["APP_AUTH_JWT_SECRET"]

@@ -30,6 +30,5 @@ frontend_max_instances   = 5
 
 # Sensitive values should be provided via TF_VAR_* in CI/CD or local shell.
 # Keep them empty in tfvars when not needed.
-mongodb_uri_secret_value           = ""
 db_supabase_password_secret_value  = ""
 app_auth_jwt_secret_value          = ""

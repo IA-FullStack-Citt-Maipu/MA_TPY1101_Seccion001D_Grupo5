@@ -8,6 +8,7 @@ public record IndividualItem(
         String assetCode,
         String status,
         String condition,
+        String notes,
         UUID currentLocationUuid,
         Boolean active
 ) {

@@ -12,9 +12,9 @@ public interface ImplementRepository {
 
     List<ImplementSummary> findAllSummaries(String name, UUID categoryUuid, StockStatusFilter stockStatusFilter);
 
-    boolean existsActiveByNameIgnoreCase(String nombre);
+    boolean existsActiveByNameIgnoreCase(String nombre, UUID categoriaUuid);
 
-    boolean existsActiveByNameIgnoreCaseAndUuidNot(String nombre, UUID excludedUuid);
+    boolean existsActiveByNameIgnoreCaseAndUuidNot(String nombre, UUID categoriaUuid, UUID excludedUuid);
 
     Implemento create(
             String nombre,

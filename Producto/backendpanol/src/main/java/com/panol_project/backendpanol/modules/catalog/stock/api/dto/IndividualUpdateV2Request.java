@@ -6,6 +6,7 @@ import java.util.UUID;
 public record IndividualUpdateV2Request(
         String status,
         String condition,
+        String notes,
         @JsonProperty("current_location_uuid")
         UUID currentLocationUuid,
         Boolean active

@@ -19,7 +19,7 @@
    - login,
    - CRUD clave,
    - lectura dashboard.
-4. Verificar escritura en Mongo (`inventory_movements`, `audit_logs`, etc.).
+4. Verificar tabla `outbox_event` y estado de eventos pendientes.
 
 ## 3. Checklist post deploy
 
@@ -27,10 +27,9 @@
   - conteo de filas en tablas críticas,
   - locks/errores en logs,
   - latencia consultas principales.
-- Mongo:
-  - creación de documentos esperados,
-  - crecimiento por colección,
-  - índices activos.
+- Outbox:
+  - eventos pendientes, `failed_count` y latencia de publicación,
+  - tasa de reintentos por evento y estabilidad del worker.
 
 ## 4. Incidentes comunes
 
@@ -39,27 +38,26 @@
 - Ajustar/crear índice.
 - Revisar N+1 desde backend.
 
-### Mongo con crecimiento excesivo
-- Auditar colecciones sin TTL.
-- Aplicar archivado por fecha.
-- Particionar por periodo lógico si aplica.
+### Backlog de outbox creciente
+- Ejecutar checks de saturación por tabla/outbox.
+- Revisar causas de reintentos repetidos y errores de publicación.
+- Si hay eventos `FAILED`, corregir causa y reencolar.
 
-### Inconsistencia SQL vs Mongo
+### Inconsistencia SQL vs Outbox
 - Ejecutar script de conciliación por ventana temporal.
-- Reprocesar eventos faltantes desde outbox o audit trail.
+- Reprocesar eventos faltantes desde `outbox_event` tras corregir causa raíz.
 
 ## 5. Backups y recuperación
 
 - PostgreSQL:
   - backup lógico diario + snapshot infra.
   - pruebas de restore mensuales.
-- MongoDB:
-  - snapshot/backup por política del cluster.
-  - pruebas de restore mensuales.
+- Outbox/eventos:
+  - backup lógico del esquema/migación de outbox si aplica.
+  - pruebas de recuperación de eventos no entregados.
 
 ## 6. Gobierno y auditoría
 
 - Cambios de esquema solo por migración versionada.
-- Cambios de estructura Mongo documentados con `schema_version`.
+- Cambios de contrato de eventos documentados con versión de payload.
 - Mantener trazabilidad de decisiones técnicas (ADR).
-

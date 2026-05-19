@@ -9,6 +9,7 @@ import com.panol_project.backendpanol.shared.error.NotFoundException;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.UUID;
+import org.jooq.exception.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -92,6 +93,41 @@ public class CategoriaService implements CategoryValidationContract {
     }
 
     @Transactional
+    public Categoria activar(UUID uuid) {
+        Categoria categoria = requireCategoria(uuid);
+        if (Boolean.TRUE.equals(categoria.activa())) {
+            return categoria;
+        }
+
+        try {
+            repository.activate(uuid);
+        } catch (DataAccessException ex) {
+            if (isCategoryNameActiveConflict(ex)) {
+                throw new BadRequestException(
+                        "CATEGORY_NAME_ACTIVE_DUPLICATE",
+                        "Ya existe una categoría activa con ese nombre."
+                );
+            }
+            throw ex;
+        } catch (DataIntegrityViolationException ex) {
+            if (isCategoryNameActiveConflict(ex)) {
+                throw new BadRequestException(
+                        "CATEGORY_NAME_ACTIVE_DUPLICATE",
+                        "Ya existe una categoría activa con ese nombre."
+                );
+            }
+            throw ex;
+        }
+        return new Categoria(
+                categoria.uuid(),
+                categoria.nombre(),
+                categoria.descripcion(),
+                true,
+                categoria.createdAt()
+        );
+    }
+
+    @Transactional
     public void eliminar(UUID uuid) {
         requireCategoria(uuid);
 
@@ -168,4 +204,30 @@ public class CategoriaService implements CategoryValidationContract {
         }
         return false;
     }
+
+    private boolean isCategoryNameActiveConflict(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (containsIgnoreCase(current.getMessage(), "category_name_key")
+                    || containsIgnoreCase(current.getMessage(), "duplicate key value violates unique constraint \"category_name_key\"")) {
+                return true;
+            }
+
+            if (current instanceof SQLException sqlException && "23505".equals(sqlException.getSQLState())
+                    && containsIgnoreCase(sqlException.getMessage(), "category_name_key")) {
+                return true;
+            }
+
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private boolean containsIgnoreCase(String text, String needle) {
+        if (text == null || needle == null) {
+            return false;
+        }
+        return text.toLowerCase().contains(needle.toLowerCase());
+    }
 }
+

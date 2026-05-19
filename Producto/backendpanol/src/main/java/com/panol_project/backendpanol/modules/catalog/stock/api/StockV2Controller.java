@@ -37,7 +37,7 @@ public class StockV2Controller {
     }
 
     @PostMapping("/movements")
-    StockDetailV2Response applyMovement(@PathVariable UUID implementUuid, @RequestBody StockMovementV2Request request) {
+    StockDetailV2Response applyMovement(@PathVariable UUID implementUuid, @Valid @RequestBody StockMovementV2Request request) {
         return toV2Response(stockService.applyMovement(
                 implementUuid,
                 request.movementType(),
@@ -54,6 +54,7 @@ public class StockV2Controller {
                 individualUuid,
                 request.status(),
                 request.condition(),
+                request.notes(),
                 request.currentLocationUuid(),
                 request.active()
         ));
@@ -76,6 +77,7 @@ public class StockV2Controller {
                         item.assetCode(),
                         item.status(),
                         item.condition(),
+                        item.notes(),
                         item.currentLocationUuid(),
                         item.active()
                 )).toList()

@@ -3,6 +3,7 @@
 - Estado del documento: vigente
 - Ultima verificacion: 2026-05-15
 - Fuente de verdad: controllers V2, SecurityConfig, application.yaml, ArchitectureTest
+- Arquitectura de datos: PostgreSQL (Supabase) como estado transaccional canónico.
 
 ## Resumen
 
@@ -42,7 +43,9 @@ Selector:
 ## Migraciones y jOOQ
 
 - Migraciones SQL en `src/main/resources/db/migration`.
-- Outbox base en `V20__outbox_events.sql`.
+- Outbox base en `V25__schema_alignment_big_bang.sql` (tabla actual `outbox_event`
+  y vista de compatibilidad `outbox_events`).
+- Estados canónicos de outbox: `PENDING`, `PROCESSING`, `SENT`, `FAILED`.
 - Codegen jOOQ con `scripts/generate-jooq.ps1` o `./mvnw generate-sources`.
 
 ## Documentacion relacionada

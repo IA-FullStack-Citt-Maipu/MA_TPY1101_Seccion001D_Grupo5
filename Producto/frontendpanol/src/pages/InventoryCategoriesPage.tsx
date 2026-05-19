@@ -9,7 +9,7 @@ import { useCategories } from "../hooks/useCategories";
 import type { Categoria } from "../types/category";
 
 interface ModalState {
-  type: "none" | "create" | "edit" | "deactivate" | "forceDeactivate" | "delete";
+  type: "none" | "create" | "edit" | "activate" | "deactivate" | "forceDeactivate" | "delete";
   category?: Categoria;
   message?: string;
 }
@@ -26,6 +26,7 @@ export function InventoryCategoriesPage({ embedded = false }: { embedded?: boole
     load,
     create,
     update,
+    activate,
     deactivate,
     remove,
     clearFieldError,
@@ -97,6 +98,17 @@ export function InventoryCategoriesPage({ embedded = false }: { embedded?: boole
     }
   }
 
+  async function handleActivate() {
+    if (!modal.category) {
+      return;
+    }
+
+    const ok = await activate(modal.category.uuid);
+    if (ok) {
+      closeModal();
+    }
+  }
+
   const content = (
     <>
       <section className="content-header">
@@ -139,6 +151,7 @@ export function InventoryCategoriesPage({ embedded = false }: { embedded?: boole
           associations={associations}
           loading={loading}
           onEdit={(category) => setModal({ type: "edit", category })}
+          onActivate={(category) => setModal({ type: "activate", category })}
           onDeactivate={(category) => setModal({ type: "deactivate", category })}
           onDelete={(category) => setModal({ type: "delete", category })}
         />
@@ -152,6 +165,16 @@ export function InventoryCategoriesPage({ embedded = false }: { embedded?: boole
         fieldError={fieldError}
         onClose={closeModal}
         onSubmit={handleSubmitForm}
+      />
+
+      <ConfirmModal
+        isOpen={modal.type === "activate"}
+        title="Activar categorÃ­a"
+        message="La categorÃ­a volverÃ¡ a estar disponible para nuevas asignaciones de implementos."
+        confirmLabel="Activar"
+        loading={saving}
+        onClose={closeModal}
+        onConfirm={handleActivate}
       />
 
       <ConfirmModal

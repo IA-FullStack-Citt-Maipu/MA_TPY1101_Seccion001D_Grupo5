@@ -17,12 +17,12 @@ import { Badge } from "../components/ui/Badge";
 import { Table } from "../components/ui/Table";
 
 const ACTION_LABELS: Record<string, string> = {
-  INGRESO: "Ingreso",
-  AJUSTE: "Ajuste",
-  RESERVA: "Reserva",
-  LIBERACION: "Liberación",
-  PRESTAMO: "Préstamo",
-  DEVOLUCION: "Devolución",
+  STOCK_IN: "Ingreso de stock",
+  STOCK_OUT: "Salida de stock",
+  LOAN_DELIVERY: "Entrega de préstamo",
+  LOAN_RETURN: "Devolución de préstamo",
+  DAMAGE_REPORT: "Reporte de daño",
+  MANUAL_ADJUSTMENT: "Ajuste manual",
 };
 
 function toDateStart(value: string): Date | null {
@@ -53,7 +53,7 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
   const [dateTo, setDateTo] = useState("");
 
   const [manualImplementUuid, setManualImplementUuid] = useState<string>("");
-  const [action, setAction] = useState<ManualMovementType>("INGRESO");
+  const [action, setAction] = useState<ManualMovementType>("STOCK_IN");
   const [quantity, setQuantity] = useState("1");
   const [notes, setNotes] = useState("");
 
@@ -123,8 +123,8 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
   const moveStats = useMemo(() => {
     return {
       total: filteredMovements.length,
-      ingresos: filteredMovements.filter((m) => m.action === "INGRESO").length,
-      ajustes: filteredMovements.filter((m) => m.action === "AJUSTE").length,
+      ingresos: filteredMovements.filter((m) => m.action === "STOCK_IN").length,
+      ajustes: filteredMovements.filter((m) => m.action === "MANUAL_ADJUSTMENT").length,
       implements: new Set(filteredMovements.map((m) => m.implement_uuid).filter((uuid): uuid is string => Boolean(uuid))).size,
     };
   }, [filteredMovements]);
@@ -188,7 +188,7 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
       <section className="content-header">
         <div>
           <h1>Movimientos</h1>
-          <p>Historial de movimientos de inventario almacenados en MongoDB.</p>
+          <p>Historial de movimientos de inventario registrados en PostgreSQL.</p>
         </div>
       </section>
 
@@ -274,8 +274,12 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
               <div>
                 <label>Acción</label>
                 <Select value={action} onChange={(e) => setAction(e.target.value as ManualMovementType)}>
-                  <option value="INGRESO">Ingreso</option>
-                  <option value="AJUSTE">Ajuste</option>
+                  <option value="STOCK_IN">Ingreso de stock</option>
+                  <option value="STOCK_OUT">Salida de stock</option>
+                  <option value="LOAN_DELIVERY">Entrega de prestamo</option>
+                  <option value="LOAN_RETURN">Devolucion de prestamo</option>
+                  <option value="DAMAGE_REPORT">Reporte de dano</option>
+                  <option value="MANUAL_ADJUSTMENT">Ajuste manual</option>
                 </Select>
               </div>
               <div>
@@ -324,12 +328,12 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
                 const implementInfo = m.implement_uuid ? implementByUuid.get(m.implement_uuid) : undefined;
                 const shortUuid = m.implement_uuid ? m.implement_uuid.slice(0, 8) : "sin-uuid";
                 return (
-                  <tr key={m.id} className="table-row-hover">
+                  <tr key={m.uuid} className="table-row-hover">
                     <td>{implementInfo?.name ?? `Implemento #${shortUuid}`}</td>
                     <td>{implementInfo?.category?.name ?? "Sin categoría"}</td>
                     <td>{new Date(m.timestamp).toLocaleString()}</td>
                     <td>
-                      <Badge tone={m.action === "INGRESO" ? "active" : m.action === "AJUSTE" ? "warn" : "inactive"}>
+                      <Badge tone={m.action === "STOCK_IN" ? "active" : m.action === "MANUAL_ADJUSTMENT" ? "warn" : "inactive"}>
                         {ACTION_LABELS[m.action] ?? m.action}
                       </Badge>
                     </td>

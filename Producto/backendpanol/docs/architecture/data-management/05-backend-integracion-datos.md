@@ -2,7 +2,7 @@
 
 - Estado del documento: vigente
 - Ultima verificacion: 2026-05-15
-- Fuente de verdad: servicios de aplicacion, `OutboxService`, `OutboxWorker`, `MongoOutboxPublisher`
+- Fuente de verdad: servicios de aplicacion, `OutboxService`, `OutboxWorker`, `outbox_event`
 
 ## Patron vigente
 
@@ -10,7 +10,7 @@
 2. Escribe estado de negocio en SQL.
 3. Encola evento outbox en la misma transaccion si corresponde.
 4. Confirma transaccion.
-5. Worker asincrono publica evento/proyeccion.
+5. Worker asincrono publica evento/proyeccion y actualiza estado (`PENDING`/`PROCESSING`/`SENT`/`FAILED`).
 
 ## Idempotencia
 
@@ -21,15 +21,14 @@
 ## Observabilidad minima
 
 - Conteo por estado de outbox.
-- Seguimiento de retries y `FAILED`.
+- Seguimiento de retries y estados de error (`FAILED`).
 - Correlacion por evento y agregado.
 
 ## Alcances
 
 - Endpoints operativos principales consumen estado SQL.
-- Vistas de trazabilidad/eventos consumen proyecciones asincronas.
+- Vistas de trazabilidad/eventos consumen proyecciones asincrónicas del mecanismo de outbox.
 
 ## Compatibilidad
 
-Este documento reemplaza la estrategia antigua "SQL y luego Mongo sincronico" como descripcion del estado actual.
-
+Este documento refleja el modelo canónico actual: estado transaccional en PostgreSQL con integración eventual mediante `outbox_event`.

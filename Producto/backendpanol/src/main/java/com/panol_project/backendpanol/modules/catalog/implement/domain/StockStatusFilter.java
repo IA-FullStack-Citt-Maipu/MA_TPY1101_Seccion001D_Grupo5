@@ -6,15 +6,14 @@ import java.util.Optional;
  * Representa el filtro de estado de stock que puede aplicarse al catálogo de implementos.
  * Cada valor corresponde a una columna de la tabla stock que debe ser > 0.
  *
- * <p>Solo los valores {@code AVAILABLE}, {@code RESERVED}, {@code LOANED},
- * {@code DAMAGED} y {@code BLOCKED} son válidos para el filtro de stock.</p>
+ * <p>Solo los valores {@code AVAILABLE}, {@code RESERVED}, {@code LOANED}
+ * y {@code DAMAGED} son válidos para el filtro de stock.</p>
  */
 public enum StockStatusFilter {
     AVAILABLE("available"),
     RESERVED("reserved"),
     LOANED("loaned"),
-    DAMAGED("damaged"),
-    BLOCKED("blocked");
+    DAMAGED("damaged");
 
     private final String value;
 

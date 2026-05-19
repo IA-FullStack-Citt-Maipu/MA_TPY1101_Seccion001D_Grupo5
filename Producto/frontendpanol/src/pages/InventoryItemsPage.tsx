@@ -100,7 +100,7 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
   async function handleSubmit(payload: {
     name: string;
     categoryUuid: string;
-    itemType: "consumable" | "reusable" | "individual";
+    itemType: "fungible" | "no_fungible";
     locationUuid: string;
     description: string | null;
     barcode: string | null;
@@ -213,7 +213,6 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
                 <option value="reserved">Reservado</option>
                 <option value="loaned">Prestado</option>
                 <option value="damaged">Da�ado</option>
-                <option value="blocked">Bloqueado</option>
               </select>
               {filters.stockStatus && filters.stockStatus !== "all" ? (
                 <span className="filter-badge">{STOCK_STATUS_LABELS[filters.stockStatus]}</span>

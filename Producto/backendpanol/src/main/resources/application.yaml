@@ -4,31 +4,26 @@
   jackson:
     serialization:
       write-dates-as-timestamps: false
-  data:
-    mongodb:
-      uri: ${MONGODB_URI}
   profiles:
     active: ${APP_DB_ENV:docker}
   config:
     import: optional:file:./secrets/application-secrets.properties
   flyway:
     enabled: true
-    locations: classpath:db/migration
+    locations: classpath:db/migration/v25
     baseline-on-migrate: true
-    baseline-version: 1
-    baseline-description: supabase-existing-schema-baseline
+    baseline-version: 25
+    baseline-description: v25-canonical-baseline
+    ignore-migration-patterns: "*:missing,*:future"
     validate-on-migrate: true
   jooq:
     sql-dialect: POSTGRES
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: ${JWT_ISSUER_URI:${SUPABASE_URL:${VITE_SUPABASE_URL:https://ekqbucfoygimzgxupdhm.supabase.co}}/auth/v1}
 
 app:
   security:
     enabled: ${APP_SECURITY_ENABLED:true}
+  outbox:
+    system-user-uuid: ${APP_OUTBOX_SYSTEM_USER_UUID:99999999-9999-9999-9999-999999999999}
   auth:
     max-failed-attempts: ${APP_AUTH_MAX_FAILED_ATTEMPTS:5}
     lock-minutes: ${APP_AUTH_LOCK_MINUTES:15}
@@ -65,4 +60,3 @@ spring:
     url: jdbc:postgresql://${DB_SUPABASE_HOST:${DB_HOST:aws-1-us-east-1.pooler.supabase.com}}:${DB_SUPABASE_PORT:${DB_PORT:5432}}/${DB_SUPABASE_NAME:${DB_NAME:postgres}}?sslmode=${DB_SUPABASE_SSL_MODE:${DB_SSL_MODE:require}}
     username: ${DB_SUPABASE_USER:${DB_USER:postgres}}
     password: ${DB_SUPABASE_PASSWORD:${DB_PASSWORD:postgres}}
-

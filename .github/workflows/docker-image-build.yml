@@ -30,75 +30,25 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Initialize schema for jOOQ codegen
+      - name: Guardrails - block legacy vocabulary
+        run: |
+          set -euo pipefail
+          if rg -n -i "m[o]ngo(db)?|n[o]sql" Producto/backendpanol/src/main Producto/frontendpanol/src Producto/backendpanol/docs; then
+            echo "Legacy storage vocabulary found."
+            exit 1
+          fi
+          if rg -n "c[o]nsumable|r[e]usable|PR[O]CESSED" Producto/backendpanol/src/main Producto/frontendpanol/src Producto/backendpanol/docs; then
+            echo "Legacy enum/status vocabulary found."
+            exit 1
+          fi
+
+      - name: Initialize schema for jOOQ codegen (V25)
         env:
           PGPASSWORD: panol_ci
         run: |
-          psql -h 127.0.0.1 -U panol_ci -d panol_ci <<'SQL'
-          CREATE TYPE item_type_enum AS ENUM ('consumable','reusable','individual');
-          CREATE TYPE individual_status_enum AS ENUM ('available','reserved','loaned','damaged');
-          CREATE TYPE individual_condition_enum AS ENUM ('good','damaged');
-
-          CREATE TABLE IF NOT EXISTS category (
-            id SERIAL PRIMARY KEY,
-            name VARCHAR(150) NOT NULL UNIQUE,
-            description TEXT,
-            active BOOLEAN NOT NULL DEFAULT TRUE,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-          );
-
-          CREATE TABLE IF NOT EXISTS location (
-            id SERIAL PRIMARY KEY,
-            name VARCHAR(150) NOT NULL,
-            description TEXT
-          );
-
-          CREATE TABLE IF NOT EXISTS implement (
-            id SERIAL PRIMARY KEY,
-            name VARCHAR(150) NOT NULL UNIQUE,
-            description TEXT,
-            category_id INTEGER REFERENCES category(id),
-            location_id INTEGER REFERENCES location(id),
-            item_type item_type_enum NOT NULL DEFAULT 'reusable',
-            barcode VARCHAR(100),
-            img_url TEXT,
-            active BOOLEAN NOT NULL DEFAULT TRUE,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            observations VARCHAR(255)
-          );
-
-          CREATE TABLE IF NOT EXISTS "user" (
-            id SERIAL PRIMARY KEY,
-            name VARCHAR(150) NOT NULL,
-            auth_uuid VARCHAR(255) UNIQUE
-          );
-
-          CREATE TABLE IF NOT EXISTS individual (
-            id SERIAL PRIMARY KEY,
-            implement_id INTEGER NOT NULL REFERENCES implement(id),
-            asset_code VARCHAR(150) NOT NULL,
-            status individual_status_enum,
-            condition individual_condition_enum,
-            current_location_id INTEGER REFERENCES location(id),
-            active BOOLEAN NOT NULL DEFAULT TRUE,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-          );
-
-          CREATE TABLE IF NOT EXISTS stock (
-            id SERIAL PRIMARY KEY,
-            implement_id INTEGER NOT NULL UNIQUE REFERENCES implement(id),
-            total_stock INTEGER NOT NULL DEFAULT 0,
-            min_stock INTEGER NOT NULL DEFAULT 0,
-            available INTEGER NOT NULL DEFAULT 0,
-            reserved INTEGER NOT NULL DEFAULT 0,
-            loaned INTEGER NOT NULL DEFAULT 0,
-            damaged INTEGER NOT NULL DEFAULT 0,
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-          );
-          SQL
+          psql -v ON_ERROR_STOP=1 \
+            -h 127.0.0.1 -U panol_ci -d panol_ci \
+            -f Producto/backendpanol/src/main/resources/db/migration/v25/V25__schema_alignment_big_bang.sql
 
       - name: Generate jOOQ sources (host build)
         env:
@@ -125,4 +75,3 @@ jobs:
           docker build \
             -t frontendpanol:ci \
             ./Producto/frontendpanol
-

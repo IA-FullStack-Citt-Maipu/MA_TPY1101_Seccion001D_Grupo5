@@ -9,6 +9,7 @@ public record ImplementRecentMovement(
         String action,
         Integer quantity,
         UUID performedByUuid,
+        String performedByName,
         Instant timestamp,
         String notes
 ) {

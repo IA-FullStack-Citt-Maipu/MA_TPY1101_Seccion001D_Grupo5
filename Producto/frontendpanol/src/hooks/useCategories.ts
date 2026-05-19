@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import {
   createCategoria,
+  activateCategoria,
   deactivateCategoria,
   deleteCategoria,
   fetchCategoriaAssociation,
@@ -108,6 +109,24 @@ export function useCategories() {
     return true;
   }, [load]);
 
+  const activate = useCallback(async (categoryUuid: string) => {
+    setState((prev) => ({ ...prev, saving: true, error: null }));
+
+    try {
+      await activateCategoria(categoryUuid);
+      await load();
+      setState((prev) => ({ ...prev, saving: false }));
+      return true;
+    } catch (error) {
+      setState((prev) => ({
+        ...prev,
+        saving: false,
+        error: getErrorMessage(error, "No se pudo activar la categorÃ­a."),
+      }));
+      return false;
+    }
+  }, [load]);
+
   const deactivate = useCallback(async (categoryUuid: string, force = false) => {
     setState((prev) => ({ ...prev, saving: true, error: null }));
 
@@ -179,6 +198,7 @@ export function useCategories() {
     load,
     create,
     update,
+    activate,
     deactivate,
     remove,
     clearFieldError,

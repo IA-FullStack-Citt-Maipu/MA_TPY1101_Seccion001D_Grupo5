@@ -67,7 +67,6 @@ jobs:
           JWT_ISSUER_URI: ${{ vars.JWT_ISSUER_URI_DEV }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY_DEV }}
           DB_SUPABASE_PASSWORD: ${{ secrets.DB_SUPABASE_PASSWORD_DEV }}
-          MONGODB_URI: ${{ secrets.MONGODB_URI_DEV }}
           APP_AUTH_JWT_SECRET: ${{ secrets.APP_AUTH_JWT_SECRET_DEV }}
         run: |
           set -euo pipefail
@@ -75,7 +74,7 @@ jobs:
             GCP_PROJECT_ID GCP_REGION GCP_ARTIFACT_REGISTRY_LOCATION GCP_TFSTATE_BUCKET
             BACKEND_IMAGE FRONTEND_IMAGE SUPABASE_DB_HOST SUPABASE_DB_PORT SUPABASE_DB_NAME SUPABASE_DB_USER
             APP_AUTH_JWT_ISSUER APP_AUTH_JWT_EXPIRATION_SECONDS JWT_ISSUER_URI VITE_SUPABASE_PUBLISHABLE_KEY
-            DB_SUPABASE_PASSWORD MONGODB_URI APP_AUTH_JWT_SECRET
+            DB_SUPABASE_PASSWORD APP_AUTH_JWT_SECRET
           )
           for key in "${required[@]}"; do
             if [ -z "${!key:-}" ]; then
@@ -116,7 +115,6 @@ jobs:
           TF_VAR_jwt_issuer_uri: ${{ vars.JWT_ISSUER_URI_DEV }}
           TF_VAR_vite_supabase_publishable_key: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY_DEV }}
           TF_VAR_db_supabase_password_secret_value: ${{ secrets.DB_SUPABASE_PASSWORD_DEV }}
-          TF_VAR_mongodb_uri_secret_value: ${{ secrets.MONGODB_URI_DEV }}
           TF_VAR_app_auth_jwt_secret_value: ${{ secrets.APP_AUTH_JWT_SECRET_DEV }}
           TF_VAR_runtime_sa_user_members: '["serviceAccount:${{ secrets.GCP_SERVICE_ACCOUNT_DEV }}"]'
           TF_VAR_backend_domain: ""
@@ -164,7 +162,6 @@ jobs:
           JWT_ISSUER_URI: ${{ vars.JWT_ISSUER_URI_PROD }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY_PROD }}
           DB_SUPABASE_PASSWORD: ${{ secrets.DB_SUPABASE_PASSWORD_PROD }}
-          MONGODB_URI: ${{ secrets.MONGODB_URI_PROD }}
           APP_AUTH_JWT_SECRET: ${{ secrets.APP_AUTH_JWT_SECRET_PROD }}
         run: |
           set -euo pipefail
@@ -172,7 +169,7 @@ jobs:
             GCP_PROJECT_ID GCP_REGION GCP_ARTIFACT_REGISTRY_LOCATION GCP_TFSTATE_BUCKET
             BACKEND_IMAGE FRONTEND_IMAGE SUPABASE_DB_HOST SUPABASE_DB_PORT SUPABASE_DB_NAME SUPABASE_DB_USER
             APP_AUTH_JWT_ISSUER APP_AUTH_JWT_EXPIRATION_SECONDS JWT_ISSUER_URI VITE_SUPABASE_PUBLISHABLE_KEY
-            DB_SUPABASE_PASSWORD MONGODB_URI APP_AUTH_JWT_SECRET
+            DB_SUPABASE_PASSWORD APP_AUTH_JWT_SECRET
           )
           for key in "${required[@]}"; do
             if [ -z "${!key:-}" ]; then
@@ -213,7 +210,6 @@ jobs:
           TF_VAR_jwt_issuer_uri: ${{ vars.JWT_ISSUER_URI_PROD }}
           TF_VAR_vite_supabase_publishable_key: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY_PROD }}
           TF_VAR_db_supabase_password_secret_value: ${{ secrets.DB_SUPABASE_PASSWORD_PROD }}
-          TF_VAR_mongodb_uri_secret_value: ${{ secrets.MONGODB_URI_PROD }}
           TF_VAR_app_auth_jwt_secret_value: ${{ secrets.APP_AUTH_JWT_SECRET_PROD }}
           TF_VAR_runtime_sa_user_members: '["serviceAccount:${{ secrets.GCP_SERVICE_ACCOUNT_PROD }}"]'
           TF_VAR_backend_domain: ""

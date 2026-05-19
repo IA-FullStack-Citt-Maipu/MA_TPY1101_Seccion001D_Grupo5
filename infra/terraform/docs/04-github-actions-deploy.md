@@ -43,7 +43,6 @@
 - Secretos sensibles via GitHub Secrets -> `TF_VAR_*` -> Secret Manager:
   - `DB_SUPABASE_PASSWORD`
   - `APP_AUTH_JWT_SECRET`
-  - `MONGODB_URI`
 - Configuracion no sensible via GitHub Variables -> `TF_VAR_*` -> `env_vars` de Cloud Run:
   - `JWT_ISSUER_URI`
   - `VITE_SUPABASE_PUBLISHABLE_KEY`

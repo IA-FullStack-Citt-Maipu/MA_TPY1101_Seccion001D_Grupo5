@@ -26,28 +26,24 @@ import { getErrorMessage } from "../services/apiClient";
 import { fetchImplementById } from "../services/implementService";
 import { fetchLabelsPdfBlob, type LabelScope } from "../services/labelService";
 import { fetchLocations } from "../services/locationService";
-import { registerManualMovement } from "../services/movementService";
+import { registerManualMovement, type ManualMovementType } from "../services/movementService";
 import { addStockEntry, applyStockMovement, fetchImplementStock, updateIndividualState } from "../services/stockService";
 import type { ImplementDetail } from "../types/implement";
 import type { LocationOption } from "../types/location";
 import type { IndividualItem, StockMovementType } from "../types/stock";
 import { getUserRoleFromToken, type UserRole } from "../utils/auth";
 
-const ITEM_TYPE_LABELS: Record<"consumable" | "reusable" | "individual", string> = {
-  consumable: "Consumible",
-  reusable: "Reutilizable",
-  individual: "Individual",
+const ITEM_TYPE_LABELS: Record<"fungible" | "no_fungible", string> = {
+  fungible: "Fungible",
+  no_fungible: "No fungible",
 };
 
 const MOVEMENT_OPTIONS: { value: StockMovementType; label: string }[] = [
-  { value: "increase_available", label: "Aumentar disponible" },
-  { value: "decrease_available", label: "Disminuir disponible" },
-  { value: "reserve", label: "Reservar" },
-  { value: "release_reserve", label: "Liberar reserva" },
-  { value: "loan", label: "Prestar" },
-  { value: "return", label: "Devolver" },
-  { value: "damage", label: "Marcar dañado" },
-  { value: "repair", label: "Reparar" },
+  { value: "STOCK_OUT", label: "Salida de stock" },
+  { value: "LOAN_DELIVERY", label: "Entrega de prestamo" },
+  { value: "LOAN_RETURN", label: "Devolucion de prestamo" },
+  { value: "DAMAGE_REPORT", label: "Reporte de dano" },
+  { value: "MANUAL_ADJUSTMENT", label: "Ajuste manual" },
 ];
 
 const INDIVIDUAL_STATUS_OPTIONS: Array<IndividualItem["status"]> = [
@@ -55,32 +51,26 @@ const INDIVIDUAL_STATUS_OPTIONS: Array<IndividualItem["status"]> = [
   "loaned",
   "maintenance",
   "damaged",
-  "blocked",
-  "retired",
 ];
 
 const INDIVIDUAL_CONDITION_OPTIONS: Array<IndividualItem["condition"]> = [
   "good",
-  "damaged_repairable",
-  "damaged_no_diagnosis",
-  "irreparable",
+  "fair",
+  "poor",
 ];
 
 function statusLabel(status: string) {
   if (status === "available") return "Disponible";
-  if (status === "blocked") return "Bloqueado";
   if (status === "loaned") return "Prestado";
   if (status === "maintenance") return "Mantención";
   if (status === "damaged") return "Dañado";
-  if (status === "retired") return "Retirado";
   return status;
 }
 
 function conditionLabel(condition: string) {
   if (condition === "good") return "Bueno";
-  if (condition === "damaged_repairable") return "Dañado reparable";
-  if (condition === "damaged_no_diagnosis") return "Daño sin diagnóstico";
-  if (condition === "irreparable") return "Irreparable";
+  if (condition === "fair") return "Regular";
+  if (condition === "poor") return "Deficiente";
   return condition;
 }
 
@@ -182,7 +172,7 @@ export function InventoryItemDetailPage({
   const [adjustReduceIndividualIds, setAdjustReduceIndividualIds] = useState<string[]>([]);
   const [adjustReduceQuantity, setAdjustReduceQuantity] = useState("1");
 
-  const [movementType, setMovementType] = useState<StockMovementType>("reserve");
+  const [movementType, setMovementType] = useState<StockMovementType>("STOCK_OUT");
   const [movementQuantity, setMovementQuantity] = useState("1");
   const [movementSelectedIndividualIds, setMovementSelectedIndividualIds] = useState<string[]>([]);
   const [movementNotes, setMovementNotes] = useState("");
@@ -190,6 +180,7 @@ export function InventoryItemDetailPage({
   const [editingIndividual, setEditingIndividual] = useState<IndividualItem | null>(null);
   const [individualStatus, setIndividualStatus] = useState<IndividualItem["status"]>("available");
   const [individualCondition, setIndividualCondition] = useState<IndividualItem["condition"]>("good");
+  const [individualNotes, setIndividualNotes] = useState("");
   const [individualLocationId, setIndividualLocationId] = useState<string>("");
   const [individualActive, setIndividualActive] = useState(true);
 
@@ -285,7 +276,7 @@ export function InventoryItemDetailPage({
   }
 
   function openMovementModal() {
-    setMovementType("reserve");
+    setMovementType("STOCK_OUT");
     setMovementQuantity("1");
     setMovementSelectedIndividualIds([]);
     setMovementNotes("");
@@ -318,7 +309,7 @@ export function InventoryItemDetailPage({
     return Array.from({ length: quantity }).map((_, idx) => `IMP-${implementUuid.slice(0, 8)}-${stamp}-${idx + 1}`);
   }
 
-  async function registerInventoryTrace(action: "INGRESO" | "AJUSTE", quantity: number, notes: string) {
+  async function registerInventoryTrace(action: ManualMovementType, quantity: number, notes: string) {
     try {
       await registerManualMovement(implementUuid, {
         action,
@@ -326,7 +317,7 @@ export function InventoryItemDetailPage({
         notes: notes.trim() ? notes.trim() : null,
       });
     } catch {
-      // El ajuste de stock es exitoso aunque falle el registro complementario en Mongo.
+      // El ajuste de stock es exitoso aunque falle el registro complementario de trazabilidad.
     }
   }
 
@@ -337,7 +328,7 @@ export function InventoryItemDetailPage({
 
     try {
       if (adjustOperation === "increase") {
-        if (implement.item_type === "individual") {
+        if (implement.item_type === "no_fungible") {
           const quantity = adjustIncreaseMode === "single" ? 1 : Number(entryQuantity);
           if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isInteger(quantity)) {
             setStockError("La cantidad debe ser un entero positivo.");
@@ -374,7 +365,7 @@ export function InventoryItemDetailPage({
           }
 
           setStockDetail(nextDetail);
-          await registerInventoryTrace("INGRESO", quantity, adjustNotes);
+          await registerInventoryTrace("STOCK_IN", quantity, adjustNotes);
         } else {
           const quantity = Number(entryQuantity);
           if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isInteger(quantity)) {
@@ -383,10 +374,10 @@ export function InventoryItemDetailPage({
             return;
           }
           setStockDetail(await addStockEntry(implementUuid, { quantity }));
-          await registerInventoryTrace("INGRESO", quantity, adjustNotes);
+          await registerInventoryTrace("STOCK_IN", quantity, adjustNotes);
         }
       } else {
-        if (implement.item_type === "individual") {
+        if (implement.item_type === "no_fungible") {
           if (adjustReduceIndividualIds.length === 0) {
             setStockError("Selecciona al menos un implemento individual para reducir.");
             setStockBusy(false);
@@ -394,12 +385,12 @@ export function InventoryItemDetailPage({
           }
           setStockDetail(
             await applyStockMovement(implementUuid, {
-              movement_type: "decrease_available",
+              movement_type: "STOCK_OUT",
               individual_uuids: adjustReduceIndividualIds,
               condition: adjustCondition,
             }),
           );
-          await registerInventoryTrace("AJUSTE", adjustReduceIndividualIds.length, adjustNotes);
+          await registerInventoryTrace("STOCK_OUT", adjustReduceIndividualIds.length, adjustNotes);
         } else {
           const quantity = Number(adjustReduceQuantity);
           if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isInteger(quantity)) {
@@ -409,11 +400,11 @@ export function InventoryItemDetailPage({
           }
           setStockDetail(
             await applyStockMovement(implementUuid, {
-              movement_type: "decrease_available",
+              movement_type: "STOCK_OUT",
               quantity,
             }),
           );
-          await registerInventoryTrace("AJUSTE", quantity, adjustNotes);
+          await registerInventoryTrace("STOCK_OUT", quantity, adjustNotes);
         }
       }
 
@@ -429,11 +420,11 @@ export function InventoryItemDetailPage({
   }
 
   async function handleMovementSave() {
-    if (implement?.item_type === "individual" && movementSelectedIndividualIds.length === 0) {
+    if (implement?.item_type === "no_fungible" && movementSelectedIndividualIds.length === 0) {
       setStockError("Debes seleccionar al menos una unidad individual.");
       return;
     }
-    if (implement?.item_type !== "individual") {
+    if (implement?.item_type !== "no_fungible") {
       const quantity = Number(movementQuantity);
       if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isInteger(quantity)) {
         setStockError("La cantidad del movimiento debe ser un entero positivo.");
@@ -445,7 +436,7 @@ export function InventoryItemDetailPage({
     try {
       const payload: any = { movement_type: movementType };
       let qtyForTrace = 0;
-      if (implement?.item_type === "individual") {
+      if (implement?.item_type === "no_fungible") {
         payload.individual_uuids = movementSelectedIndividualIds;
         qtyForTrace = movementSelectedIndividualIds.length;
       } else {
@@ -453,7 +444,7 @@ export function InventoryItemDetailPage({
         qtyForTrace = Number(movementQuantity);
       }
       setStockDetail(await applyStockMovement(implementUuid, payload));
-      await registerInventoryTrace("AJUSTE", qtyForTrace, movementNotes);
+      await registerInventoryTrace(movementType as ManualMovementType, qtyForTrace, movementNotes);
       await refreshDetailData();
       setSuccess("Movimiento interno aplicado.");
       setIsMovementModalOpen(false);
@@ -488,12 +479,14 @@ export function InventoryItemDetailPage({
     setEditingIndividual(individual);
     setIndividualStatus(individual.status);
     setIndividualCondition(individual.condition);
+    setIndividualNotes(individual.notes ?? "");
     setIndividualLocationId(individual.current_location_uuid == null ? "" : String(individual.current_location_uuid));
     setIndividualActive(individual.active);
   }
 
   function closeIndividualEditor() {
     setEditingIndividual(null);
+    setIndividualNotes("");
   }
 
   async function handleSaveIndividual() {
@@ -504,6 +497,7 @@ export function InventoryItemDetailPage({
       const payload = {
         status: individualStatus,
         condition: individualCondition,
+        notes: individualNotes.trim() ? individualNotes.trim() : null,
         current_location_uuid: individualLocationId.trim() ? individualLocationId : null,
         active: individualActive,
       };
@@ -679,7 +673,7 @@ export function InventoryItemDetailPage({
                 </>
               )}
 
-              {!isDocente && implement.item_type === "individual" ? (
+              {!isDocente && implement.item_type === "no_fungible" ? (
                 <article className="detail-card units-card">
                   <h3>Unidades asociadas</h3>
                   <div className="table-wrapper">
@@ -693,7 +687,7 @@ export function InventoryItemDetailPage({
                             <td>{individual.uuid}</td>
                             <td>{individual.asset_code}</td>
                             <td>
-                              <span className={`badge ${individual.status === "available" ? "badge--active" : individual.status === "blocked" ? "badge--danger" : "badge--inactive"}`}>
+                              <span className={`badge ${individual.status === "available" ? "badge--active" : individual.status === "damaged" ? "badge--danger" : "badge--inactive"}`}>
                                 {statusLabel(individual.status)}
                               </span>
                             </td>
@@ -723,7 +717,7 @@ export function InventoryItemDetailPage({
                 <p><strong>Observaciones:</strong> {implement.observations ?? "Sin observaciones"}</p>
                 <p><strong>Total stock:</strong> {stockDetail?.stock?.total_stock ?? 0}</p>
                 <p><strong>Última actualización:</strong> {implement.updatedAt ? new Date(implement.updatedAt).toLocaleString() : "-"}</p>
-                {implement.item_type !== "individual" && !isDocente ? (
+                {implement.item_type !== "no_fungible" && !isDocente ? (
                   <div style={{ marginTop: 10 }}>
                     <button type="button" className="button button--ghost button--sm" onClick={() => openLabelsModal("GENERAL")}><Barcode size={14} />Código de barras general</button>
                   </div>
@@ -741,7 +735,7 @@ export function InventoryItemDetailPage({
                           <tr><td colSpan={4} style={{ textAlign: "center" }}>No hay movimientos recientes registrados</td></tr>
                         ) : (
                           implement.recent_movements.map((mov) => (
-                            <tr key={mov.id}>
+                            <tr key={mov.uuid}>
                               <td>{new Date(mov.timestamp).toLocaleString()}</td>
                               <td><span className="badge badge--inactive">{mov.action}</span></td>
                               <td>{mov.quantity}</td>
@@ -818,7 +812,7 @@ export function InventoryItemDetailPage({
                   <option value="decrease">Reducir stock</option>
                 </select>
 
-                {implement.item_type === "individual" && adjustOperation === "increase" ? (
+                {implement.item_type === "no_fungible" && adjustOperation === "increase" ? (
                   <>
                     <label htmlFor="adjust-increase-mode">Tipo de ingreso</label>
                     <select
@@ -847,7 +841,7 @@ export function InventoryItemDetailPage({
                       disabled={adjustIncreaseMode === "single"}
                     />
 
-                    {implement.item_type === "individual" && adjustIncreaseMode === "single" ? (
+                    {implement.item_type === "no_fungible" && adjustIncreaseMode === "single" ? (
                       <>
                         <label htmlFor="single-asset-code">Código del individual</label>
                         <input
@@ -860,7 +854,7 @@ export function InventoryItemDetailPage({
                       </>
                     ) : null}
 
-                    {implement.item_type === "individual" && adjustIncreaseMode === "batch" ? (
+                    {implement.item_type === "no_fungible" && adjustIncreaseMode === "batch" ? (
                       <>
                         <label htmlFor="entry-asset-codes">Códigos individuales (opcional, uno por línea)</label>
                         <textarea
@@ -872,7 +866,7 @@ export function InventoryItemDetailPage({
                       </>
                     ) : null}
 
-                    {implement.item_type === "individual" ? (
+                    {implement.item_type === "no_fungible" ? (
                       <>
                         <label className="modal-checkbox">
                           <input
@@ -917,7 +911,7 @@ export function InventoryItemDetailPage({
                   </>
                 ) : (
                   <>
-                    {implement.item_type === "individual" ? (
+                    {implement.item_type === "no_fungible" ? (
                       <>
                         <label>Selecciona implementos a retirar (borrado lógico)</label>
                         <div className="table-wrapper wizard-table-select">
@@ -1043,7 +1037,7 @@ export function InventoryItemDetailPage({
               ))}
             </select>
 
-            {implement.item_type === "individual" ? (
+            {implement.item_type === "no_fungible" ? (
               <>
                 <label>Selecciona unidades</label>
                 <div className="table-wrapper" style={{ maxHeight: 260, border: "1px solid var(--line)", borderRadius: 10 }}>
@@ -1132,6 +1126,14 @@ export function InventoryItemDetailPage({
               {locations.map((location) => (<option key={location.uuid} value={location.uuid}>{location.name}</option>))}
             </select>
 
+            <label htmlFor="individual-notes">Notas</label>
+            <textarea
+              id="individual-notes"
+              value={individualNotes}
+              onChange={(e) => setIndividualNotes(e.target.value)}
+              placeholder="Observaciones de la unidad"
+            />
+
             <label htmlFor="individual-active">Activo</label>
             <select id="individual-active" value={individualActive ? "true" : "false"} onChange={(e) => setIndividualActive(e.target.value === "true")}>
               <option value="true">Sí</option>
@@ -1203,7 +1205,3 @@ export function InventoryItemDetailPage({
 
   return <InventoryLayout activeSection="items">{content}</InventoryLayout>;
 }
-
-
-
-

@@ -15,7 +15,7 @@ export function ImportantAlertsCard({ alerts }: { alerts: AlertItem[] }) {
         {alerts.map((alert) => {
           const Icon = iconBySeverity(alert.severity);
           return (
-            <li key={alert.id} className={`director-alert director-alert--${alert.severity}`} tabIndex={0}>
+            <li key={alert.uuid} className={`director-alert director-alert--${alert.severity}`} tabIndex={0}>
               <Icon size={16} aria-hidden="true" />
               <span>{alert.text}</span>
               <ChevronRight size={16} aria-hidden="true" />

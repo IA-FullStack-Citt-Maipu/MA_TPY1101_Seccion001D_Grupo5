@@ -53,14 +53,14 @@ class AuthServiceTest {
         String hash = BCrypt.hashpw("secret", BCrypt.gensalt());
         AuthUser authUser = new AuthUser(
                 userUuid,
-                "123456789",
+                "12345678",
                 hash,
                 "DIRECTOR",
                 0,
                 null
         );
 
-        when(userAuthPort.findAuthUserByRut("123456789")).thenReturn(Optional.of(authUser));
+        when(userAuthPort.findAuthUserByRut("12345678")).thenReturn(Optional.of(authUser));
         when(jwtEncoder.encode(any())).thenReturn(Jwt.withTokenValue("token-123")
                 .header("alg", "HS256")
                 .subject(userUuid.toString())
@@ -86,8 +86,8 @@ class AuthServiceTest {
         assertEquals("DIRECTOR", result.role());
         assertEquals(3600, result.expiresInSeconds());
         verify(userAuthPort).resetLoginAttempts(eq(userUuid), any(OffsetDateTime.class));
-        verify(auditLogPort).log("user_logged_in", userUuid, userUuid, Map.of("rut", "123456789", "role", "DIRECTOR"));
-        verify(outboxService).enqueue("user", userUuid, "UserLoggedIn", userUuid, Map.of("rut", "123456789", "role", "DIRECTOR"));
+        verify(auditLogPort).log("user_logged_in", userUuid, userUuid, Map.of("rut", "12345678", "role", "DIRECTOR"));
+        verify(outboxService).enqueue("user", userUuid, "UserLoggedIn", userUuid, Map.of("rut", "12345678", "role", "DIRECTOR"));
     }
 
     @Test
@@ -96,14 +96,14 @@ class AuthServiceTest {
         String hash = BCrypt.hashpw("secret", BCrypt.gensalt());
         AuthUser authUser = new AuthUser(
                 userUuid,
-                "123456789",
+                "12345678",
                 hash,
                 "DOCENTE",
                 0,
                 null
         );
 
-        when(userAuthPort.findAuthUserByRut("123456789")).thenReturn(Optional.of(authUser));
+        when(userAuthPort.findAuthUserByRut("12345678")).thenReturn(Optional.of(authUser));
 
         AuthService service = new AuthService(
                 userAuthPort,
@@ -124,8 +124,8 @@ class AuthServiceTest {
 
         assertEquals("AUTH_INVALID_CREDENTIALS", ex.getCode());
         verify(userAuthPort).registerFailedAttempt(eq(userUuid), eq(1), eq(null));
-        verify(auditLogPort).log("login_failed", null, null, Map.of("rut", "123456789"));
-        verify(outboxService).enqueue("auth", null, "LoginFailed", null, Map.of("rut", "123456789"));
+        verify(auditLogPort).log("login_failed", null, null, Map.of("rut", "12345678"));
+        verify(outboxService).enqueue("auth", null, "LoginFailed", null, Map.of("rut", "12345678"));
     }
 
     @Test

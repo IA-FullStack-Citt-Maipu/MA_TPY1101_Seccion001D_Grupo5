@@ -10,11 +10,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Repository;
 
-import static org.jooq.JSONB.jsonb;
-import static org.jooq.impl.DSL.field;
-import static org.jooq.impl.DSL.name;
-import static org.jooq.impl.DSL.table;
-
 @Repository
 public class AuditLogJooqAdapter implements AuditLogPort {
 
@@ -31,10 +26,13 @@ public class AuditLogJooqAdapter implements AuditLogPort {
     @Override
     public void log(String event, UUID actorUserUuid, UUID targetUserUuid, Map<String, Object> payload) {
         try {
-            dsl.insertInto(table(name("audit_log")))
-                    .columns(field(name("event")), field(name("actor_user_uuid")), field(name("target_user_uuid")), field(name("payload")))
-                    .values(event, actorUserUuid, targetUserUuid, jsonb(objectMapper.writeValueAsString(payload)))
-                    .execute();
+            dsl.execute(
+                    "select public.fn_write_audit_log(?, ?, ?, ?::jsonb)",
+                    event,
+                    actorUserUuid,
+                    targetUserUuid,
+                    objectMapper.writeValueAsString(payload)
+            );
         } catch (JsonProcessingException ex) {
             LOG.warn("audit_log_payload_serialize_failed", ex);
         } catch (Exception ex) {

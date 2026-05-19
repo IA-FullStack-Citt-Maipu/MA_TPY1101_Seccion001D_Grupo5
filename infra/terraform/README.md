@@ -43,7 +43,6 @@ terraform apply -var-file=terraform.tfvars
 
 - `DB_SUPABASE_PASSWORD`
 - `APP_AUTH_JWT_SECRET`
-- `MONGODB_URI`
 
 `env_vars` (non-sensitive) for runtime/public configuration:
 

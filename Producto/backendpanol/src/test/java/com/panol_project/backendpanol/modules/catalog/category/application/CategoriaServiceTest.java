@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 @ExtendWith(MockitoExtension.class)
 class CategoriaServiceTest {
@@ -96,4 +98,48 @@ class CategoriaServiceTest {
         assertEquals(false, response.activa());
         verify(repository).deactivate(eq(uuid));
     }
+
+    @Test
+    void activarDebeRetornarCategoriaCuandoYaEstaActiva() {
+        UUID uuid = UUID.randomUUID();
+        Categoria active = new Categoria(uuid, "Quimica", null, true, OffsetDateTime.now());
+
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(active));
+
+        Categoria response = service.activar(uuid);
+
+        assertEquals("Quimica", response.nombre());
+        assertEquals(true, response.activa());
+        verify(repository, never()).activate(any());
+    }
+
+    @Test
+    void activarDebeActivarCuandoEstaInactiva() {
+        UUID uuid = UUID.randomUUID();
+        Categoria inactive = new Categoria(uuid, "Biologia", null, false, OffsetDateTime.now());
+
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(inactive));
+
+        Categoria response = service.activar(uuid);
+
+        assertEquals(false, inactive.activa());
+        assertEquals(true, response.activa());
+        verify(repository).activate(eq(uuid));
+    }
+
+    @Test
+    void activarDebeLanzarBadRequestCuandoActivaNombreDuplicadoViolandoRestriccion() {
+        UUID uuid = UUID.randomUUID();
+        Categoria inactive = new Categoria(uuid, "Duplicada", null, false, OffsetDateTime.now());
+
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(inactive));
+        doThrow(new DataIntegrityViolationException("ERROR: duplicate key value violates unique constraint \"category_name_key\""))
+                .when(repository).activate(eq(uuid));
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> service.activar(uuid));
+
+        assertEquals("CATEGORY_NAME_ACTIVE_DUPLICATE", ex.getCode());
+        assertEquals("Ya existe una categoría activa con ese nombre.", ex.getMessage());
+    }
 }
+

@@ -54,7 +54,7 @@ public class ImplementService implements ImplementLookupContract {
         String normalizedObservations = normalizeObservations(observations);
         ImplementItemType normalizedItemType = parseItemType(itemType);
         locationValidationContract.validarLocationExistente(locationUuid);
-        validateUniqueActiveNameForCreate(normalizedName);
+        validateUniqueActiveNameForCreate(normalizedName, categoriaUuid);
 
         try {
             Implemento created = repository.create(
@@ -102,7 +102,7 @@ public class ImplementService implements ImplementLookupContract {
         String normalizedImgUrl = normalizeOptional(imgUrl);
         String normalizedObservations = normalizeObservations(observations);
         ImplementItemType normalizedItemType = parseItemType(itemType);
-        validateUniqueActiveNameForUpdate(normalizedName, uuid);
+        validateUniqueActiveNameForUpdate(normalizedName, categoriaUuid, uuid);
 
         try {
             Implemento updated = repository.update(
@@ -227,14 +227,14 @@ public class ImplementService implements ImplementLookupContract {
         return normalized;
     }
 
-    private void validateUniqueActiveNameForCreate(String normalizedName) {
-        if (repository.existsActiveByNameIgnoreCase(normalizedName)) {
+    private void validateUniqueActiveNameForCreate(String normalizedName, UUID categoryUuid) {
+        if (repository.existsActiveByNameIgnoreCase(normalizedName, categoryUuid)) {
             throw duplicateNameException(normalizedName);
         }
     }
 
-    private void validateUniqueActiveNameForUpdate(String normalizedName, UUID uuid) {
-        if (repository.existsActiveByNameIgnoreCaseAndUuidNot(normalizedName, uuid)) {
+    private void validateUniqueActiveNameForUpdate(String normalizedName, UUID categoryUuid, UUID uuid) {
+        if (repository.existsActiveByNameIgnoreCaseAndUuidNot(normalizedName, categoryUuid, uuid)) {
             throw duplicateNameException(normalizedName);
         }
     }
@@ -250,7 +250,7 @@ public class ImplementService implements ImplementLookupContract {
         return ImplementItemType.fromLiteral(itemType)
                 .orElseThrow(() -> new BadRequestException(
                         "IMPLEMENT_ITEM_TYPE_INVALID",
-                        "El tipo de implemento debe ser consumable, reusable o individual"
+                        "El tipo de implemento debe ser fungible o no_fungible"
                 ));
     }
 

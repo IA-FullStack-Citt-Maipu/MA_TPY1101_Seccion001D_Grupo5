@@ -7,13 +7,13 @@ import com.panol_project.backendpanol.modules.users.domain.UserAdminRepository;
 import com.panol_project.backendpanol.modules.users.domain.UserAdminSummary;
 import com.panol_project.backendpanol.shared.error.ApiException;
 import com.panol_project.backendpanol.shared.outbox.application.OutboxService;
+import com.panol_project.backendpanol.shared.security.CurrentUserUuidResolver;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.bcrypt.BCrypt;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,20 +25,28 @@ public class UserAdminService {
     private final UserAdminRepository repository;
     private final AuditLogPort auditLogPort;
     private final OutboxService outboxService;
+    private final CurrentUserUuidResolver currentUserUuidResolver;
 
-    public UserAdminService(UserAdminRepository repository, AuditLogPort auditLogPort, OutboxService outboxService) {
+    public UserAdminService(
+            UserAdminRepository repository,
+            AuditLogPort auditLogPort,
+            OutboxService outboxService,
+            CurrentUserUuidResolver currentUserUuidResolver
+    ) {
         this.repository = repository;
         this.auditLogPort = auditLogPort;
         this.outboxService = outboxService;
+        this.currentUserUuidResolver = currentUserUuidResolver;
     }
 
     @Transactional
-    public void createUser(CreateUserCommand command, Jwt jwt) {
+    public void createUser(CreateUserCommand command) {
+        UUID actorUuid = resolveActorUuid();
         String role = normalizeRole(command.role());
         String normalizedRut = normalizeRut(command.rut());
         String normalizedEmail = normalizeEmail(command.email());
-        UUID roleUuid = repository.findRoleUuid(role);
-        if (roleUuid == null) {
+        Long roleId = repository.findRoleId(role);
+        if (roleId == null) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "ROLE_NOT_SUPPORTED", "Rol invalido");
         }
 
@@ -51,29 +59,30 @@ public class UserAdminService {
                 normalizedRut,
                 normalizedEmail,
                 BCrypt.hashpw(command.password(), BCrypt.gensalt()),
-                roleUuid,
+                roleId,
                 true
         );
 
-        auditLogPort.log("user_created", getUserUuid(jwt), null, Map.of("rut", normalizedRut, "email", normalizedEmail, "role", role));
-        outboxService.enqueue("user", null, "UserCreated", getUserUuid(jwt), Map.of("rut", normalizedRut, "email", normalizedEmail, "role", role));
+        auditLogPort.log("user_created", actorUuid, null, Map.of("rut", normalizedRut, "email", normalizedEmail, "role", role));
+        outboxService.enqueue("user", null, "UserCreated", actorUuid, Map.of("rut", normalizedRut, "email", normalizedEmail, "role", role));
     }
 
     @Transactional
-    public void changeRole(UUID userUuid, String roleInput, Jwt jwt) {
+    public void changeRole(UUID userUuid, String roleInput) {
+        UUID actorUuid = resolveActorUuid();
         String role = normalizeRole(roleInput);
-        UUID roleUuid = repository.findRoleUuid(role);
-        if (roleUuid == null) {
+        Long roleId = repository.findRoleId(role);
+        if (roleId == null) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "ROLE_NOT_SUPPORTED", "Rol invalido");
         }
-        int updated = repository.updateUserRole(userUuid, roleUuid);
+        int updated = repository.updateUserRole(userUuid, roleId);
 
         if (updated == 0) {
             throw new ApiException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "Usuario no encontrado");
         }
 
-        auditLogPort.log("user_role_changed", getUserUuid(jwt), userUuid, Map.of("new_role", role));
-        outboxService.enqueue("user", userUuid, "UserRoleChanged", getUserUuid(jwt), Map.of("new_role", role));
+        auditLogPort.log("user_role_changed", actorUuid, userUuid, Map.of("new_role", role));
+        outboxService.enqueue("user", userUuid, "UserRoleChanged", actorUuid, Map.of("new_role", role));
     }
 
     @Transactional(readOnly = true)
@@ -91,8 +100,8 @@ public class UserAdminService {
     }
 
     @Transactional
-    public void setActive(UUID userUuid, boolean active, Jwt jwt) {
-        UUID actorUuid = getUserUuid(jwt);
+    public void setActive(UUID userUuid, boolean active) {
+        UUID actorUuid = resolveActorUuid();
         if (actorUuid != null && actorUuid.equals(userUuid) && !active) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "USER_SELF_DEACTIVATION_NOT_ALLOWED", "No puedes desactivar tu propio usuario");
         }
@@ -112,11 +121,11 @@ public class UserAdminService {
     }
 
     @Transactional
-    public void updateUser(UUID userUuid, UpdateUserCommand command, Jwt jwt) {
+    public void updateUser(UUID userUuid, UpdateUserCommand command) {
         if (!existsUserByUuid(userUuid)) {
             throw new ApiException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "Usuario no encontrado");
         }
-        UUID actorUuid = getUserUuid(jwt);
+        UUID actorUuid = resolveActorUuid();
         String normalizedRut = normalizeRut(command.rut());
         String normalizedEmail = normalizeEmail(command.email());
 
@@ -134,8 +143,8 @@ public class UserAdminService {
         outboxService.enqueue("user", userUuid, "UserUpdated", actorUuid, Map.of("rut", normalizedRut, "email", normalizedEmail));
     }
 
-    public void deleteUser(UUID userUuid, Jwt jwt) {
-        setActive(userUuid, false, jwt);
+    public void deleteUser(UUID userUuid) {
+        setActive(userUuid, false);
     }
 
     private String normalizeRole(String roleRaw) {
@@ -161,8 +170,19 @@ public class UserAdminService {
     }
 
     private String normalizeRut(String rutRaw) {
-        if (rutRaw == null) return "";
-        return rutRaw.replaceAll("\\D", "").trim();
+        String compactRut = rutRaw == null ? "" : rutRaw.replaceAll("[.\\-\\s]", "").trim();
+        if (compactRut.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "USER_RUT_REQUIRED", "El RUT es obligatorio");
+        }
+        if (compactRut.length() < 2) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "USER_RUT_INVALID", "El RUT no tiene formato valido");
+        }
+
+        String rutWithoutVerifier = compactRut.substring(0, compactRut.length() - 1);
+        if (rutWithoutVerifier.isBlank() || !rutWithoutVerifier.chars().allMatch(Character::isDigit)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "USER_RUT_INVALID", "El RUT no tiene formato valido");
+        }
+        return rutWithoutVerifier;
     }
 
     private String normalizeEmail(String emailRaw) {
@@ -172,28 +192,13 @@ public class UserAdminService {
         return emailRaw.trim().toLowerCase();
     }
 
-    private UUID getUserUuid(Jwt jwt) {
-        if (jwt == null) return null;
-        String subject = jwt.getSubject();
-        if (subject != null && !subject.isBlank()) {
-            UUID uuid = tryParseUuid(subject);
-            if (uuid != null && existsUserByUuid(uuid)) {
-                return uuid;
-            }
-        }
-        return null;
-    }
-
     private boolean existsUserByUuid(UUID uuid) {
         return repository.existsUserByUuid(uuid);
     }
 
-    private UUID tryParseUuid(String value) {
-        try {
-            return UUID.fromString(value);
-        } catch (IllegalArgumentException ex) {
-            return null;
-        }
+    private UUID resolveActorUuid() {
+        return currentUserUuidResolver.resolveCurrentUserUuid()
+                .filter(this::existsUserByUuid)
+                .orElse(null);
     }
 }
-

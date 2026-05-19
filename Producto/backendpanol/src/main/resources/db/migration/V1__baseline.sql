@@ -1,9 +1,0 @@
--- Baseline migration for environments with an existing Supabase schema.
---
--- Why this file is intentionally empty:
--- 1) The source-of-truth schema already exists in Supabase.
--- 2) Flyway is configured with baseline-on-migrate=true.
--- 3) On first run against a non-empty DB, Flyway inserts baseline metadata
---    into flyway_schema_history and starts versioned migrations from here.
---
--- Add forward-only changes in new files: V2__*.sql, V3__*.sql, etc.
