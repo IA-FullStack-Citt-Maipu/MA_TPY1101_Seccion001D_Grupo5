@@ -46,7 +46,15 @@ Base publica: `/api/v2/**`
 - `POST /api/v2/categories`
 - `PUT /api/v2/categories/{categoryUuid}`
 - `PATCH /api/v2/categories/{categoryUuid}/deactivate`
+- `PATCH /api/v2/categories/{categoryUuid}/activate`
 - `DELETE /api/v2/categories/{categoryUuid}`
+
+### Loans
+- `GET /api/v2/loans`
+- `POST /api/v2/loans`
+- `PATCH /api/v2/loans/{loanUuid}/review`
+- `POST /api/v2/loans/{loanUuid}/delivery`
+- `POST /api/v2/loans/{loanUuid}/return`
 
 ### Locations
 - `GET /api/v2/locations`

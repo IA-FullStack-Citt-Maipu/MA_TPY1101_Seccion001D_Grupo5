@@ -12,4 +12,5 @@
 - [catalog-location.md](./catalog-location.md)
 - [catalog-implement.md](./catalog-implement.md)
 - [catalog-stock.md](./catalog-stock.md)
+- [loan.md](./loan.md)
 

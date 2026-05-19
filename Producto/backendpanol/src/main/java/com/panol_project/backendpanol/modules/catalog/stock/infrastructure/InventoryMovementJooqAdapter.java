@@ -21,7 +21,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.jooq.DSLContext;
 import org.jooq.JSONB;
-import org.jooq.Record7;
+import org.jooq.Record8;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -97,11 +97,12 @@ public class InventoryMovementJooqAdapter implements InventoryMovementRepository
                         INVENTORY_MOVEMENT.QUANTITY,
                         USER.UUID,
                         INVENTORY_MOVEMENT.CREATED_AT,
-                        INVENTORY_MOVEMENT.DELTA_CHANGES
+                        INVENTORY_MOVEMENT.DELTA_CHANGES,
+                        USER.NAME.as("performedByName")
                 )
                 .from(INVENTORY_MOVEMENT)
                 .join(IMPLEMENT).on(IMPLEMENT.ID.eq(INVENTORY_MOVEMENT.IMPLEMENT_ID))
-                .join(USER).on(USER.ID.eq(INVENTORY_MOVEMENT.ACTOR_USER_ID))
+                .leftJoin(USER).on(USER.ID.eq(INVENTORY_MOVEMENT.ACTOR_USER_ID))
                 .where(IMPLEMENT.UUID.eq(implementUuid))
                 .orderBy(INVENTORY_MOVEMENT.CREATED_AT.desc())
                 .limit(10)
@@ -117,19 +118,21 @@ public class InventoryMovementJooqAdapter implements InventoryMovementRepository
                         INVENTORY_MOVEMENT.QUANTITY,
                         USER.UUID,
                         INVENTORY_MOVEMENT.CREATED_AT,
-                        INVENTORY_MOVEMENT.DELTA_CHANGES
+                        INVENTORY_MOVEMENT.DELTA_CHANGES,
+                        USER.NAME.as("performedByName")
                 )
                 .from(INVENTORY_MOVEMENT)
                 .join(IMPLEMENT).on(IMPLEMENT.ID.eq(INVENTORY_MOVEMENT.IMPLEMENT_ID))
-                .join(USER).on(USER.ID.eq(INVENTORY_MOVEMENT.ACTOR_USER_ID))
+                .leftJoin(USER).on(USER.ID.eq(INVENTORY_MOVEMENT.ACTOR_USER_ID))
                 .orderBy(INVENTORY_MOVEMENT.CREATED_AT.desc())
                 .fetch(this::toDomain);
     }
 
     private InventoryMovement toDomain(
-            Record7<Long, UUID, InventoryMovementTypeEnum, Integer, UUID, OffsetDateTime, JSONB> record
+            Record8<Long, UUID, InventoryMovementTypeEnum, Integer, UUID, OffsetDateTime, JSONB, String> record
     ) {
         MovementAction action = record.value3() == null ? null : MovementAction.valueOf(record.value3().name());
+        String performerName = record.get("performedByName", String.class);
         InventoryMovement movement = new InventoryMovement(
                 record.value2(),
                 action,
@@ -138,6 +141,7 @@ public class InventoryMovementJooqAdapter implements InventoryMovementRepository
                 record.value6() == null ? Instant.now() : record.value6().toInstant(),
                 extractNotes(record.value7())
         );
+        movement.setPerformedByName(performerName);
         movement.setId(record.value1() == null ? null : String.valueOf(record.value1()));
         return movement;
     }

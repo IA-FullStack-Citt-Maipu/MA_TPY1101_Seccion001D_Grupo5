@@ -97,6 +97,14 @@ public class CategoriaJooqRepository implements CategoriaRepository {
     }
 
     @Override
+    public void activate(UUID uuid) {
+        dsl.update(CATEGORY)
+                .set(CATEGORY.ACTIVE, true)
+                .where(CATEGORY.UUID.eq(uuid))
+                .execute();
+    }
+
+    @Override
     public void deleteByUuid(UUID uuid) {
         dsl.deleteFrom(CATEGORY)
                 .where(CATEGORY.UUID.eq(uuid))

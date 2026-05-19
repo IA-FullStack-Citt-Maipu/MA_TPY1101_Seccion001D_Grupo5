@@ -8,11 +8,9 @@ import com.panol_project.backendpanol.modules.catalog.stock.api.dto.InventoryMov
 import com.panol_project.backendpanol.modules.catalog.stock.application.InventoryMovementService;
 import com.panol_project.backendpanol.modules.catalog.stock.domain.InventoryMovement;
 import com.panol_project.backendpanol.modules.catalog.stock.domain.MovementAction;
-import com.panol_project.backendpanol.modules.users.application.contract.UserDirectoryContract;
 import com.panol_project.backendpanol.shared.security.CurrentUserUuidResolver;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,9 +22,6 @@ class InventoryMovementV2ControllerTest {
 
     @Mock
     private InventoryMovementService inventoryMovementService;
-
-    @Mock
-    private UserDirectoryContract userDirectoryContract;
 
     @Mock
     private CurrentUserUuidResolver currentUserUuidResolver;
@@ -47,18 +42,42 @@ class InventoryMovementV2ControllerTest {
 
         InventoryMovementV2Controller controller = new InventoryMovementV2Controller(
                 inventoryMovementService,
-                userDirectoryContract,
                 currentUserUuidResolver
         );
 
         when(inventoryMovementService.obtenerTodosMovimientos()).thenReturn(List.of(movement));
-        when(userDirectoryContract.getNombresUsuariosByUuid(List.of(userUuid))).thenReturn(Map.of(userUuid, "Carlos"));
+        movement.setPerformedByName("Carlos");
 
         List<InventoryMovementV2Response> response = controller.listarMovimientos();
 
         assertEquals(1, response.size());
         assertEquals("Carlos", response.get(0).performedBy());
         verify(inventoryMovementService).obtenerTodosMovimientos();
-        verify(userDirectoryContract).getNombresUsuariosByUuid(List.of(userUuid));
+    }
+
+    @Test
+    void listarMovimientosDebeResolverUsuarioNoIdentificadoSiNoExisteEnDirectorio() {
+        UUID implementUuid = UUID.randomUUID();
+        UUID userUuid = UUID.randomUUID();
+        InventoryMovement movement = new InventoryMovement(
+                implementUuid,
+                MovementAction.STOCK_OUT,
+                1,
+                userUuid,
+                Instant.now(),
+                null
+        );
+
+        InventoryMovementV2Controller controller = new InventoryMovementV2Controller(
+                inventoryMovementService,
+                currentUserUuidResolver
+        );
+
+        when(inventoryMovementService.obtenerTodosMovimientos()).thenReturn(List.of(movement));
+
+        List<InventoryMovementV2Response> response = controller.listarMovimientos();
+
+        assertEquals(1, response.size());
+        assertEquals("Usuario no identificado", response.get(0).performedBy());
     }
 }

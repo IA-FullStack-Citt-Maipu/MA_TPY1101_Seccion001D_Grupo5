@@ -13,6 +13,7 @@
 - Categories: `/api/v2/categories/*`
 - Locations: `/api/v2/locations/*`
 - Implements/Stock: `/api/v2/implements/*`
+- Loans: `/api/v2/loans/*`
 
 ## Seguridad vigente
 
@@ -29,6 +30,7 @@
 4. Worker publica eventos al destino de integración/observabilidad.
 5. Reintentos y estado en `public.outbox_event` con estados canónicos:
    `PENDING`, `PROCESSING`, `SENT`, `FAILED` (compatibilidad: vista `outbox_events`).
+6. `loan`: flujo de préstamo (solicitud, revisión, entrega y devolución) con impacto de disponibilidad y stock.
 
 ## Compose vigente
 

@@ -33,6 +33,7 @@ Nota operativa: PostgreSQL es la base canónica y única del sistema en este tra
 - `catalog/location`
 - `catalog/implement`
 - `catalog/stock`
+- `loan`
 
 ## Referencias
 

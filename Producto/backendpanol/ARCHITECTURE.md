@@ -26,6 +26,7 @@ El backend sigue:
 - `catalog/location`
 - `catalog/implement`
 - `catalog/stock`
+- `loan`
 
 ## Reglas vigentes de dependencia
 

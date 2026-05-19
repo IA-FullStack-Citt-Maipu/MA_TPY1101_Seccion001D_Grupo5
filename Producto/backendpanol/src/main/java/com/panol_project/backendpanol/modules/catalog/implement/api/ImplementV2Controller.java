@@ -17,7 +17,6 @@ import com.panol_project.backendpanol.modules.catalog.implement.domain.StockStat
 import com.panol_project.backendpanol.shared.error.ApiException;
 import jakarta.validation.Valid;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -171,16 +170,13 @@ public class ImplementV2Controller {
     private List<ImplementRecentMovementV2Response> buildMovementRowsSafely(UUID implementUuid) {
         try {
             var movements = detailFacade.getRecentMovements(implementUuid);
-            Map<UUID, String> userNames = detailFacade.getUserNamesByUuid(
-                    movements.stream().map(m -> m.performedByUuid()).filter(uuid -> uuid != null).distinct().toList()
-            );
             return movements.stream()
                     .map(movement -> new ImplementRecentMovementV2Response(
                             movement.id(),
                             movement.implementUuid(),
                             movement.action(),
                             movement.quantity(),
-                            resolvePerformerName(userNames, movement.performedByUuid()),
+                            resolvePerformerName(movement.performedByName()),
                             movement.timestamp(),
                             movement.notes()))
                     .toList();
@@ -199,10 +195,10 @@ public class ImplementV2Controller {
                 .anyMatch(role::equals);
     }
 
-    private String resolvePerformerName(Map<UUID, String> userNames, UUID performedByUuid) {
-        if (performedByUuid == null) {
+    private String resolvePerformerName(String performedByName) {
+        if (performedByName == null || performedByName.isBlank()) {
             return "Usuario no identificado";
         }
-        return userNames.getOrDefault(performedByUuid, "Usuario no identificado");
+        return performedByName;
     }
 }

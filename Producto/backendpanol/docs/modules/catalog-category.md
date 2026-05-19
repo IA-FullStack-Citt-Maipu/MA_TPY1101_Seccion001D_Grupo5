@@ -18,6 +18,7 @@ Base path: `/api/v2/categories`
 - `POST /`
 - `PUT /{categoryUuid}`
 - `PATCH /{categoryUuid}/deactivate`
+- `PATCH /{categoryUuid}/activate`
 - `DELETE /{categoryUuid}`
 
 ## Fronteras del modulo
@@ -32,4 +33,5 @@ Base path: `/api/v2/categories`
 - Desactivacion con validacion de implementos activos asociados.
 - Eliminacion bloqueada si existen asociaciones.
 - Errores con `code` estable.
+- Activacion (`PATCH /{categoryUuid}/activate`) es idempotente: si la categoría ya se encuentra activa, responde exitosamente con el estado actual sin producir error.
 

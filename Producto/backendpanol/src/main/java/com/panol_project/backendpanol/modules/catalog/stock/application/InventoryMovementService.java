@@ -49,10 +49,12 @@ public class InventoryMovementService implements InventoryMovementQueryContract 
         return saved;
     }
 
+    @Transactional(readOnly = true)
     public List<InventoryMovement> obtenerUltimosMovimientos(UUID implementUuid) {
         return repository.findTop10ByImplementUuidOrderByTimestampDesc(implementUuid);
     }
 
+    @Transactional(readOnly = true)
     public List<InventoryMovement> obtenerTodosMovimientos() {
         return repository.findAllByOrderByTimestampDesc();
     }
@@ -72,6 +74,7 @@ public class InventoryMovementService implements InventoryMovementQueryContract 
                 movement.getAction() == null ? null : movement.getAction().name(),
                 movement.getQuantity(),
                 movement.getPerformedByUuid(),
+                movement.getPerformedByName(),
                 movement.getTimestamp(),
                 movement.getNotes()
         );

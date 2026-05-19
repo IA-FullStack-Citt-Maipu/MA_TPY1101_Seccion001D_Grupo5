@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -12,6 +13,7 @@ import com.panol_project.backendpanol.modules.catalog.category.domain.Categoria;
 import com.panol_project.backendpanol.modules.catalog.category.domain.CategoriaRepository;
 import com.panol_project.backendpanol.shared.error.BadRequestException;
 import com.panol_project.backendpanol.shared.error.ConflictException;
+import java.lang.reflect.Constructor;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
@@ -19,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.jooq.exception.DataAccessException;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -96,4 +99,62 @@ class CategoriaServiceTest {
         assertEquals(false, response.activa());
         verify(repository).deactivate(eq(uuid));
     }
+
+    @Test
+    void activarDebeRetornarCategoriaCuandoYaEstaActiva() {
+        UUID uuid = UUID.randomUUID();
+        Categoria active = new Categoria(uuid, "Quimica", null, true, OffsetDateTime.now());
+
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(active));
+
+        Categoria response = service.activar(uuid);
+
+        assertEquals("Quimica", response.nombre());
+        assertEquals(true, response.activa());
+        verify(repository, never()).activate(any());
+    }
+
+    @Test
+    void activarDebeActivarCuandoEstaInactiva() {
+        UUID uuid = UUID.randomUUID();
+        Categoria inactive = new Categoria(uuid, "Biologia", null, false, OffsetDateTime.now());
+
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(inactive));
+
+        Categoria response = service.activar(uuid);
+
+        assertEquals(false, inactive.activa());
+        assertEquals(true, response.activa());
+        verify(repository).activate(eq(uuid));
+    }
+
+    @Test
+    void activarDebeLanzarBadRequestCuandoActivaNombreDuplicadoViolandoRestriccion() {
+        UUID uuid = UUID.randomUUID();
+        Categoria inactive = new Categoria(uuid, "Duplicada", null, false, OffsetDateTime.now());
+
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(inactive));
+        doThrow(newJooqDataAccessException("ERROR: duplicate key value violates unique constraint \"category_name_key\""))
+                .when(repository).activate(eq(uuid));
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> service.activar(uuid));
+
+        assertEquals("CATEGORY_NAME_ACTIVE_DUPLICATE", ex.getCode());
+        assertEquals("Ya existe una categoría activa con ese nombre.", ex.getMessage());
+    }
+
+    private RuntimeException newJooqDataAccessException(String message) {
+        try {
+            Constructor<?> constructor = DataAccessException.class.getDeclaredConstructor(String.class);
+            constructor.setAccessible(true);
+            Object instance = constructor.newInstance(message);
+            if (instance instanceof RuntimeException runtimeException) {
+                return runtimeException;
+            }
+            throw new IllegalStateException("org.jooq.exception.DataAccessException no es RuntimeException");
+        } catch (ReflectiveOperationException ex) {
+            throw new IllegalStateException("No se pudo crear la excepción de jOOQ para la prueba", ex);
+        }
+    }
 }
+

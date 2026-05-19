@@ -4,13 +4,12 @@ import com.panol_project.backendpanol.modules.users.domain.UserRepository;
 import org.jooq.DSLContext;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 import static com.panol_project.backendpanol.jooq.tables.User.USER;
-import static org.jooq.impl.DSL.field;
-import static org.jooq.impl.DSL.name;
 
 @Repository
 public class UserJooqRepository implements UserRepository {
@@ -24,14 +23,12 @@ public class UserJooqRepository implements UserRepository {
     @Override
     public Map<UUID, String> findNamesByUuids(List<UUID> uuids) {
         if (uuids == null || uuids.isEmpty()) {
-            return Map.of();
+            return Collections.emptyMap();
         }
-
-        var userUuidField = field(name("uuid"), UUID.class);
-
-        return dsl.select(userUuidField, USER.NAME)
+        return dsl.select(USER.UUID, USER.NAME)
                 .from(USER)
-                .where(userUuidField.in(uuids))
-                .fetchMap(userUuidField, USER.NAME);
+                .where(USER.UUID.in(uuids))
+                .fetch()
+                .intoMap(USER.UUID, USER.NAME);
     }
 }

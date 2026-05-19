@@ -16,7 +16,7 @@
 
 ## Horizonte 30-60 días
 
-1. Consolidar puertos en casos críticos (`users`, `auth`, `loan`).
+1. [FINALIZADO] Consolidar puertos en casos críticos (`users`, `auth`, `loan`).
 2. Unificar naming de repositorios/adaptadores.
 3. Crear tests de integración por adapter.
 

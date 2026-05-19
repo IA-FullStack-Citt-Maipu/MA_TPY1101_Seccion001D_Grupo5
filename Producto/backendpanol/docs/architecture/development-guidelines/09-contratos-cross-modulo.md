@@ -8,7 +8,7 @@
 
 | Flujo | Modulo dueno | Contrato usado | Tipo |
 |---|---|---|---|
-| Ficha detalle de implemento + movimientos + nombres de usuario | `catalog/implement` | `ImplementDetailFacade` + `InventoryMovementQueryContract` + `UserDirectoryContract` | Contratos de aplicacion |
+| Ficha detalle de implemento + movimientos + nombres de usuario | `catalog/implement` | `ImplementDetailFacade` + `InventoryMovementQueryContract` | Contratos de aplicacion |
 | Registro de movimiento de inventario | `catalog/stock` | `InventoryMovementService` + `OutboxService` | Caso de uso + evento |
 | Etiquetas PDF de inventario | `catalog/stock` | `ImplementLookupContract` | Contrato de lectura cross-modulo |
 | Auditoria y autenticacion | `auth` | `AuditLogPort`, `UserAuthPort`, `TokenRevocationPort` | Puertos de dominio |

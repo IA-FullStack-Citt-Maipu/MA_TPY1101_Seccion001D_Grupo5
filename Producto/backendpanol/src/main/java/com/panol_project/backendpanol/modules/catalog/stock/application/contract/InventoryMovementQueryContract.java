@@ -14,6 +14,7 @@ public interface InventoryMovementQueryContract {
             String action,
             Integer quantity,
             UUID performedByUuid,
+            String performedByName,
             Instant timestamp,
             String notes
     ) {
