@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   InventoryLayout,
@@ -42,12 +43,10 @@ function App() {
   }, []);
 
   async function handleLogout() {
-    // Solo limpia la sesión pero no redirige al login
     clearSession();
   }
 
-  // Modo desarrollo: usar rol por defecto y omitir autenticación
-  const role: UserRole = "COORDINADOR"; // Cambiar a "DIRECTOR" o "DOCENTE" según necesites
+  const role: UserRole = "COORDINADOR";
   const normalizedHash = hash || "#/inventory/categories";
   const defaultHash = getDefaultHashByRole(role);
   const effectiveHash = normalizedHash === "#/login" ? defaultHash : normalizedHash;
@@ -61,7 +60,6 @@ function App() {
   const routeView = useMemo<RouteView>(() => {
     const currentHash = effectiveHash;
 
-    // Acceso denegado a rutas de director
     if (currentHash.startsWith("#/director")) {
       return {
         key: "director-forbidden",
