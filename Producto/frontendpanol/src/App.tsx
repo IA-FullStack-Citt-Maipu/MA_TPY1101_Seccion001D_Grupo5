@@ -49,7 +49,7 @@ function App() {
   }
 
   // Modo desarrollo: usar rol por defecto y omitir autenticación
-  const role = "DIRECTOR"; // Cambiar a "COORDINADOR" o "DOCENTE" según necesites
+  const role = "COORDINADOR"; // Cambiar a "DIRECTOR" o "DOCENTE" según necesites
   const normalizedHash = hash || "#/inventory/categories";
   const defaultHash = getDefaultHashByRole(role);
   const effectiveHash = normalizedHash === "#/login" ? defaultHash : normalizedHash;
