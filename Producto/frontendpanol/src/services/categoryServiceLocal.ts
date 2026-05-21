@@ -3,39 +3,17 @@ import type { Categoria, CategoriaAssociationSummary, CategoriaPayload } from ".
 
 const CATEGORIES_COLLECTION = "categories";
 
-interface RawCategory {
-  id: string;
-  name: string;
-  description: string;
-  createdAt: string;
-}
-
-// Mapear datos del JSON al formato esperado
-function mapToCategoria(raw: RawCategory): Categoria {
-  return {
-    uuid: raw.id,
-    nombre: raw.name,
-    descripcion: raw.description || null,
-    activa: true,
-    createdAt: raw.createdAt,
-  };
-}
-
-
-
 let initializationPromise: Promise<void> | null = null;
 
-// Cargar categorías iniciales desde el JSON
+// Cargar categorias iniciales desde el JSON
 async function initializeCategories() {
   const existing = await localDB.get<Categoria[]>(CATEGORIES_COLLECTION);
   if (!existing || existing.length === 0) {
     try {
-      const data = await localDB.loadJSON<{ categories: RawCategory[] }>("/db/categories.json");
-      const mapped = data.categories.map(mapToCategoria);
-      await localDB.set(CATEGORIES_COLLECTION, mapped);
+      const data = await localDB.loadJSON<{ categories: Categoria[] }>("/db/categories.json");
+      await localDB.set(CATEGORIES_COLLECTION, data.categories);
     } catch (error) {
       console.error("Error initializing categories:", error);
-      // Fallback a categorías vacías si falla la carga
       await localDB.set(CATEGORIES_COLLECTION, []);
     }
   }

@@ -1,20 +1,64 @@
 {
   "locations": [
     {
-      "id": "loc-001",
-      "name": "Pabellón A - Estantería 1",
-      "floor": 1,
-      "section": "A",
-      "description": "Estantería principal",
-      "createdAt": "2024-01-15T10:00:00Z"
+      "uuid": "loc-001",
+      "name": "Panol Principal - Estante A",
+      "description": "Estante principal para herramientas de uso frecuente",
+      "active": true
     },
     {
-      "id": "loc-002",
-      "name": "Pabellón B - Estantería 2",
-      "floor": 2,
-      "section": "B",
-      "description": "Estantería secundaria",
-      "createdAt": "2024-01-15T10:05:00Z"
+      "uuid": "loc-002",
+      "name": "Panol Principal - Estante B",
+      "description": "Estante secundario para equipos electronicos",
+      "active": true
+    },
+    {
+      "uuid": "loc-003",
+      "name": "Bodega Norte",
+      "description": "Almacen de equipos de gran tamano y reserva",
+      "active": true
+    },
+    {
+      "uuid": "loc-004",
+      "name": "Laboratorio Electronica",
+      "description": "Ubicacion para equipos de laboratorio de electronica",
+      "active": true
+    },
+    {
+      "uuid": "loc-005",
+      "name": "Sala de Computacion A",
+      "description": "Equipos informaticos de la sala A",
+      "active": true
+    },
+    {
+      "uuid": "loc-006",
+      "name": "Sala de Computacion B",
+      "description": "Equipos informaticos de la sala B",
+      "active": true
+    },
+    {
+      "uuid": "loc-007",
+      "name": "Taller Mecanico",
+      "description": "Herramientas y equipos del taller de mecanica",
+      "active": true
+    },
+    {
+      "uuid": "loc-008",
+      "name": "Deposito Temporal",
+      "description": "Almacenamiento temporal de equipos en reparacion",
+      "active": false
+    },
+    {
+      "uuid": "loc-009",
+      "name": "Auditorio Principal",
+      "description": "Equipos audiovisuales del auditorio",
+      "active": true
+    },
+    {
+      "uuid": "loc-010",
+      "name": "Biblioteca",
+      "description": "Material didactico y recursos de biblioteca",
+      "active": true
     }
   ]
 }

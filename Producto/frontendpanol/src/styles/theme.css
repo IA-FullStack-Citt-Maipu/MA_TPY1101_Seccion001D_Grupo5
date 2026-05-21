@@ -3154,3 +3154,360 @@ body.modal-open .app-shell__main {
     height: 140px;
   }
 }
+
+/* ============================================================
+   ENHANCED ANIMATIONS & TRANSITIONS
+   ============================================================ */
+
+/* Stagger animation for list items */
+@keyframes fade-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes bounce-subtle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+@keyframes ripple {
+  0% { transform: scale(0); opacity: 0.5; }
+  100% { transform: scale(4); opacity: 0; }
+}
+
+/* Animated table rows */
+.category-table tbody tr {
+  animation: fade-slide-up 300ms ease backwards;
+}
+
+.category-table tbody tr:nth-child(1) { animation-delay: 0ms; }
+.category-table tbody tr:nth-child(2) { animation-delay: 30ms; }
+.category-table tbody tr:nth-child(3) { animation-delay: 60ms; }
+.category-table tbody tr:nth-child(4) { animation-delay: 90ms; }
+.category-table tbody tr:nth-child(5) { animation-delay: 120ms; }
+.category-table tbody tr:nth-child(6) { animation-delay: 150ms; }
+.category-table tbody tr:nth-child(7) { animation-delay: 180ms; }
+.category-table tbody tr:nth-child(8) { animation-delay: 210ms; }
+.category-table tbody tr:nth-child(9) { animation-delay: 240ms; }
+.category-table tbody tr:nth-child(10) { animation-delay: 270ms; }
+
+/* Panel entrance animation */
+.panel {
+  animation: scale-in 250ms ease;
+}
+
+/* Card hover effects */
+.panel:hover,
+.detail-card:hover,
+.side-info-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 40px rgba(9, 33, 80, 0.1);
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+/* Button ripple effect */
+.button {
+  position: relative;
+  overflow: hidden;
+}
+
+.button::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.button:active::after {
+  animation: ripple 400ms linear;
+}
+
+/* Improved focus states */
+.button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(29, 89, 214, 0.4);
+  outline-offset: 2px;
+  transition: outline 150ms ease;
+}
+
+/* Smooth skeleton loading */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    #e9f0fb 0%,
+    #f4f8ff 50%,
+    #e9f0fb 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite linear;
+  border-radius: 8px;
+}
+
+/* Badge animations */
+.badge {
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+.badge:hover {
+  transform: scale(1.05);
+}
+
+/* KPI card animations */
+.stock-kpi,
+.director-kpi {
+  transition: transform 250ms ease, box-shadow 250ms ease;
+}
+
+.stock-kpi:hover,
+.director-kpi:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 32px rgba(9, 33, 80, 0.12);
+}
+
+/* Sidebar link transitions */
+.sidebar__item {
+  transition: background 180ms ease, color 180ms ease, transform 180ms ease;
+}
+
+.sidebar__item:hover {
+  transform: translateX(4px);
+}
+
+.sidebar__item--active {
+  animation: fade-slide-in 250ms ease;
+}
+
+/* Modal overlay animations */
+.modal-overlay {
+  animation: fade-in 200ms ease;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-content {
+  animation: scale-in 250ms ease;
+}
+
+/* Toast notifications */
+.toast {
+  animation: fade-slide-up 300ms ease;
+}
+
+.toast--exit {
+  animation: fade-out 200ms ease forwards;
+}
+
+@keyframes fade-out {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-8px); }
+}
+
+/* Status indicators pulse */
+.badge--success::before,
+.director-dot {
+  animation: pulse-soft 2s infinite ease-in-out;
+}
+
+/* Table row hover enhancement */
+.category-table tbody tr {
+  transition: background 150ms ease, transform 150ms ease;
+}
+
+.category-table tbody tr:hover {
+  background: linear-gradient(90deg, #f8fbff 0%, #f0f6ff 100%);
+  transform: scale(1.005);
+}
+
+/* Input field animations */
+.filter-input,
+.category-modal input,
+.category-modal textarea {
+  transition: border-color 200ms ease, box-shadow 200ms ease, transform 150ms ease;
+}
+
+.filter-input:focus,
+.category-modal input:focus,
+.category-modal textarea:focus {
+  border-color: #1d59d6;
+  box-shadow: 0 0 0 4px rgba(29, 89, 214, 0.15);
+  transform: scale(1.01);
+}
+
+/* Dropdown menu animation */
+.dropdown-menu {
+  animation: fade-slide-up 180ms ease;
+  transform-origin: top center;
+}
+
+/* Progress bar animation */
+.director-request-bar span {
+  animation: progress-fill 800ms ease forwards;
+}
+
+@keyframes progress-fill {
+  from { width: 0; }
+}
+
+/* Chart bar animation enhancement */
+.director-bar-chart__bar {
+  transform-origin: bottom;
+  transition: height 400ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Smooth page transitions */
+.app-shell__main {
+  animation: fade-slide-up 350ms ease;
+}
+
+/* Avatar hover effect */
+.topbar__avatar:hover,
+.director-avatar:hover {
+  transform: scale(1.08);
+  transition: transform 200ms ease;
+}
+
+/* Checkbox/toggle animations */
+input[type="checkbox"] {
+  transition: box-shadow 150ms ease;
+}
+
+input[type="checkbox"]:checked {
+  animation: bounce-subtle 300ms ease;
+}
+
+/* Icon button hover */
+.button--table:hover svg,
+.topbar__icon:hover svg {
+  transform: scale(1.1);
+  transition: transform 150ms ease;
+}
+
+/* Empty state animation */
+.empty-state {
+  animation: fade-slide-up 400ms ease;
+}
+
+/* Search highlight animation */
+.search-highlight {
+  background: linear-gradient(120deg, #fff8dc 0%, #fffacd 100%);
+  animation: pulse-soft 1.5s ease infinite;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+/* Tab transitions */
+.topbar__menu a {
+  transition: color 180ms ease, background 180ms ease;
+}
+
+.topbar__menu a::after {
+  transition: transform 200ms ease, opacity 200ms ease;
+  transform: scaleX(0);
+  opacity: 0;
+}
+
+.topbar__menu a.is-active::after {
+  transform: scaleX(1);
+  opacity: 1;
+}
+
+/* Notification badge pop */
+.notification-badge {
+  animation: scale-in 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Loading spinner */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-spinner {
+  animation: spin 1s linear infinite;
+}
+
+/* Card grid stagger */
+.card-grid > * {
+  animation: fade-slide-up 350ms ease backwards;
+}
+
+.card-grid > *:nth-child(1) { animation-delay: 0ms; }
+.card-grid > *:nth-child(2) { animation-delay: 60ms; }
+.card-grid > *:nth-child(3) { animation-delay: 120ms; }
+.card-grid > *:nth-child(4) { animation-delay: 180ms; }
+.card-grid > *:nth-child(5) { animation-delay: 240ms; }
+.card-grid > *:nth-child(6) { animation-delay: 300ms; }
+
+/* Smooth scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5fb;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c5d4eb;
+  border-radius: 4px;
+  transition: background 200ms ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8bdd9;
+}
+
+/* Print-friendly - disable animations */
+@media print {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+

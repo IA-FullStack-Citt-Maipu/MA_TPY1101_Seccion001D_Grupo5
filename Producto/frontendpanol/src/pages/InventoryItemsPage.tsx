@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Package, Search, Filter, Eye, Edit3 } from "lucide-react";
 import { InventoryLayout } from "../components/layout/InventoryLayout";
 import { ImplementFormModal } from "../components/implements/ImplementFormModal";
 import { ImplementEditModal } from "../components/implements/ImplementEditModal";
-import { createImplement, fetchImplements } from "../services/implementService";
-import { fetchActiveCategories } from "../services/activeCategoryService";
+import { createImplement, fetchImplements } from "../services/implementServiceLocal";
+import { fetchActiveCategories } from "../services/activeCategoryServiceLocal";
 import { getErrorMessage } from "../services/apiClient";
 import type { ActiveCategoryOption } from "../types/categoryActive";
 import type { ImplementFilters, ImplementStockFilterStatus, ImplementSummary } from "../types/implement";
@@ -145,13 +145,16 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
     <>
       <section className="content-header">
         <div>
-          <h1>Inventario</h1>
-          <p>Alta de producto.</p>
+          <h1>
+            <Package size={28} style={{ marginRight: 12, verticalAlign: "middle" }} />
+            Inventario
+          </h1>
+          <p>Gestiona todos los implementos del panol educativo</p>
         </div>
 
         <div className="content-header__actions">
-          <button type="button" className="button" onClick={() => setIsCreateOpen(true)}>
-            <Plus size={16} />
+          <button type="button" className="button button--primary" onClick={() => setIsCreateOpen(true)}>
+            <Plus size={18} />
             Nuevo implemento
           </button>
         </div>
@@ -160,8 +163,11 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
       <section className="panel">
         <div className="panel__head">
           <div>
-            <h2>Implementos</h2>
-            <p>Usa "Nuevo implemento" para crear un producto con categoria y ubicacion obligatorias.</p>
+            <h2>
+              <Filter size={20} style={{ marginRight: 8, opacity: 0.7 }} />
+              Catalogo de Implementos
+            </h2>
+            <p>Busca, filtra y gestiona los productos del inventario</p>
           </div>
         </div>
 
@@ -212,7 +218,7 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
                 <option value="available">Disponible</option>
                 <option value="reserved">Reservado</option>
                 <option value="loaned">Prestado</option>
-                <option value="damaged">Da�ado</option>
+                <option value="damaged">Danado</option>
               </select>
               {filters.stockStatus && filters.stockStatus !== "all" ? (
                 <span className="filter-badge">{STOCK_STATUS_LABELS[filters.stockStatus]}</span>
@@ -221,7 +227,10 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
           ) : null}
 
           <div className="catalog-filters__item catalog-filters__item--search">
-            <label htmlFor="catalog-filter-name">Buscar</label>
+            <label htmlFor="catalog-filter-name">
+              <Search size={16} style={{ marginRight: 4 }} />
+              Buscar
+            </label>
             <input
               id="catalog-filter-name"
               type="search"
@@ -253,18 +262,22 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
         {success ? <div className="success-banner">{success}</div> : null}
 
         {implementos.length === 0 && !loading ? (
-          <div className="empty-state">No se encontraron implementos con los filtros aplicados</div>
+          <div className="empty-state">
+            <Package size={48} style={{ opacity: 0.3, marginBottom: 12 }} />
+            <p>No se encontraron implementos con los filtros aplicados</p>
+          </div>
         ) : null}
 
         <div className="table-wrapper">
           <table className="category-table">
             <thead>
               <tr>
-                <th>Miniatura</th>
+                <th style={{ width: 70 }}>Imagen</th>
                 <th>Nombre</th>
                 <th>Categoria</th>
                 <th>Ubicacion</th>
-                <th>Acciones</th>
+                <th style={{ width: 140 }}>Stock</th>
+                <th style={{ width: 160 }}>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -284,6 +297,9 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
                         <div className="skeleton skeleton-line skeleton-line--sm" />
                       </td>
                       <td>
+                        <div className="skeleton skeleton-line skeleton-line--sm" />
+                      </td>
+                      <td>
                         <div className="skeleton-actions">
                           <div className="skeleton skeleton-btn" />
                           <div className="skeleton skeleton-btn" />
@@ -293,38 +309,77 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
                   ))
                 : null}
               {!loading
-                ? implementos.map((row) => (
-                    <tr key={row.uuid}>
-                      <td>
-                        <img
-                          src={(row.imgUrl ?? (row as any).img_url) ?? "https://placehold.co/56x56/e9edf5/4d6284?text=Sin+img"}
-                          alt={row.name}
-                          className="implement-thumb"
-                        />
-                      </td>
-                      <td>{row.name}</td>
-                      <td>
-                        {row.category
-                          ? `${row.category.name}${row.category.active ? "" : " [Categoria inactiva]"}`
-                          : "Sin categoria"}
-                      </td>
-                      <td>{row.location ? row.location.name : "Sin ubicacion"}</td>
-                      <td>
-                        <div className="table-actions">
-                          <button
-                            type="button"
-                            className="button button--table button--ghost"
-                            onClick={() => setEditingUuid(row.uuid)}
-                          >
-                            Editar
-                          </button>
-                          <a className="button button--table button--ghost" href={`#/inventory/implementos/${row.uuid}`}>
-                            Ver ficha
-                          </a>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                ? implementos.map((row) => {
+                    const stockInfo = row.stock;
+                    const available = stockInfo?.available ?? 0;
+                    const total = stockInfo?.total_stock ?? 0;
+                    const minStock = stockInfo?.min_stock ?? 0;
+                    const isLowStock = available <= minStock && minStock > 0;
+                    
+                    return (
+                      <tr key={row.uuid}>
+                        <td>
+                          <img
+                            src={(row.imgUrl ?? (row as any).img_url) ?? "https://placehold.co/56x56/e9edf5/4d6284?text=Sin+img"}
+                            alt={row.name}
+                            className="implement-thumb"
+                          />
+                        </td>
+                        <td>
+                          <strong style={{ color: "#1a3a66" }}>{row.name}</strong>
+                          {row.description ? (
+                            <p style={{ margin: "4px 0 0", fontSize: "0.82rem", color: "#6b7f9a" }}>
+                              {row.description.slice(0, 60)}{row.description.length > 60 ? "..." : ""}
+                            </p>
+                          ) : null}
+                        </td>
+                        <td>
+                          <span className={`badge ${row.category?.active ? "badge--info" : "badge--neutral"}`}>
+                            {row.category ? row.category.name : "Sin categoria"}
+                          </span>
+                          {row.category && !row.category.active ? (
+                            <span className="badge badge--warning" style={{ marginLeft: 4 }}>Inactiva</span>
+                          ) : null}
+                        </td>
+                        <td>{row.location ? row.location.name : <span style={{ color: "#9ca3af" }}>Sin ubicacion</span>}</td>
+                        <td>
+                          {stockInfo ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                              <span className={`badge ${isLowStock ? "badge--warning" : available > 0 ? "badge--success" : "badge--danger"}`}>
+                                {available} / {total} disponibles
+                              </span>
+                              {isLowStock ? (
+                                <span style={{ fontSize: "0.72rem", color: "#d97706" }}>Stock bajo</span>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <span style={{ color: "#9ca3af" }}>Sin stock</span>
+                          )}
+                        </td>
+                        <td>
+                          <div className="table-actions">
+                            <button
+                              type="button"
+                              className="button button--table button--ghost"
+                              onClick={() => setEditingUuid(row.uuid)}
+                              title="Editar implemento"
+                            >
+                              <Edit3 size={14} />
+                              Editar
+                            </button>
+                            <a 
+                              className="button button--table button--primary" 
+                              href={`#/inventory/implementos/${row.uuid}`}
+                              title="Ver ficha completa"
+                            >
+                              <Eye size={14} />
+                              Ficha
+                            </a>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 : null}
             </tbody>
           </table>

@@ -1,0 +1,111 @@
+{
+  "loans": [
+    {
+      "uuid": "loan-001",
+      "requester_uuid": "user-004",
+      "room_uuid": "room-001",
+      "subject_uuid": "subj-001",
+      "status": "DELIVERED",
+      "scheduled_at": "2024-05-05T08:00:00-04:00",
+      "due_date": "2024-05-05T18:00:00-04:00",
+      "created_at": "2024-05-04T15:00:00-04:00",
+      "items": [
+        {
+          "implement_uuid": "impl-001",
+          "requested_quantity": 2,
+          "reserved_quantity": 2,
+          "delivered_quantity": 2
+        }
+      ]
+    },
+    {
+      "uuid": "loan-002",
+      "requester_uuid": "user-005",
+      "room_uuid": "room-002",
+      "subject_uuid": "subj-002",
+      "status": "PENDING",
+      "scheduled_at": "2024-05-20T10:00:00-04:00",
+      "due_date": "2024-05-20T14:00:00-04:00",
+      "created_at": "2024-05-18T09:00:00-04:00",
+      "items": [
+        {
+          "implement_uuid": "impl-005",
+          "requested_quantity": 5,
+          "reserved_quantity": 5,
+          "delivered_quantity": 0
+        },
+        {
+          "implement_uuid": "impl-012",
+          "requested_quantity": 5,
+          "reserved_quantity": 5,
+          "delivered_quantity": 0
+        }
+      ]
+    },
+    {
+      "uuid": "loan-003",
+      "requester_uuid": "user-006",
+      "room_uuid": "room-003",
+      "subject_uuid": "subj-003",
+      "status": "DELIVERED",
+      "scheduled_at": "2024-05-15T14:00:00-04:00",
+      "due_date": "2024-05-15T18:00:00-04:00",
+      "created_at": "2024-05-14T11:00:00-04:00",
+      "items": [
+        {
+          "implement_uuid": "impl-009",
+          "requested_quantity": 8,
+          "reserved_quantity": 8,
+          "delivered_quantity": 8
+        }
+      ]
+    },
+    {
+      "uuid": "loan-004",
+      "requester_uuid": "user-004",
+      "room_uuid": null,
+      "subject_uuid": null,
+      "status": "RETURNED",
+      "scheduled_at": "2024-05-10T09:00:00-04:00",
+      "due_date": "2024-05-10T13:00:00-04:00",
+      "created_at": "2024-05-09T16:00:00-04:00",
+      "items": [
+        {
+          "implement_uuid": "impl-006",
+          "requested_quantity": 1,
+          "reserved_quantity": 1,
+          "delivered_quantity": 1
+        }
+      ]
+    },
+    {
+      "uuid": "loan-005",
+      "requester_uuid": "user-008",
+      "room_uuid": "room-001",
+      "subject_uuid": "subj-004",
+      "status": "CANCELLED",
+      "scheduled_at": "2024-05-12T08:00:00-04:00",
+      "due_date": "2024-05-12T12:00:00-04:00",
+      "created_at": "2024-05-11T14:00:00-04:00",
+      "items": [
+        {
+          "implement_uuid": "impl-003",
+          "requested_quantity": 10,
+          "reserved_quantity": 0,
+          "delivered_quantity": 0
+        }
+      ]
+    }
+  ],
+  "rooms": [
+    { "uuid": "room-001", "name": "Laboratorio A-101" },
+    { "uuid": "room-002", "name": "Sala de Computacion B-201" },
+    { "uuid": "room-003", "name": "Taller Mecanico C-102" }
+  ],
+  "subjects": [
+    { "uuid": "subj-001", "name": "Electronica Basica", "code": "ELE-101" },
+    { "uuid": "subj-002", "name": "Programacion I", "code": "PRG-101" },
+    { "uuid": "subj-003", "name": "Robotica Aplicada", "code": "ROB-201" },
+    { "uuid": "subj-004", "name": "Seguridad Industrial", "code": "SEG-101" }
+  ]
+}

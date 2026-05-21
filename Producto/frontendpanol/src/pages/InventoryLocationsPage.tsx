@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus, RefreshCcw, Search } from "lucide-react";
 import { InventoryLayout } from "../components/layout/InventoryLayout";
 import { getApiErrorPayload, getErrorMessage } from "../services/apiClient";
@@ -7,7 +7,7 @@ import {
   fetchLocationsForManagement,
   setLocationActive,
   updateLocation,
-} from "../services/locationService";
+} from "../services/locationServiceLocal";
 import type { LocationOption } from "../types/location";
 
 interface FormState {

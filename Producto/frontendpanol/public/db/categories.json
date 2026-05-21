@@ -1,22 +1,60 @@
 {
   "categories": [
     {
-      "id": "cat-001",
-      "name": "Medicamentos",
-      "description": "Productos farmacéuticos",
-      "createdAt": "2024-01-15T10:00:00Z"
+      "uuid": "cat-001",
+      "nombre": "Herramientas Manuales",
+      "descripcion": "Herramientas de uso manual para trabajos de precision y mantenimiento",
+      "activa": true,
+      "createdAt": "2024-01-15T10:30:00Z"
     },
     {
-      "id": "cat-002",
-      "name": "Equipos Médicos",
-      "description": "Dispositivos y equipos para diagnóstico",
-      "createdAt": "2024-01-15T10:05:00Z"
+      "uuid": "cat-002",
+      "nombre": "Equipos Electronicos",
+      "descripcion": "Dispositivos electronicos para medicion, diagnostico y reparacion",
+      "activa": true,
+      "createdAt": "2024-01-20T14:45:00Z"
     },
     {
-      "id": "cat-003",
-      "name": "Material de Curación",
-      "description": "Vendajes, gasas y suturas",
-      "createdAt": "2024-01-15T10:10:00Z"
+      "uuid": "cat-003",
+      "nombre": "Material de Seguridad",
+      "descripcion": "Equipamiento de proteccion personal y seguridad laboral",
+      "activa": true,
+      "createdAt": "2024-02-05T09:00:00Z"
+    },
+    {
+      "uuid": "cat-004",
+      "nombre": "Instrumentos de Medicion",
+      "descripcion": "Instrumentos para mediciones precisas en laboratorio y campo",
+      "activa": true,
+      "createdAt": "2024-02-10T11:20:00Z"
+    },
+    {
+      "uuid": "cat-005",
+      "nombre": "Material Didactico",
+      "descripcion": "Recursos educativos y material de apoyo para clases",
+      "activa": true,
+      "createdAt": "2024-02-15T08:30:00Z"
+    },
+    {
+      "uuid": "cat-006",
+      "nombre": "Equipos de Computacion",
+      "descripcion": "Computadores, perifericos y accesorios informaticos",
+      "activa": true,
+      "createdAt": "2024-03-01T10:00:00Z"
+    },
+    {
+      "uuid": "cat-007",
+      "nombre": "Insumos Consumibles",
+      "descripcion": "Materiales de uso unico o consumo frecuente",
+      "activa": true,
+      "createdAt": "2024-03-10T15:30:00Z"
+    },
+    {
+      "uuid": "cat-008",
+      "nombre": "Equipos Audiovisuales",
+      "descripcion": "Proyectores, camaras, microfonos y equipos de presentacion",
+      "activa": false,
+      "createdAt": "2024-03-15T09:45:00Z"
     }
   ]
 }

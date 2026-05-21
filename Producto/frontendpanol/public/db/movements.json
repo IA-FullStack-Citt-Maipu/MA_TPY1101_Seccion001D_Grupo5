@@ -1,0 +1,94 @@
+{
+  "movements": [
+    {
+      "uuid": "mov-001",
+      "implement_uuid": "impl-001",
+      "action": "STOCK_IN",
+      "quantity": 5,
+      "timestamp": "2024-05-01T09:00:00Z",
+      "notes": "Ingreso inicial de multimetros",
+      "performed_by": "user-002"
+    },
+    {
+      "uuid": "mov-002",
+      "implement_uuid": "impl-001",
+      "action": "LOAN_DELIVERY",
+      "quantity": 1,
+      "timestamp": "2024-05-05T10:30:00Z",
+      "notes": "Prestamo a laboratorio electronica",
+      "performed_by": "user-002"
+    },
+    {
+      "uuid": "mov-003",
+      "implement_uuid": "impl-005",
+      "action": "LOAN_DELIVERY",
+      "quantity": 4,
+      "timestamp": "2024-05-08T14:00:00Z",
+      "notes": "Prestamo para clase de programacion",
+      "performed_by": "user-003"
+    },
+    {
+      "uuid": "mov-004",
+      "implement_uuid": "impl-009",
+      "action": "STOCK_IN",
+      "quantity": 10,
+      "timestamp": "2024-05-10T08:00:00Z",
+      "notes": "Compra de kits Arduino nuevos",
+      "performed_by": "user-002"
+    },
+    {
+      "uuid": "mov-005",
+      "implement_uuid": "impl-015",
+      "action": "DAMAGE_REPORT",
+      "quantity": 1,
+      "timestamp": "2024-05-12T16:00:00Z",
+      "notes": "Taladro con motor danado, enviar a reparacion",
+      "performed_by": "user-003"
+    },
+    {
+      "uuid": "mov-006",
+      "implement_uuid": "impl-003",
+      "action": "LOAN_DELIVERY",
+      "quantity": 3,
+      "timestamp": "2024-05-14T09:30:00Z",
+      "notes": "Cascos para practica en terreno",
+      "performed_by": "user-002"
+    },
+    {
+      "uuid": "mov-007",
+      "implement_uuid": "impl-007",
+      "action": "STOCK_OUT",
+      "quantity": 25,
+      "timestamp": "2024-05-15T11:00:00Z",
+      "notes": "Distribucion de lentes a estudiantes nuevos",
+      "performed_by": "user-003"
+    },
+    {
+      "uuid": "mov-008",
+      "implement_uuid": "impl-001",
+      "action": "LOAN_RETURN",
+      "quantity": 1,
+      "timestamp": "2024-05-16T15:00:00Z",
+      "notes": "Devolucion de multimetro",
+      "performed_by": "user-002"
+    },
+    {
+      "uuid": "mov-009",
+      "implement_uuid": "impl-012",
+      "action": "STOCK_IN",
+      "quantity": 15,
+      "timestamp": "2024-05-17T10:00:00Z",
+      "notes": "Reposicion de stock de mouse",
+      "performed_by": "user-002"
+    },
+    {
+      "uuid": "mov-010",
+      "implement_uuid": "impl-006",
+      "action": "MANUAL_ADJUSTMENT",
+      "quantity": -1,
+      "timestamp": "2024-05-18T14:30:00Z",
+      "notes": "Ajuste de inventario por auditoria",
+      "performed_by": "user-002"
+    }
+  ]
+}

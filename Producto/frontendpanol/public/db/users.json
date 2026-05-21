@@ -1,28 +1,76 @@
 {
   "users": [
     {
-      "id": "user-001",
-      "rut": "22307980-1",
-      "name": "Juan Director",
-      "email": "juan@escuelasalud.cl",
+      "uuid": "user-001",
+      "rut": "12345678-9",
+      "nombre": "Roberto Mendez",
+      "email": "roberto.mendez@instituto.cl",
       "role": "DIRECTOR",
+      "active": true,
+      "createdAt": "2024-01-10T08:00:00Z"
+    },
+    {
+      "uuid": "user-002",
+      "rut": "11223344-5",
+      "nombre": "Carolina Silva",
+      "email": "carolina.silva@instituto.cl",
+      "role": "COORDINADOR",
+      "active": true,
+      "createdAt": "2024-01-12T09:00:00Z"
+    },
+    {
+      "uuid": "user-003",
+      "rut": "22334455-6",
+      "nombre": "Miguel Torres",
+      "email": "miguel.torres@instituto.cl",
+      "role": "COORDINADOR",
+      "active": true,
       "createdAt": "2024-01-15T10:00:00Z"
     },
     {
-      "id": "user-002",
-      "rut": "18765432-9",
-      "name": "María Coordinadora",
-      "email": "maria@escuelasalud.cl",
-      "role": "COORDINADOR",
-      "createdAt": "2024-01-15T10:05:00Z"
+      "uuid": "user-004",
+      "rut": "33445566-7",
+      "nombre": "Ana Martinez",
+      "email": "ana.martinez@instituto.cl",
+      "role": "DOCENTE",
+      "active": true,
+      "createdAt": "2024-01-20T11:00:00Z"
     },
     {
-      "id": "user-003",
-      "rut": "14567890-4",
-      "name": "Carlos Docente",
-      "email": "carlos@escuelasalud.cl",
+      "uuid": "user-005",
+      "rut": "44556677-8",
+      "nombre": "Pedro Gonzalez",
+      "email": "pedro.gonzalez@instituto.cl",
       "role": "DOCENTE",
-      "createdAt": "2024-01-15T10:10:00Z"
+      "active": true,
+      "createdAt": "2024-01-25T14:00:00Z"
+    },
+    {
+      "uuid": "user-006",
+      "rut": "55667788-9",
+      "nombre": "Laura Fernandez",
+      "email": "laura.fernandez@instituto.cl",
+      "role": "DOCENTE",
+      "active": true,
+      "createdAt": "2024-02-01T09:30:00Z"
+    },
+    {
+      "uuid": "user-007",
+      "rut": "66778899-0",
+      "nombre": "Jorge Ramirez",
+      "email": "jorge.ramirez@instituto.cl",
+      "role": "DOCENTE",
+      "active": false,
+      "createdAt": "2024-02-05T10:00:00Z"
+    },
+    {
+      "uuid": "user-008",
+      "rut": "77889900-1",
+      "nombre": "Claudia Vargas",
+      "email": "claudia.vargas@instituto.cl",
+      "role": "DOCENTE",
+      "active": true,
+      "createdAt": "2024-02-10T11:30:00Z"
     }
   ]
 }
