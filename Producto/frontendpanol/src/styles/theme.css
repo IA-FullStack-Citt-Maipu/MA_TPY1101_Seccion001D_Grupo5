@@ -3511,3 +3511,348 @@ input[type="checkbox"]:checked {
   }
 }
 
+/* ============================================================
+   ENHANCED MODAL & FORM STYLES
+   ============================================================ */
+
+/* Enhanced Modal */
+.modal--enhanced {
+  max-width: 520px;
+  padding: 0;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 25px 50px -12px rgba(9, 33, 80, 0.25);
+}
+
+.modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 24px 24px 16px;
+  background: linear-gradient(135deg, #f8faff 0%, #eef4ff 100%);
+  border-bottom: 1px solid #e2eaf5;
+}
+
+.modal__header-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.modal__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, #1d59d6 0%, #2563eb 100%);
+  border-radius: 12px;
+  color: white;
+  flex-shrink: 0;
+}
+
+.modal__header h3 {
+  margin: 0 0 4px;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1a3a66;
+}
+
+.modal__header p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #6b7f9a;
+  line-height: 1.4;
+}
+
+.modal__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  color: #6b7f9a;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.modal__close:hover {
+  background: #e2eaf5;
+  color: #1a3a66;
+}
+
+.modal__close:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.modal__form {
+  padding: 24px;
+}
+
+.modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 24px;
+  margin-top: 8px;
+  border-top: 1px solid #e9f0fb;
+}
+
+/* Form Groups */
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group--error .form-input,
+.form-group--error .form-textarea {
+  border-color: #dc2626;
+  background: #fef2f2;
+}
+
+.form-group--valid .form-input {
+  border-color: #16a34a;
+  background: #f0fdf4;
+}
+
+.form-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.form-label svg {
+  color: #6b7f9a;
+}
+
+.form-label__required {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.form-label__optional {
+  font-weight: 400;
+  color: #9ca3af;
+  font-size: 0.8rem;
+}
+
+.form-input-wrapper {
+  position: relative;
+}
+
+.form-input,
+.form-textarea {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #e2eaf5;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  color: #1a3a66;
+  background: #fff;
+  transition: all 200ms ease;
+}
+
+.form-input:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: #1d59d6;
+  box-shadow: 0 0 0 4px rgba(29, 89, 214, 0.12);
+}
+
+.form-input::placeholder,
+.form-textarea::placeholder {
+  color: #9ca3af;
+}
+
+.form-input__icon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.form-input__icon--success {
+  color: #16a34a;
+}
+
+.form-input__icon--error {
+  color: #dc2626;
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.form-field-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-top: 6px;
+  gap: 12px;
+}
+
+.form-field-footer .field-hint,
+.form-field-footer .field-error {
+  margin: 0;
+  flex: 1;
+}
+
+.char-count {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.char-count--warning {
+  color: #d97706;
+  font-weight: 500;
+}
+
+/* Button Enhancements */
+.button--lg {
+  padding: 12px 20px;
+  font-size: 0.95rem;
+}
+
+.button--primary {
+  background: linear-gradient(135deg, #1d59d6 0%, #2563eb 100%);
+  color: white;
+  border: none;
+  box-shadow: 0 4px 12px rgba(29, 89, 214, 0.25);
+}
+
+.button--primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1a4fc2 0%, #1d4ed8 100%);
+  box-shadow: 0 6px 16px rgba(29, 89, 214, 0.35);
+  transform: translateY(-1px);
+}
+
+.button--primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.button__spinner {
+  animation: spin 1s linear infinite;
+}
+
+/* Success and Error Banners */
+.success-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  border: 1px solid #a7f3d0;
+  border-radius: 10px;
+  color: #065f46;
+  font-size: 0.9rem;
+  margin-bottom: 16px;
+  animation: fade-slide-up 300ms ease;
+}
+
+.error-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  color: #991b1b;
+  font-size: 0.9rem;
+  margin-bottom: 16px;
+  animation: fade-slide-up 300ms ease;
+}
+
+/* Empty State Enhancement */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+  color: #6b7f9a;
+}
+
+.empty-state p {
+  margin: 8px 0 0;
+  font-size: 0.95rem;
+}
+
+/* Filter Badge */
+.filter-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: #dbeafe;
+  color: #1d59d6;
+  font-size: 0.7rem;
+  font-weight: 500;
+  border-radius: 4px;
+  margin-left: 8px;
+}
+
+/* Table Actions Enhancement */
+.table-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.table-actions .button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 0.82rem;
+}
+
+/* Implement Thumbnail */
+.implement-thumb {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 2px solid #e9f0fb;
+}
+
+/* Stock Badge Styles */
+.badge--success {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.badge--warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.badge--danger {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.badge--info {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.badge--neutral {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
