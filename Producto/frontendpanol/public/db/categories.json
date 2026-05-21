@@ -1,0 +1,22 @@
+{
+  "categories": [
+    {
+      "id": "cat-001",
+      "name": "Medicamentos",
+      "description": "Productos farmacéuticos",
+      "createdAt": "2024-01-15T10:00:00Z"
+    },
+    {
+      "id": "cat-002",
+      "name": "Equipos Médicos",
+      "description": "Dispositivos y equipos para diagnóstico",
+      "createdAt": "2024-01-15T10:05:00Z"
+    },
+    {
+      "id": "cat-003",
+      "name": "Material de Curación",
+      "description": "Vendajes, gasas y suturas",
+      "createdAt": "2024-01-15T10:10:00Z"
+    }
+  ]
+}

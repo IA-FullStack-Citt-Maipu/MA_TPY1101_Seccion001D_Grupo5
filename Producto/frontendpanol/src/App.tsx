@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   InventoryLayout,
   type BreadcrumbPart,
@@ -12,10 +12,8 @@ import { InventoryItemDetailPage } from "./pages/InventoryItemDetailPage";
 import { InventoryItemsPage } from "./pages/InventoryItemsPage";
 import { InventoryLocationsPage } from "./pages/InventoryLocationsPage";
 import { InventoryMovesPage } from "./pages/InventoryMovesPage";
-import { LoginPage } from "./pages/LoginPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
-import { logout } from "./services/authService";
-import { clearSession, getUserRoleFromToken, isAuthenticated } from "./utils/auth";
+import { clearSession } from "./utils/auth";
 
 interface RouteView {
   key: string;
@@ -32,12 +30,12 @@ function getDefaultHashByRole(role: string): string {
 }
 
 function App() {
-  const [hash, setHash] = useState(() => window.location.hash || "#/login");
+  const [hash, setHash] = useState(() => window.location.hash || "#/inventory/categories");
   const [routeTransitionKey, setRouteTransitionKey] = useState(0);
 
   useEffect(() => {
     function handleHashChange() {
-      setHash(window.location.hash || "#/login");
+      setHash(window.location.hash || "#/inventory/categories");
       setRouteTransitionKey((previous) => previous + 1);
     }
 
@@ -46,35 +44,26 @@ function App() {
   }, []);
 
   async function handleLogout() {
-    await logout();
-    window.location.hash = "#/login";
+    // Solo limpia la sesión pero no redirige al login
+    clearSession();
   }
 
-  const role = getUserRoleFromToken();
-  const authenticated = isAuthenticated();
-  const normalizedHash = hash || "#/login";
+  // Modo desarrollo: usar rol por defecto y omitir autenticación
+  const role = "DIRECTOR"; // Cambiar a "COORDINADOR" o "DOCENTE" según necesites
+  const normalizedHash = hash || "#/inventory/categories";
   const defaultHash = getDefaultHashByRole(role);
-  const effectiveHash = !authenticated
-    ? "#/login"
-    : normalizedHash === "#/login"
-      ? defaultHash
-      : normalizedHash;
+  const effectiveHash = normalizedHash === "#/login" ? defaultHash : normalizedHash;
 
   useEffect(() => {
-    if (!authenticated && normalizedHash !== "#/login") {
-      clearSession();
-      window.location.hash = "#/login";
-      return;
-    }
-    if (authenticated && role === "DIRECTOR" && normalizedHash.startsWith("#/inventory")) {
-      window.location.hash = "#/director/dashboard";
-      return;
-    }
-    if (authenticated && normalizedHash === "#/login") {
+    if (normalizedHash === "#/login") {
       window.location.hash = defaultHash;
       return;
     }
-  }, [authenticated, normalizedHash, defaultHash, role]);
+    if (role === "DIRECTOR" && normalizedHash.startsWith("#/inventory")) {
+      window.location.hash = "#/director/dashboard";
+      return;
+    }
+  }, [normalizedHash, defaultHash, role]);
 
   const routeView = useMemo<RouteView>(() => {
     const currentHash = effectiveHash;
@@ -154,10 +143,6 @@ function App() {
       notFound: true,
     };
   }, [effectiveHash, role]);
-
-  if (effectiveHash === "#/login") {
-    return <LoginPage />;
-  }
 
   return (
     <InventoryLayout

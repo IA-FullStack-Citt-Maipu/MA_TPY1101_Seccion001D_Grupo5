@@ -1,0 +1,28 @@
+{
+  "users": [
+    {
+      "id": "user-001",
+      "rut": "22307980-1",
+      "name": "Juan Director",
+      "email": "juan@escuelasalud.cl",
+      "role": "DIRECTOR",
+      "createdAt": "2024-01-15T10:00:00Z"
+    },
+    {
+      "id": "user-002",
+      "rut": "18765432-9",
+      "name": "María Coordinadora",
+      "email": "maria@escuelasalud.cl",
+      "role": "COORDINADOR",
+      "createdAt": "2024-01-15T10:05:00Z"
+    },
+    {
+      "id": "user-003",
+      "rut": "14567890-4",
+      "name": "Carlos Docente",
+      "email": "carlos@escuelasalud.cl",
+      "role": "DOCENTE",
+      "createdAt": "2024-01-15T10:10:00Z"
+    }
+  ]
+}

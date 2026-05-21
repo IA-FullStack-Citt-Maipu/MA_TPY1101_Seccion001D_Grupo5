@@ -1,0 +1,31 @@
+{
+  "implements": [
+    {
+      "id": "impl-001",
+      "name": "Paracetamol 500mg",
+      "categoryId": "cat-001",
+      "quantity": 150,
+      "locationId": "loc-001",
+      "description": "Tabletas de paracetamol",
+      "createdAt": "2024-01-15T10:00:00Z"
+    },
+    {
+      "id": "impl-002",
+      "name": "Tensiómetro Digital",
+      "categoryId": "cat-002",
+      "quantity": 5,
+      "locationId": "loc-001",
+      "description": "Medidor de presión arterial",
+      "createdAt": "2024-01-15T10:05:00Z"
+    },
+    {
+      "id": "impl-003",
+      "name": "Gasa estéril",
+      "categoryId": "cat-003",
+      "quantity": 500,
+      "locationId": "loc-002",
+      "description": "Gasa de algodón estéril",
+      "createdAt": "2024-01-15T10:10:00Z"
+    }
+  ]
+}

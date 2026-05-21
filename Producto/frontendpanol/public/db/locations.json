@@ -1,0 +1,20 @@
+{
+  "locations": [
+    {
+      "id": "loc-001",
+      "name": "Pabellón A - Estantería 1",
+      "floor": 1,
+      "section": "A",
+      "description": "Estantería principal",
+      "createdAt": "2024-01-15T10:00:00Z"
+    },
+    {
+      "id": "loc-002",
+      "name": "Pabellón B - Estantería 2",
+      "floor": 2,
+      "section": "B",
+      "description": "Estantería secundaria",
+      "createdAt": "2024-01-15T10:05:00Z"
+    }
+  ]
+}

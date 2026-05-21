@@ -7,7 +7,7 @@ import {
   fetchCategoriaAssociation,
   fetchCategoriasGestion,
   updateCategoria,
-} from "../services/categoryService";
+} from "../services/categoryServiceLocal";
 import { getApiErrorPayload, getErrorMessage } from "../services/apiClient";
 import type { Categoria, CategoriaAssociationSummary } from "../types/category";
 
@@ -131,7 +131,7 @@ export function useCategories() {
     setState((prev) => ({ ...prev, saving: true, error: null }));
 
     try {
-      await deactivateCategoria(categoryUuid, force);
+      await deactivateCategoria(categoryUuid);
       await load();
       setState((prev) => ({ ...prev, saving: false }));
       return { ok: true, forceRequired: false, message: null };
