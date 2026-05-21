@@ -23,6 +23,8 @@ function mapToCategoria(raw: RawCategory): Categoria {
 
 
 
+let initializationPromise: Promise<void> | null = null;
+
 // Cargar categorías iniciales desde el JSON
 async function initializeCategories() {
   const existing = await localDB.get<Categoria[]>(CATEGORIES_COLLECTION);
@@ -33,14 +35,19 @@ async function initializeCategories() {
       await localDB.set(CATEGORIES_COLLECTION, mapped);
     } catch (error) {
       console.error("Error initializing categories:", error);
+      // Fallback a categorías vacías si falla la carga
+      await localDB.set(CATEGORIES_COLLECTION, []);
     }
   }
 }
 
-// Llamar inicialización al cargar el módulo
-initializeCategories();
-
 export async function fetchCategoriasGestion(): Promise<Categoria[]> {
+  // Asegurar que la inicialización se complete antes de devolver datos
+  if (!initializationPromise) {
+    initializationPromise = initializeCategories();
+  }
+  await initializationPromise;
+  
   const categories = await localDB.get<Categoria[]>(CATEGORIES_COLLECTION);
   return categories || [];
 }

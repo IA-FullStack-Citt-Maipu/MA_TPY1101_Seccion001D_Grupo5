@@ -38,10 +38,14 @@ export function InventoryCategoriesPage({ embedded = false }: { embedded?: boole
     void load();
   }, [load]);
 
-  const sortedCategories = useMemo(
-    () => [...categories].sort((a, b) => Number(b.activa) - Number(a.activa) || a.nombre.localeCompare(b.nombre)),
-    [categories],
-  );
+  const sortedCategories = useMemo(() => {
+    if (!Array.isArray(categories) || categories.length === 0) {
+      return [];
+    }
+    return [...categories].sort(
+      (a, b) => Number(b.activa) - Number(a.activa) || a.nombre.localeCompare(b.nombre),
+    );
+  }, [categories]);
 
   function closeModal() {
     clearFieldError();

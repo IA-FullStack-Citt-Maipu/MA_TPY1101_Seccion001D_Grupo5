@@ -6,14 +6,12 @@ import {
   type NavigationMode,
 } from "./components/layout/InventoryLayout";
 import { InventoryCategoriesPage } from "./pages/InventoryCategoriesPage";
-import { DirectorCreateUserPage } from "./pages/DirectorCreateUserPage";
-import { DirectorDashboardPage } from "./pages/DirectorDashboardPage";
 import { InventoryItemDetailPage } from "./pages/InventoryItemDetailPage";
 import { InventoryItemsPage } from "./pages/InventoryItemsPage";
 import { InventoryLocationsPage } from "./pages/InventoryLocationsPage";
 import { InventoryMovesPage } from "./pages/InventoryMovesPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
-import { clearSession } from "./utils/auth";
+import { clearSession, type UserRole } from "./utils/auth";
 
 interface RouteView {
   key: string;
@@ -49,7 +47,7 @@ function App() {
   }
 
   // Modo desarrollo: usar rol por defecto y omitir autenticación
-  const role = "COORDINADOR"; // Cambiar a "DIRECTOR" o "DOCENTE" según necesites
+  const role: UserRole = "COORDINADOR"; // Cambiar a "DIRECTOR" o "DOCENTE" según necesites
   const normalizedHash = hash || "#/inventory/categories";
   const defaultHash = getDefaultHashByRole(role);
   const effectiveHash = normalizedHash === "#/login" ? defaultHash : normalizedHash;
@@ -57,18 +55,14 @@ function App() {
   useEffect(() => {
     if (normalizedHash === "#/login") {
       window.location.hash = defaultHash;
-      return;
     }
-    if (role === "DIRECTOR" && normalizedHash.startsWith("#/inventory")) {
-      window.location.hash = "#/director/dashboard";
-      return;
-    }
-  }, [normalizedHash, defaultHash, role]);
+  }, [normalizedHash, defaultHash]);
 
   const routeView = useMemo<RouteView>(() => {
     const currentHash = effectiveHash;
 
-    if (role !== "DIRECTOR" && currentHash.startsWith("#/director")) {
+    // Acceso denegado a rutas de director
+    if (currentHash.startsWith("#/director")) {
       return {
         key: "director-forbidden",
         navigationMode: "inventory",
@@ -80,26 +74,6 @@ function App() {
             <p className="text-muted">Esta vista solo esta disponible para Director de carrera.</p>
           </section>
         ),
-      };
-    }
-
-    if (role === "DIRECTOR" && currentHash.startsWith("#/director/dashboard")) {
-      return {
-        key: "director-dashboard",
-        navigationMode: "director",
-        activeSection: "director-dashboard",
-        breadcrumbs: [{ label: "Dashboard" }, { label: "Director de Carrera" }],
-        content: <DirectorDashboardPage embedded />,
-      };
-    }
-
-    if (role === "DIRECTOR" && currentHash.startsWith("#/director/users/create")) {
-      return {
-        key: "director-users-create",
-        navigationMode: "director",
-        activeSection: "director-users",
-        breadcrumbs: [{ label: "Usuarios" }, { label: "Director de Carrera" }],
-        content: <DirectorCreateUserPage embedded />,
       };
     }
 
@@ -156,8 +130,8 @@ function App() {
           : "Buscar implementos..."
       }
       notificationCount={routeView.navigationMode === "director" ? 3 : 0}
-      userName={role === "DIRECTOR" ? "Director de Carrera" : "Usuario"}
-      userRole={role === "DIRECTOR" ? "Director de Carrera" : role}
+      userName="Coordinador"
+      userRole={role}
     >
       <div key={`${routeView.key}-${routeTransitionKey}`} className="route-transition">
         {routeView.content}
