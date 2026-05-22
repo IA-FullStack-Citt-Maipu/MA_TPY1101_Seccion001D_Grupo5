@@ -12,7 +12,9 @@ public interface LoanRepositoryPort {
 
     boolean existsActiveSubjectByUuid(UUID subjectUuid);
 
-    boolean existsActiveImplementByUuid(UUID implementUuid);
+    Optional<LoanImplementAvailability> findImplementAvailabilityByUuid(UUID implementUuid);
+
+    boolean existsPendingLoanConflict(UUID requesterUuid, List<UUID> implementUuids);
 
     LoanAggregate createPendingLoan(LoanCreateCommand command);
 

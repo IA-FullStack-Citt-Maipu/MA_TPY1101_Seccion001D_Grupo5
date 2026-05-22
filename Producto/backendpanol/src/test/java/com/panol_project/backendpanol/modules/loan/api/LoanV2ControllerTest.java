@@ -16,6 +16,7 @@ import com.panol_project.backendpanol.modules.loan.application.SolicitarPrestamo
 import com.panol_project.backendpanol.modules.loan.domain.LoanAggregate;
 import com.panol_project.backendpanol.modules.loan.domain.LoanCreateCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanDetailItem;
+import com.panol_project.backendpanol.modules.loan.domain.LoanImplementAvailability;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRepositoryPort;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStatus;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
@@ -114,7 +115,9 @@ class LoanV2ControllerTest {
         when(loanRepositoryPort.existsActiveRequesterByUuid(authenticatedUserUuid)).thenReturn(true);
         when(loanRepositoryPort.existsActiveRoomByUuid(roomUuid)).thenReturn(true);
         when(loanRepositoryPort.existsActiveSubjectByUuid(subjectUuid)).thenReturn(true);
-        when(loanRepositoryPort.existsActiveImplementByUuid(implementUuid)).thenReturn(true);
+        when(loanRepositoryPort.findImplementAvailabilityByUuid(implementUuid))
+                .thenReturn(Optional.of(new LoanImplementAvailability(implementUuid, true)));
+        when(loanRepositoryPort.existsPendingLoanConflict(authenticatedUserUuid, List.of(implementUuid))).thenReturn(false);
         when(loanRepositoryPort.createPendingLoan(any(LoanCreateCommand.class))).thenReturn(createdLoan);
         when(loanRepositoryPort.findVisibleLoanSummaryByUuid(loanUuid)).thenReturn(Optional.of(response));
 
@@ -209,6 +212,38 @@ class LoanV2ControllerTest {
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
         verifyNoInteractions(loanRepositoryPort);
+    }
+
+    @Test
+    void solicitarPrestamoDebeRetornar409CuandoExisteSolicitudPendienteSolapada() throws Exception {
+        UUID authenticatedUserUuid = UUID.randomUUID();
+        UUID roomUuid = UUID.randomUUID();
+        UUID implementUuid = UUID.randomUUID();
+
+        when(loanRepositoryPort.existsActiveRequesterByUuid(authenticatedUserUuid)).thenReturn(true);
+        when(loanRepositoryPort.existsActiveRoomByUuid(roomUuid)).thenReturn(true);
+        when(loanRepositoryPort.findImplementAvailabilityByUuid(implementUuid))
+                .thenReturn(Optional.of(new LoanImplementAvailability(implementUuid, true)));
+        when(loanRepositoryPort.existsPendingLoanConflict(authenticatedUserUuid, List.of(implementUuid))).thenReturn(true);
+
+        mockMvc.perform(post("/api/v2/loans")
+                        .with(authentication(jwtAuthentication(authenticatedUserUuid, "DOCENTE")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "room_uuid": "%s",
+                                  "scheduled_at": "2026-06-12T10:30:00-04:00",
+                                  "items": [
+                                    {
+                                      "implement_uuid": "%s",
+                                      "requested_quantity": 1
+                                    }
+                                  ]
+                                }
+                                """.formatted(roomUuid, implementUuid)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("LOAN_DUPLICATE_REQUEST"))
+                .andExpect(jsonPath("$.message").value("Ya tienes una solicitud pendiente con uno o m\u00e1s de estos implementos"));
     }
 
     @Test

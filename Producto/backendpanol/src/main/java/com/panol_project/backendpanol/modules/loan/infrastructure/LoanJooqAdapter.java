@@ -20,6 +20,7 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanDeliveryCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanDeliveryItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanDeliveryResult;
 import com.panol_project.backendpanol.modules.loan.domain.LoanDetailItem;
+import com.panol_project.backendpanol.modules.loan.domain.LoanImplementAvailability;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRepositoryPort;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRequestedItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReturnCommand;
@@ -42,6 +43,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -99,17 +101,47 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
     }
 
     @Override
-    public boolean existsActiveImplementByUuid(UUID implementUuid) {
+    public Optional<LoanImplementAvailability> findImplementAvailabilityByUuid(UUID implementUuid) {
         if (implementUuid == null) {
+            return Optional.empty();
+        }
+        return dsl.select(IMPLEMENT.UUID, IMPLEMENT.ACTIVE)
+                        .from(IMPLEMENT)
+                        .where(IMPLEMENT.UUID.eq(implementUuid))
+                        .fetchOptional(record -> new LoanImplementAvailability(
+                                record.get(IMPLEMENT.UUID),
+                                Boolean.TRUE.equals(record.get(IMPLEMENT.ACTIVE))
+                        ));
+    }
+
+    @Override
+    public boolean existsPendingLoanConflict(UUID requesterUuid, List<UUID> implementUuids) {
+        if (requesterUuid == null || implementUuids == null || implementUuids.isEmpty()) {
             return false;
         }
+
+        Long requesterId = findActiveUserIdByUuid(requesterUuid);
+        if (requesterId == null) {
+            return false;
+        }
+
+        List<UUID> filteredImplementUuids = implementUuids.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (filteredImplementUuids.isEmpty()) {
+            return false;
+        }
+
         return dsl.fetchExists(
                 dsl.selectOne()
-                        .from(IMPLEMENT)
+                        .from(LOAN)
+                        .join(LOAN_DETAIL).on(LOAN_DETAIL.LOAN_ID.eq(LOAN.ID))
+                        .join(IMPLEMENT).on(IMPLEMENT.ID.eq(LOAN_DETAIL.IMPLEMENT_ID))
                         .where(
-                                IMPLEMENT.UUID.eq(implementUuid)
-                                        .and(IMPLEMENT.ACTIVE.isTrue())
-                                        .and(IMPLEMENT.ITEM_TYPE.in(ItemTypeEnum.fungible, ItemTypeEnum.no_fungible))
+                                LOAN.REQUESTER_ID.eq(requesterId)
+                                        .and(LOAN.STATUS.eq(LoanStatusEnum.pending))
+                                        .and(IMPLEMENT.UUID.in(filteredImplementUuids))
                         )
         );
     }
@@ -820,15 +852,21 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
     }
 
     private Long requireUserIdByUuid(UUID userUuid) {
-        Long userId = dsl.select(USER.ID)
-                .from(USER)
-                .where(USER.UUID.eq(userUuid).and(USER.ACTIVE.isTrue()))
-                .fetchOne(USER.ID);
-
+        Long userId = findActiveUserIdByUuid(userUuid);
         if (userId == null) {
             throw new NotFoundException("LOAN_ACTOR_NOT_FOUND", "No se pudo resolver el usuario actor");
         }
         return userId;
+    }
+
+    private Long findActiveUserIdByUuid(UUID userUuid) {
+        if (userUuid == null) {
+            return null;
+        }
+        return dsl.select(USER.ID)
+                .from(USER)
+                .where(USER.UUID.eq(userUuid).and(USER.ACTIVE.isTrue()))
+                .fetchOne(USER.ID);
     }
 
     private Long findRoomIdByUuid(UUID roomUuid) {
