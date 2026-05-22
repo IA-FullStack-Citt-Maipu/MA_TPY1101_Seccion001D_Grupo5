@@ -57,9 +57,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 @SpringBootTest(properties = {
         "spring.task.scheduling.enabled=false",
         "app.outbox.worker-delay-ms=600000",
-        "app.outbox.metrics-delay-ms=600000"
+        "app.outbox.metrics-delay-ms=600000",
+        "spring.datasource.url=${JOOQ_DB_URL:jdbc:postgresql://127.0.0.1:5432/panol_ci}",
+        "spring.datasource.username=${JOOQ_DB_USER:panol_ci}",
+        "spring.datasource.password=${JOOQ_DB_PASSWORD:panol_ci}"
 })
-@ActiveProfiles("supabase")
+@ActiveProfiles("docker")
 class SolicitarPrestamoPersistenceTest {
 
     private static final UUID SYSTEM_OUTBOX_USER_UUID = UUID.fromString("99999999-9999-9999-9999-999999999999");

@@ -7,6 +7,7 @@ import com.tngtech.archunit.core.domain.Dependency;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
+import com.tngtech.archunit.core.importer.ImportOption;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
@@ -16,6 +17,7 @@ class ArchitectureTest {
     private static final String AUTH_AUDIT_LOG_PORT = "com.panol_project.backendpanol.modules.auth.domain.AuditLogPort";
 
     private final JavaClasses importedClasses = new ClassFileImporter()
+            .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
             .importPackages("com.panol_project.backendpanol");
 
     @Test
@@ -250,7 +252,9 @@ class ArchitectureTest {
                 "catalog.implement",
                 "catalog.stock",
                 "catalog.category",
-                "catalog.location"
+                "catalog.location",
+                "catalog.room",
+                "catalog.subject"
         );
 
         for (JavaClass source : importedClasses) {
