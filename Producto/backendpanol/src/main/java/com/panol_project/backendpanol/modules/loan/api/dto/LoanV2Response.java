@@ -11,22 +11,17 @@ public record LoanV2Response(
         @JsonProperty("requester_uuid")
         UUID requesterUuid,
 
-        @JsonProperty("room_uuid")
-        UUID roomUuid,
-
-        @JsonProperty("subject_uuid")
-        UUID subjectUuid,
-
         String status,
 
         @JsonProperty("scheduled_at")
         OffsetDateTime scheduledAt,
 
-        @JsonProperty("due_date")
-        OffsetDateTime dueDate,
-
         @JsonProperty("created_at")
         OffsetDateTime createdAt,
+
+        LoanRoomV2Response room,
+
+        LoanSubjectV2Response subject,
 
         List<LoanItemV2Response> items
 ) {

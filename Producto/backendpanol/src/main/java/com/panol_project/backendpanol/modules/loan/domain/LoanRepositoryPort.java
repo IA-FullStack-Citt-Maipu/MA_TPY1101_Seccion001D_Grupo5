@@ -1,6 +1,7 @@
 package com.panol_project.backendpanol.modules.loan.domain;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface LoanRepositoryPort {
@@ -15,7 +16,9 @@ public interface LoanRepositoryPort {
 
     LoanAggregate createPendingLoan(LoanCreateCommand command);
 
-    List<LoanAggregate> findAllVisibleLoans();
+    Optional<LoanSummaryView> findVisibleLoanSummaryByUuid(UUID loanUuid);
+
+    List<LoanSummaryView> findAllVisibleLoanSummaries();
 
     LoanAggregate reviewLoan(LoanReviewCommand command);
 

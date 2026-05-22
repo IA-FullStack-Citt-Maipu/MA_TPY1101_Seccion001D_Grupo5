@@ -6,9 +6,9 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanAggregate;
 import com.panol_project.backendpanol.modules.loan.domain.LoanCreateCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRepositoryPort;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRequestedItem;
+import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
 import com.panol_project.backendpanol.shared.error.BadRequestException;
 import com.panol_project.backendpanol.shared.error.NotFoundException;
-import com.panol_project.backendpanol.shared.outbox.application.OutboxService;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -20,15 +20,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class SolicitarPrestamoUseCase {
 
     private final LoanRepositoryPort loanRepositoryPort;
-    private final OutboxService outboxService;
 
-    public SolicitarPrestamoUseCase(LoanRepositoryPort loanRepositoryPort, OutboxService outboxService) {
+    public SolicitarPrestamoUseCase(LoanRepositoryPort loanRepositoryPort) {
         this.loanRepositoryPort = loanRepositoryPort;
-        this.outboxService = outboxService;
     }
 
     @Transactional
-    public LoanAggregate solicitar(SolicitarPrestamoCommand command) {
+    public LoanSummaryView solicitar(SolicitarPrestamoCommand command) {
         validateCommand(command);
 
         UUID requesterUuid = command.requesterUuid();
@@ -66,25 +64,8 @@ public class SolicitarPrestamoUseCase {
                 )
         );
 
-        outboxService.enqueue(
-                "loan",
-                loan.uuid(),
-                "LoanRequested",
-                requesterUuid,
-                java.util.Map.of(
-                        "requester_uuid", requesterUuid.toString(),
-                        "room_uuid", roomUuid == null ? "" : roomUuid.toString(),
-                        "subject_uuid", subjectUuid == null ? "" : subjectUuid.toString(),
-                        "scheduled_at", command.scheduledAt().toString(),
-                        "due_date", command.dueDate() == null ? "" : command.dueDate().toString(),
-                        "items", requestedItems.stream().map(item -> java.util.Map.of(
-                                "implement_uuid", item.implementUuid().toString(),
-                                "requested_quantity", item.requestedQuantity()
-                        )).toList()
-                )
-        );
-
-        return loan;
+        return loanRepositoryPort.findVisibleLoanSummaryByUuid(loan.uuid())
+                .orElseThrow(() -> new NotFoundException("LOAN_NOT_FOUND", "Prestamo no encontrado"));
     }
 
     private void validateCommand(SolicitarPrestamoCommand command) {
@@ -93,6 +74,9 @@ public class SolicitarPrestamoUseCase {
         }
         if (command.requesterUuid() == null) {
             throw new BadRequestException("LOAN_REQUESTER_REQUIRED", "El solicitante autenticado es obligatorio");
+        }
+        if (command.roomUuid() == null) {
+            throw new BadRequestException("LOAN_ROOM_REQUIRED", "room_uuid es obligatorio");
         }
         if (command.scheduledAt() == null) {
             throw new BadRequestException("LOAN_SCHEDULE_REQUIRED", "scheduled_at es obligatorio");

@@ -3,6 +3,8 @@ package com.panol_project.backendpanol.modules.loan.api;
 import com.panol_project.backendpanol.modules.loan.api.dto.CreateLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.api.dto.DeliverLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanItemV2Response;
+import com.panol_project.backendpanol.modules.loan.api.dto.LoanRoomV2Response;
+import com.panol_project.backendpanol.modules.loan.api.dto.LoanSubjectV2Response;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanV2Response;
 import com.panol_project.backendpanol.modules.loan.api.dto.ReturnLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.api.dto.ReviewLoanV2Request;
@@ -16,13 +18,14 @@ import com.panol_project.backendpanol.modules.loan.application.dto.EntregarPrest
 import com.panol_project.backendpanol.modules.loan.application.dto.RevisarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.SolicitarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.SolicitarPrestamoItemCommand;
-import com.panol_project.backendpanol.modules.loan.domain.LoanAggregate;
+import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
 import com.panol_project.backendpanol.shared.error.ApiException;
 import com.panol_project.backendpanol.shared.security.CurrentUserUuidResolver;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -53,7 +56,8 @@ public class LoanV2Controller {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    LoanV2Response solicitarPrestamo(@Valid @RequestBody CreateLoanV2Request request, Authentication authentication) {
+    @PreAuthorize("hasRole('DOCENTE')")
+    public LoanV2Response solicitarPrestamo(@Valid @RequestBody CreateLoanV2Request request, Authentication authentication) {
         UUID requesterUuid = currentUserUuidResolver.resolveCurrentUserUuid(authentication)
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "AUTH_REQUIRED", "Autenticacion requerida"));
 
@@ -61,13 +65,13 @@ public class LoanV2Controller {
                 .map(item -> new SolicitarPrestamoItemCommand(item.implementUuid(), item.requestedQuantity()))
                 .toList();
 
-        LoanAggregate created = solicitarPrestamoUseCase.solicitar(
+        LoanSummaryView created = solicitarPrestamoUseCase.solicitar(
                 new SolicitarPrestamoCommand(
                         requesterUuid,
                         request.roomUuid(),
                         request.subjectUuid(),
                         request.scheduledAt(),
-                        request.dueDate(),
+                        null,
                         items
                 )
         );
@@ -76,20 +80,20 @@ public class LoanV2Controller {
     }
 
     @GetMapping
-    List<LoanV2Response> listarPrestamos() {
+    public List<LoanV2Response> listarPrestamos() {
         return gestionPrestamoUseCase.listar().stream()
                 .map(this::toResponse)
                 .toList();
     }
 
     @PatchMapping("/{loanUuid}/review")
-    LoanV2Response revisarPrestamo(
+    public LoanV2Response revisarPrestamo(
             @PathVariable UUID loanUuid,
             @Valid @RequestBody ReviewLoanV2Request request,
             Authentication authentication
     ) {
         UUID actorUuid = resolveCurrentUserUuid(authentication);
-        LoanAggregate reviewed = gestionPrestamoUseCase.revisar(
+        LoanSummaryView reviewed = gestionPrestamoUseCase.revisar(
                 new RevisarPrestamoCommand(
                         loanUuid,
                         actorUuid,
@@ -102,13 +106,13 @@ public class LoanV2Controller {
     }
 
     @PostMapping("/{loanUuid}/delivery")
-    LoanV2Response entregarPrestamo(
+    public LoanV2Response entregarPrestamo(
             @PathVariable UUID loanUuid,
             @Valid @RequestBody DeliverLoanV2Request request,
             Authentication authentication
     ) {
         UUID actorUuid = resolveCurrentUserUuid(authentication);
-        LoanAggregate delivered = gestionPrestamoUseCase.entregar(
+        LoanSummaryView delivered = gestionPrestamoUseCase.entregar(
                 new EntregarPrestamoCommand(
                         loanUuid,
                         actorUuid,
@@ -123,13 +127,13 @@ public class LoanV2Controller {
     }
 
     @PostMapping("/{loanUuid}/return")
-    LoanV2Response devolverPrestamo(
+    public LoanV2Response devolverPrestamo(
             @PathVariable UUID loanUuid,
             @Valid @RequestBody ReturnLoanV2Request request,
             Authentication authentication
     ) {
         UUID actorUuid = resolveCurrentUserUuid(authentication);
-        LoanAggregate completed = gestionPrestamoUseCase.devolver(
+        LoanSummaryView completed = gestionPrestamoUseCase.devolver(
                 new DevolverPrestamoCommand(
                         loanUuid,
                         actorUuid,
@@ -152,22 +156,24 @@ public class LoanV2Controller {
         return toResponse(completed);
     }
 
-    private LoanV2Response toResponse(LoanAggregate loan) {
+    private LoanV2Response toResponse(LoanSummaryView loan) {
         return new LoanV2Response(
                 loan.uuid(),
                 loan.requesterUuid(),
-                loan.roomUuid(),
-                loan.subjectUuid(),
                 loan.status().literal(),
                 loan.scheduledAt(),
-                loan.dueDate(),
                 loan.createdAt(),
-                loan.items().stream().map(item -> new LoanItemV2Response(
-                        item.implementUuid(),
-                        item.requestedQuantity(),
-                        item.reservedQuantity(),
-                        item.deliveredQuantity()
-                )).toList()
+                loan.room() == null ? null : new LoanRoomV2Response(loan.room().uuid(), loan.room().name()),
+                loan.subject() == null ? null : new LoanSubjectV2Response(loan.subject().uuid(), loan.subject().name()),
+                loan.items().stream()
+                        .map(item -> new LoanItemV2Response(
+                                item.implementUuid(),
+                                item.implementName(),
+                                item.requestedQuantity(),
+                                item.reservedQuantity(),
+                                item.deliveredQuantity()
+                        ))
+                        .toList()
         );
     }
 

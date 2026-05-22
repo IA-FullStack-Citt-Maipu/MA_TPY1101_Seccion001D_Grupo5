@@ -7,6 +7,9 @@ public record LoanItemV2Response(
         @JsonProperty("implement_uuid")
         UUID implementUuid,
 
+        @JsonProperty("implement_name")
+        String implementName,
+
         @JsonProperty("requested_quantity")
         Integer requestedQuantity,
 

@@ -10,6 +10,7 @@ import java.util.UUID;
 
 public record CreateLoanV2Request(
         @JsonProperty("room_uuid")
+        @NotNull(message = "room_uuid es obligatorio")
         UUID roomUuid,
 
         @JsonProperty("subject_uuid")
@@ -18,9 +19,6 @@ public record CreateLoanV2Request(
         @JsonProperty("scheduled_at")
         @NotNull(message = "scheduled_at es obligatorio")
         OffsetDateTime scheduledAt,
-
-        @JsonProperty("due_date")
-        OffsetDateTime dueDate,
 
         @NotEmpty(message = "Debes incluir al menos un item solicitado")
         @Valid
