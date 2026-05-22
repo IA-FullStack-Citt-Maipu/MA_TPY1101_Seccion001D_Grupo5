@@ -196,6 +196,17 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
             ));
         }
 
+        dsl.insertInto(LOAN_STATUS_HISTORY)
+                .set(LOAN_STATUS_HISTORY.LOAN_ID, loanId)
+                .set(LOAN_STATUS_HISTORY.ACTOR_USER_ID, requesterId)
+                .set(LOAN_STATUS_HISTORY.FROM_STATUS, (LoanStatusEnum) null)
+                .set(LOAN_STATUS_HISTORY.TO_STATUS, LoanStatusEnum.pending)
+                .set(LOAN_STATUS_HISTORY.NOTES, "Solicitud creada")
+                .set(LOAN_STATUS_HISTORY.CHANGED_AT, now)
+                .execute();
+
+        dsl.fetch("select public.fn_notify_new_loan_request(?::uuid)", command.requesterUuid());
+
         return new LoanAggregate(
                 insertedLoan.getUuid(),
                 command.requesterUuid(),
