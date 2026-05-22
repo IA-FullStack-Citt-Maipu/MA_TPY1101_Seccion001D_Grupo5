@@ -155,6 +155,7 @@ export function InventoryItemDetailPage({
 
   const [userRole, setUserRole] = useState<UserRole>("UNKNOWN");
   const isDocente = userRole === "DOCENTE";
+  const isCoordinator = userRole === "COORDINADOR";
 
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [locationsError, setLocationsError] = useState<string | null>(null);
@@ -564,7 +565,9 @@ export function InventoryItemDetailPage({
           <a className="button button--ghost" href="#/inventory/implementos"><ArrowLeft size={16} />Volver al listado</a>
           {!isDocente && (
             <>
-              <button type="button" className="button" onClick={() => setIsEditing(true)} disabled={loading || !implement}><Edit3 size={16} />Editar implemento</button>
+              {isCoordinator ? (
+                <button type="button" className="button" onClick={() => setIsEditing(true)} disabled={loading || !implement}><Edit3 size={16} />Editar implemento</button>
+              ) : null}
               <button
                 type="button"
                 className="button button--ghost"

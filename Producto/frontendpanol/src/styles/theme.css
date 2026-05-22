@@ -2790,6 +2790,71 @@ body.modal-open .app-shell__main {
     grid-template-columns: 1fr;
   }
 }
+
+.loan-grid {
+  margin-top: 20px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.loan-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.loan-form-grid label {
+  display: block;
+  margin-bottom: 7px;
+  font-weight: 700;
+  color: var(--text-soft);
+}
+
+.loan-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.loan-search-results {
+  display: grid;
+  gap: 8px;
+  max-height: 320px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.loan-search-item {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: #fbfdff;
+}
+
+.loan-search-item p {
+  margin: 2px 0 0;
+  color: var(--text-soft);
+  font-size: 0.86rem;
+}
+
+.loan-submit {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 960px) {
+  .loan-grid,
+  .loan-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
 /* Director Dashboard */
 .topbar__icon--notify {
   position: relative;

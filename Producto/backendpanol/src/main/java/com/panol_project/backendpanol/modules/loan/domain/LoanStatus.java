@@ -10,7 +10,8 @@ public enum LoanStatus {
     REJECTED("rejected"),
     DELIVERED("delivered"),
     COMPLETED("completed"),
-    CANCELLED("cancelled");
+    CANCELLED("cancelled"),
+    EXPIRED("expired");
 
     private final String literal;
 

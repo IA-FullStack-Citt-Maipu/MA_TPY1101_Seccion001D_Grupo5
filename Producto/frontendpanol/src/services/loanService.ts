@@ -10,3 +10,8 @@ export async function fetchLoans(): Promise<LoanSummary[]> {
   const response = await apiClient.get<LoanSummary[]>("/api/v2/loans");
   return response.data;
 }
+
+export async function fetchLoanByUuid(loanUuid: string): Promise<LoanSummary | null> {
+  const loans = await fetchLoans();
+  return loans.find((loan) => loan.uuid === loanUuid) ?? null;
+}
