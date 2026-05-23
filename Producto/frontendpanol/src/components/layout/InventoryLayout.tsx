@@ -26,7 +26,7 @@ const menuInventory = [
   { key: "categories", label: "Categorias", icon: ClipboardList, href: "#/inventory/categories" },
   { key: "locations", label: "Ubicaciones", icon: MapPin, href: "#/inventory/locations" },
   { key: "moves", label: "Movimientos", icon: ClipboardList, href: "#/inventory/moves" },
-  { key: "loans", label: "Prestamos", icon: Handshake, href: "#/inventory/implementos" },
+  { key: "loans", label: "Prestamos", icon: Handshake, href: "#/inventory/prestamos/nuevo" },
   { key: "reports", label: "Reportes", icon: FileBarChart2, href: "#/inventory/implementos" },
 ] as const;
 

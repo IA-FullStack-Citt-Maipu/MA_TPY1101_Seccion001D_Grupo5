@@ -15,8 +15,10 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanReturnIndividual;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReturnResult;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReviewCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReviewDecision;
+import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStockMovement;
 import com.panol_project.backendpanol.shared.error.BadRequestException;
+import com.panol_project.backendpanol.shared.error.NotFoundException;
 import com.panol_project.backendpanol.shared.outbox.application.OutboxService;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -40,12 +42,12 @@ public class GestionPrestamoUseCase {
     }
 
     @Transactional(readOnly = true)
-    public List<LoanAggregate> listar() {
-        return loanRepositoryPort.findAllVisibleLoans();
+    public List<LoanSummaryView> listar() {
+        return loanRepositoryPort.findAllVisibleLoanSummaries();
     }
 
     @Transactional
-    public LoanAggregate revisar(RevisarPrestamoCommand command) {
+    public LoanSummaryView revisar(RevisarPrestamoCommand command) {
         LoanReviewDecision decision = LoanReviewDecision.fromLiteral(command.decision())
                 .orElseThrow(() -> new BadRequestException("LOAN_REVIEW_DECISION_INVALID", "decision debe ser APPROVE o REJECT"));
 
@@ -78,11 +80,11 @@ public class GestionPrestamoUseCase {
                 )
         );
 
-        return updated;
+        return findVisibleLoanSummaryOrThrow(updated.uuid());
     }
 
     @Transactional
-    public LoanAggregate entregar(EntregarPrestamoCommand command) {
+    public LoanSummaryView entregar(EntregarPrestamoCommand command) {
         LoanDeliveryResult delivery = loanRepositoryPort.deliverLoan(
                 new LoanDeliveryCommand(
                         command.loanUuid(),
@@ -108,11 +110,11 @@ public class GestionPrestamoUseCase {
                 )
         );
 
-        return delivery.loan();
+        return findVisibleLoanSummaryOrThrow(delivery.loan().uuid());
     }
 
     @Transactional
-    public LoanAggregate devolver(DevolverPrestamoCommand command) {
+    public LoanSummaryView devolver(DevolverPrestamoCommand command) {
         boolean hasIndividuals = command.returnedIndividuals() != null && !command.returnedIndividuals().isEmpty();
         boolean hasFungible = command.fungibleReturns() != null && !command.fungibleReturns().isEmpty();
         if (!hasIndividuals && !hasFungible) {
@@ -149,7 +151,7 @@ public class GestionPrestamoUseCase {
                 )
         );
 
-        return returned.loan();
+        return findVisibleLoanSummaryOrThrow(returned.loan().uuid());
     }
 
     private void applyStockMovements(List<LoanStockMovement> stockMovements) {
@@ -170,5 +172,10 @@ public class GestionPrestamoUseCase {
         }
         String normalized = raw.trim();
         return normalized.isEmpty() ? null : normalized;
+    }
+
+    private LoanSummaryView findVisibleLoanSummaryOrThrow(java.util.UUID loanUuid) {
+        return loanRepositoryPort.findVisibleLoanSummaryByUuid(loanUuid)
+                .orElseThrow(() -> new NotFoundException("LOAN_NOT_FOUND", "Prestamo no encontrado"));
     }
 }

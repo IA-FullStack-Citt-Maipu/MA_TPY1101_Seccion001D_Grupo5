@@ -4,15 +4,19 @@ import com.panol_project.backendpanol.modules.loan.application.dto.SolicitarPres
 import com.panol_project.backendpanol.modules.loan.application.dto.SolicitarPrestamoItemCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanAggregate;
 import com.panol_project.backendpanol.modules.loan.domain.LoanCreateCommand;
+import com.panol_project.backendpanol.modules.loan.domain.LoanImplementAvailability;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRepositoryPort;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRequestedItem;
+import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
+import com.panol_project.backendpanol.shared.error.ApiException;
 import com.panol_project.backendpanol.shared.error.BadRequestException;
 import com.panol_project.backendpanol.shared.error.NotFoundException;
-import com.panol_project.backendpanol.shared.outbox.application.OutboxService;
+import java.time.OffsetDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,15 +24,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class SolicitarPrestamoUseCase {
 
     private final LoanRepositoryPort loanRepositoryPort;
-    private final OutboxService outboxService;
 
-    public SolicitarPrestamoUseCase(LoanRepositoryPort loanRepositoryPort, OutboxService outboxService) {
+    public SolicitarPrestamoUseCase(LoanRepositoryPort loanRepositoryPort) {
         this.loanRepositoryPort = loanRepositoryPort;
-        this.outboxService = outboxService;
     }
 
     @Transactional
-    public LoanAggregate solicitar(SolicitarPrestamoCommand command) {
+    public LoanSummaryView solicitar(SolicitarPrestamoCommand command) {
         validateCommand(command);
 
         UUID requesterUuid = command.requesterUuid();
@@ -50,9 +52,23 @@ public class SolicitarPrestamoUseCase {
                 .toList();
 
         for (LoanRequestedItem item : requestedItems) {
-            if (!loanRepositoryPort.existsActiveImplementByUuid(item.implementUuid())) {
-                throw new NotFoundException("LOAN_IMPLEMENT_NOT_FOUND", "Uno o mas implementos no existen o estan inactivos");
+            LoanImplementAvailability implement = loanRepositoryPort.findImplementAvailabilityByUuid(item.implementUuid())
+                    .orElseThrow(() -> new NotFoundException("LOAN_IMPLEMENT_NOT_FOUND", "Implemento no encontrado"));
+            if (!implement.active()) {
+                throw new BadRequestException("LOAN_IMPLEMENT_INACTIVE", "El implemento seleccionado est\u00e1 inactivo");
             }
+        }
+
+        List<UUID> implementUuids = requestedItems.stream()
+                .map(LoanRequestedItem::implementUuid)
+                .toList();
+
+        if (loanRepositoryPort.existsPendingLoanConflict(requesterUuid, implementUuids)) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "LOAN_DUPLICATE_REQUEST",
+                    "Ya tienes una solicitud pendiente con uno o m\u00e1s de estos implementos"
+            );
         }
 
         LoanAggregate loan = loanRepositoryPort.createPendingLoan(
@@ -66,25 +82,8 @@ public class SolicitarPrestamoUseCase {
                 )
         );
 
-        outboxService.enqueue(
-                "loan",
-                loan.uuid(),
-                "LoanRequested",
-                requesterUuid,
-                java.util.Map.of(
-                        "requester_uuid", requesterUuid.toString(),
-                        "room_uuid", roomUuid == null ? "" : roomUuid.toString(),
-                        "subject_uuid", subjectUuid == null ? "" : subjectUuid.toString(),
-                        "scheduled_at", command.scheduledAt().toString(),
-                        "due_date", command.dueDate() == null ? "" : command.dueDate().toString(),
-                        "items", requestedItems.stream().map(item -> java.util.Map.of(
-                                "implement_uuid", item.implementUuid().toString(),
-                                "requested_quantity", item.requestedQuantity()
-                        )).toList()
-                )
-        );
-
-        return loan;
+        return loanRepositoryPort.findVisibleLoanSummaryByUuid(loan.uuid())
+                .orElseThrow(() -> new NotFoundException("LOAN_NOT_FOUND", "Prestamo no encontrado"));
     }
 
     private void validateCommand(SolicitarPrestamoCommand command) {
@@ -94,12 +93,10 @@ public class SolicitarPrestamoUseCase {
         if (command.requesterUuid() == null) {
             throw new BadRequestException("LOAN_REQUESTER_REQUIRED", "El solicitante autenticado es obligatorio");
         }
-        if (command.scheduledAt() == null) {
-            throw new BadRequestException("LOAN_SCHEDULE_REQUIRED", "scheduled_at es obligatorio");
+        if (command.roomUuid() == null) {
+            throw new BadRequestException("LOAN_ROOM_REQUIRED", "room_uuid es obligatorio");
         }
-        if (command.dueDate() != null && command.dueDate().isBefore(command.scheduledAt())) {
-            throw new BadRequestException("LOAN_DUE_DATE_INVALID", "due_date no puede ser anterior a scheduled_at");
-        }
+        validateScheduledAt(command.scheduledAt());
 
         List<SolicitarPrestamoItemCommand> items = command.requestedItems();
         if (items == null || items.isEmpty()) {
@@ -115,8 +112,16 @@ public class SolicitarPrestamoUseCase {
                 throw new BadRequestException("LOAN_ITEM_QUANTITY_INVALID", "requested_quantity debe ser mayor a cero");
             }
             if (!uniqueImplementUuids.add(item.implementUuid())) {
-                throw new BadRequestException("LOAN_ITEM_DUPLICATE", "No puedes repetir implementos en la misma solicitud");
+                throw new BadRequestException("LOAN_ITEM_DUPLICATE", "No puedes incluir implementos duplicados en la solicitud");
             }
         }
+    }
+
+    private void validateScheduledAt(OffsetDateTime scheduledAt) {
+        if (scheduledAt == null) {
+            throw new BadRequestException("LOAN_SCHEDULE_REQUIRED", "scheduled_at es obligatorio");
+        }
+
+        // TODO: Confirmar con cliente si se debe rechazar scheduled_at cuando quede en el pasado.
     }
 }

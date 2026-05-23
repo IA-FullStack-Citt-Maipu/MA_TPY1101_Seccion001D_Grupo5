@@ -12,6 +12,8 @@ import { InventoryItemDetailPage } from "./pages/InventoryItemDetailPage";
 import { InventoryItemsPage } from "./pages/InventoryItemsPage";
 import { InventoryLocationsPage } from "./pages/InventoryLocationsPage";
 import { InventoryMovesPage } from "./pages/InventoryMovesPage";
+import { LoanCreatePage } from "./pages/LoanCreatePage";
+import { LoanDetailPage } from "./pages/LoanDetailPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { logout } from "./services/authService";
@@ -129,6 +131,62 @@ function App() {
           { label: "Detalle" },
         ],
         content: <InventoryItemDetailPage implementUuid={implementUuid} embedded />,
+      };
+    }
+
+    const loanDetailMatch = currentHash.match(
+      /^#\/inventory\/prestamos\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$/,
+    );
+    if (loanDetailMatch) {
+      if (role !== "DOCENTE") {
+        return {
+          key: "loan-forbidden",
+          navigationMode: "inventory",
+          activeSection: "loans",
+          breadcrumbs: [{ label: "Prestamos" }, { label: "Acceso denegado" }],
+          content: (
+            <section className="panel">
+              <div className="content-header"><h1>Acceso denegado</h1></div>
+              <p className="text-muted">Solo el rol Docente puede acceder a solicitudes de prestamo.</p>
+            </section>
+          ),
+        };
+      }
+      const loanUuid = loanDetailMatch[1];
+      return {
+        key: `loan-detail-${loanUuid}`,
+        navigationMode: "inventory",
+        activeSection: "loans",
+        breadcrumbs: [
+          { label: "Inventario", href: "#/inventory/implementos" },
+          { label: "Prestamos", href: "#/inventory/prestamos/nuevo" },
+          { label: "Detalle" },
+        ],
+        content: <LoanDetailPage loanUuid={loanUuid} embedded />,
+      };
+    }
+
+    if (currentHash === "#/inventory/prestamos" || currentHash.startsWith("#/inventory/prestamos/nuevo")) {
+      if (role !== "DOCENTE") {
+        return {
+          key: "loan-create-forbidden",
+          navigationMode: "inventory",
+          activeSection: "loans",
+          breadcrumbs: [{ label: "Prestamos" }, { label: "Acceso denegado" }],
+          content: (
+            <section className="panel">
+              <div className="content-header"><h1>Acceso denegado</h1></div>
+              <p className="text-muted">Solo el rol Docente puede crear solicitudes de prestamo.</p>
+            </section>
+          ),
+        };
+      }
+      return {
+        key: "loan-create",
+        navigationMode: "inventory",
+        activeSection: "loans",
+        breadcrumbs: [{ label: "Inventario" }, { label: "Prestamos" }, { label: "Nueva solicitud" }],
+        content: <LoanCreatePage embedded />,
       };
     }
 

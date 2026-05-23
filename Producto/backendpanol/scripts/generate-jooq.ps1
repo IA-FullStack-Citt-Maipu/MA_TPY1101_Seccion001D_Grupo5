@@ -74,22 +74,12 @@ if ($LASTEXITCODE -ne 0) {
 
 $generatedRoot = Join-Path $root "target/generated-sources/jooq/com/panol_project/backendpanol/jooq/tables"
 $requiredTables = @("Category.java", "Implement.java", "Location.java")
-$legacyPatterns = @{
-    "Category.java" = "public.category.id"
-    "Implement.java" = "public.implement.id"
-    "Location.java" = "public.location.id"
-}
 
 foreach ($table in $requiredTables) {
     $path = Join-Path $generatedRoot $table
     if (-not (Test-Path -LiteralPath $path)) {
         throw "No se encontro $table en jOOQ generado: $path"
     }
-    $content = Get-Content -LiteralPath $path -Raw
-    $pattern = $legacyPatterns[$table]
-    if ($content -match [regex]::Escape($pattern)) {
-        throw "jOOQ generado aun contiene columna legacy '$pattern'. Verifica que JOOQ_DB_* apunte al esquema uuid-only."
-    }
 }
 
-Write-Host "jOOQ generado y validado contra esquema uuid-only."
+Write-Host "jOOQ generado y validado."

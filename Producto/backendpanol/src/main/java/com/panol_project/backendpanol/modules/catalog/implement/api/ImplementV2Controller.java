@@ -22,6 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.web.bind.annotation.*;
@@ -60,6 +61,7 @@ public class ImplementV2Controller {
     }
 
     @PutMapping("/{implementUuid}")
+    @PreAuthorize("hasRole('COORDINADOR')")
     ImplementV2Response editar(@PathVariable UUID implementUuid, @Valid @RequestBody UpdateImplementV2Request request, Authentication authentication) {
         Implemento updated = service.editar(
                 implementUuid,

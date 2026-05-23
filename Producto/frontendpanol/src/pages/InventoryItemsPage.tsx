@@ -311,13 +311,15 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
                       <td>{row.location ? row.location.name : "Sin ubicacion"}</td>
                       <td>
                         <div className="table-actions">
-                          <button
-                            type="button"
-                            className="button button--table button--ghost"
-                            onClick={() => setEditingUuid(row.uuid)}
-                          >
-                            Editar
-                          </button>
+                          {isCoordinator ? (
+                            <button
+                              type="button"
+                              className="button button--table button--ghost"
+                              onClick={() => setEditingUuid(row.uuid)}
+                            >
+                              Editar
+                            </button>
+                          ) : null}
                           <a className="button button--table button--ghost" href={`#/inventory/implementos/${row.uuid}`}>
                             Ver ficha
                           </a>

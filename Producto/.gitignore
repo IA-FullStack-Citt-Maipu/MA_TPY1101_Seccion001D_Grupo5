@@ -62,3 +62,6 @@ frontendpanol/.env.*.local
 frontendpanol/node_modules/
 frontendpanol/dist/
 .env
+
+# === Personal local documentation ===
+docs-personal/
