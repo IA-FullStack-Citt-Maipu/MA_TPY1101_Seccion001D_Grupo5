@@ -31,7 +31,9 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanReviewCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReviewDecision;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStatus;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStockMovement;
+import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryPage;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
+import com.panol_project.backendpanol.modules.loan.domain.LoanUpdateCommand;
 import com.panol_project.backendpanol.shared.error.ApiException;
 import com.panol_project.backendpanol.shared.error.BadRequestException;
 import com.panol_project.backendpanol.shared.error.NotFoundException;
@@ -116,6 +118,11 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
 
     @Override
     public boolean existsPendingLoanConflict(UUID requesterUuid, List<UUID> implementUuids) {
+        return existsPendingLoanConflict(requesterUuid, null, implementUuids);
+    }
+
+    @Override
+    public boolean existsPendingLoanConflict(UUID requesterUuid, UUID excludeLoanUuid, List<UUID> implementUuids) {
         if (requesterUuid == null || implementUuids == null || implementUuids.isEmpty()) {
             return false;
         }
@@ -133,16 +140,19 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
             return false;
         }
 
+        Condition condition = LOAN.REQUESTER_ID.eq(requesterId)
+                .and(LOAN.STATUS.eq(LoanStatusEnum.pending))
+                .and(IMPLEMENT.UUID.in(filteredImplementUuids));
+        if (excludeLoanUuid != null) {
+            condition = condition.and(LOAN.UUID.ne(excludeLoanUuid));
+        }
+
         return dsl.fetchExists(
                 dsl.selectOne()
                         .from(LOAN)
                         .join(LOAN_DETAIL).on(LOAN_DETAIL.LOAN_ID.eq(LOAN.ID))
                         .join(IMPLEMENT).on(IMPLEMENT.ID.eq(LOAN_DETAIL.IMPLEMENT_ID))
-                        .where(
-                                LOAN.REQUESTER_ID.eq(requesterId)
-                                        .and(LOAN.STATUS.eq(LoanStatusEnum.pending))
-                                        .and(IMPLEMENT.UUID.in(filteredImplementUuids))
-                        )
+                        .where(condition)
         );
     }
 
@@ -172,29 +182,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
         }
 
         Long loanId = insertedLoan.getId();
-        List<LoanDetailItem> details = new ArrayList<>();
-
-        for (LoanRequestedItem item : command.requestedItems()) {
-            Long implementId = requireImplementIdByUuid(item.implementUuid());
-
-            var detail = dsl.insertInto(LOAN_DETAIL)
-                    .set(LOAN_DETAIL.LOAN_ID, loanId)
-                    .set(LOAN_DETAIL.IMPLEMENT_ID, implementId)
-                    .set(LOAN_DETAIL.REQUESTED_QUANTITY, item.requestedQuantity())
-                    .returning(LOAN_DETAIL.REQUESTED_QUANTITY, LOAN_DETAIL.RESERVED_QUANTITY, LOAN_DETAIL.DELIVERED_QUANTITY)
-                    .fetchOne();
-
-            if (detail == null) {
-                throw new IllegalStateException("No fue posible crear el detalle del prestamo");
-            }
-
-            details.add(new LoanDetailItem(
-                    item.implementUuid(),
-                    detail.getRequestedQuantity(),
-                    detail.getReservedQuantity(),
-                    detail.getDeliveredQuantity()
-            ));
-        }
+        List<LoanDetailItem> details = insertLoanDetails(loanId, command.requestedItems());
 
         dsl.insertInto(LOAN_STATUS_HISTORY)
                 .set(LOAN_STATUS_HISTORY.LOAN_ID, loanId)
@@ -221,8 +209,60 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
     }
 
     @Override
+    public LoanAggregate updatePendingLoan(LoanUpdateCommand command) {
+        LoanRow current = requireLoanRowForUpdate(command.loanUuid());
+        if (current.status() != LoanStatus.PENDING) {
+            throw new BadRequestException("LOAN_UPDATE_INVALID_STATE", "Solo se puede modificar un prestamo en estado pending");
+        }
+        if (!Objects.equals(current.requesterUuid(), command.requesterUuid())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "LOAN_UPDATE_FORBIDDEN", "No tienes permisos para modificar este prestamo");
+        }
+
+        Long roomId = findRoomIdByUuid(command.roomUuid());
+        Long subjectId = findSubjectIdByUuid(command.subjectUuid());
+
+        dsl.update(LOAN)
+                .set(LOAN.ROOM_ID, roomId)
+                .set(LOAN.SUBJECT_ID, subjectId)
+                .set(LOAN.SCHEDULED_AT, command.scheduledAt())
+                .set(LOAN.DUE_DATE, command.dueDate())
+                .where(LOAN.ID.eq(current.loanId()))
+                .execute();
+
+        dsl.deleteFrom(LOAN_DETAIL_INDIVIDUAL)
+                .where(LOAN_DETAIL_INDIVIDUAL.LOAN_ID.eq(current.loanId()))
+                .execute();
+        dsl.deleteFrom(LOAN_DETAIL)
+                .where(LOAN_DETAIL.LOAN_ID.eq(current.loanId()))
+                .execute();
+
+        List<LoanDetailItem> details = insertLoanDetails(current.loanId(), command.requestedItems());
+
+        dsl.insertInto(LOAN_STATUS_HISTORY)
+                .set(LOAN_STATUS_HISTORY.LOAN_ID, current.loanId())
+                .set(LOAN_STATUS_HISTORY.ACTOR_USER_ID, requireUserIdByUuid(command.requesterUuid()))
+                .set(LOAN_STATUS_HISTORY.FROM_STATUS, LoanStatusEnum.pending)
+                .set(LOAN_STATUS_HISTORY.TO_STATUS, LoanStatusEnum.pending)
+                .set(LOAN_STATUS_HISTORY.NOTES, "Solicitud modificada por docente")
+                .set(LOAN_STATUS_HISTORY.CHANGED_AT, OffsetDateTime.now())
+                .execute();
+
+        return new LoanAggregate(
+                current.loanUuid(),
+                command.requesterUuid(),
+                command.roomUuid(),
+                command.subjectUuid(),
+                LoanStatus.PENDING,
+                command.scheduledAt(),
+                command.dueDate(),
+                current.createdAt(),
+                details
+        );
+    }
+
+    @Override
     public Optional<LoanSummaryView> findVisibleLoanSummaryByUuid(UUID loanUuid) {
-        List<LoanSummaryRow> rows = fetchLoanSummaryRows(loanUuid);
+        List<LoanSummaryRow> rows = fetchLoanSummaryRows(loanUuid, null, null, null);
         if (rows.isEmpty()) {
             return Optional.empty();
         }
@@ -233,8 +273,33 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
     }
 
     @Override
+    public LoanSummaryPage findVisibleLoanSummaries(UUID requesterUuid, int page, int size) {
+        int safePage = Math.max(1, page);
+        int safeSize = Math.max(1, size);
+        int offset = (safePage - 1) * safeSize;
+
+        long totalItems = countLoanSummaryRows(requesterUuid);
+        int totalPages = totalItems == 0 ? 1 : (int) Math.ceil((double) totalItems / safeSize);
+        if (safePage > totalPages) {
+            safePage = totalPages;
+            offset = (safePage - 1) * safeSize;
+        }
+
+        List<LoanSummaryRow> rows = fetchLoanSummaryRows(null, requesterUuid, safeSize, offset);
+        if (rows.isEmpty()) {
+            return new LoanSummaryPage(List.of(), safePage, safeSize, totalItems, totalPages);
+        }
+
+        Map<Long, List<LoanSummaryView.ItemView>> itemsByLoanId = fetchLoanSummaryItems(rows.stream().map(LoanSummaryRow::loanId).toList());
+        List<LoanSummaryView> items = rows.stream()
+                .map(row -> toSummaryView(row, itemsByLoanId.getOrDefault(row.loanId(), List.of())))
+                .toList();
+        return new LoanSummaryPage(items, safePage, safeSize, totalItems, totalPages);
+    }
+
+    @Override
     public List<LoanSummaryView> findAllVisibleLoanSummaries() {
-        List<LoanSummaryRow> rows = fetchLoanSummaryRows(null);
+        List<LoanSummaryRow> rows = fetchLoanSummaryRows(null, null, null, null);
         if (rows.isEmpty()) {
             return List.of();
         }
@@ -569,19 +634,15 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
         return toAggregate(row, detailsByLoanId.getOrDefault(row.loanId(), List.of()));
     }
 
-    private List<LoanSummaryRow> fetchLoanSummaryRows(UUID onlyLoanUuid) {
+    private List<LoanSummaryRow> fetchLoanSummaryRows(UUID onlyLoanUuid, UUID requesterUuid, Integer limit, Integer offset) {
         Field<UUID> requesterUuidField = USER.UUID.as("requester_uuid");
         Field<UUID> roomUuidField = ROOM.UUID.as("room_uuid");
         Field<String> roomNameField = ROOM.NAME.as("room_name");
         Field<UUID> subjectUuidField = SUBJECT.UUID.as("subject_uuid");
         Field<String> subjectNameField = SUBJECT.NAME.as("subject_name");
-        Condition condition = DSL.trueCondition();
+        Condition condition = buildLoanSummaryCondition(onlyLoanUuid, requesterUuid);
 
-        if (onlyLoanUuid != null) {
-            condition = condition.and(LOAN.UUID.eq(onlyLoanUuid));
-        }
-
-        return dsl.select(
+        var query = dsl.select(
                         LOAN.ID,
                         LOAN.UUID,
                         requesterUuidField,
@@ -598,8 +659,52 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 .leftJoin(ROOM).on(ROOM.ID.eq(LOAN.ROOM_ID))
                 .leftJoin(SUBJECT).on(SUBJECT.ID.eq(LOAN.SUBJECT_ID))
                 .where(condition)
-                .orderBy(LOAN.CREATED_AT.desc(), LOAN.ID.desc())
-                .fetch(record -> new LoanSummaryRow(
+                .orderBy(LOAN.CREATED_AT.desc(), LOAN.ID.desc());
+
+        if (limit != null && offset != null) {
+            return query.limit(limit).offset(offset).fetch(record -> new LoanSummaryRow(
+                    record.get(LOAN.ID),
+                    record.get(LOAN.UUID),
+                    record.get(requesterUuidField),
+                    toDomainStatus(record.get(LOAN.STATUS)),
+                    record.get(LOAN.SCHEDULED_AT),
+                    record.get(LOAN.CREATED_AT),
+                    record.get(roomUuidField),
+                    record.get(roomNameField),
+                    record.get(subjectUuidField),
+                    record.get(subjectNameField)
+            ));
+        }
+        if (limit != null) {
+            return query.limit(limit).fetch(record -> new LoanSummaryRow(
+                    record.get(LOAN.ID),
+                    record.get(LOAN.UUID),
+                    record.get(requesterUuidField),
+                    toDomainStatus(record.get(LOAN.STATUS)),
+                    record.get(LOAN.SCHEDULED_AT),
+                    record.get(LOAN.CREATED_AT),
+                    record.get(roomUuidField),
+                    record.get(roomNameField),
+                    record.get(subjectUuidField),
+                    record.get(subjectNameField)
+            ));
+        }
+        if (offset != null) {
+            return query.offset(offset).fetch(record -> new LoanSummaryRow(
+                    record.get(LOAN.ID),
+                    record.get(LOAN.UUID),
+                    record.get(requesterUuidField),
+                    toDomainStatus(record.get(LOAN.STATUS)),
+                    record.get(LOAN.SCHEDULED_AT),
+                    record.get(LOAN.CREATED_AT),
+                    record.get(roomUuidField),
+                    record.get(roomNameField),
+                    record.get(subjectUuidField),
+                    record.get(subjectNameField)
+            ));
+        }
+
+        return query.fetch(record -> new LoanSummaryRow(
                         record.get(LOAN.ID),
                         record.get(LOAN.UUID),
                         record.get(requesterUuidField),
@@ -611,6 +716,29 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                         record.get(subjectUuidField),
                         record.get(subjectNameField)
                 ));
+    }
+
+    private long countLoanSummaryRows(UUID requesterUuid) {
+        Condition condition = buildLoanSummaryCondition(null, requesterUuid);
+        Integer count = dsl.selectCount()
+                .from(LOAN)
+                .join(USER).on(USER.ID.eq(LOAN.REQUESTER_ID))
+                .leftJoin(ROOM).on(ROOM.ID.eq(LOAN.ROOM_ID))
+                .leftJoin(SUBJECT).on(SUBJECT.ID.eq(LOAN.SUBJECT_ID))
+                .where(condition)
+                .fetchOne(0, Integer.class);
+        return count == null ? 0L : count.longValue();
+    }
+
+    private Condition buildLoanSummaryCondition(UUID onlyLoanUuid, UUID requesterUuid) {
+        Condition condition = DSL.trueCondition();
+        if (onlyLoanUuid != null) {
+            condition = condition.and(LOAN.UUID.eq(onlyLoanUuid));
+        }
+        if (requesterUuid != null) {
+            condition = condition.and(USER.UUID.eq(requesterUuid));
+        }
+        return condition;
     }
 
     private LoanRow requireLoanRowForUpdate(UUID loanUuid) {
@@ -826,6 +954,32 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                                 .and(LOAN_DETAIL.IMPLEMENT_ID.eq(implementId))
                 )
                 .execute();
+    }
+
+    private List<LoanDetailItem> insertLoanDetails(Long loanId, List<LoanRequestedItem> requestedItems) {
+        List<LoanDetailItem> details = new ArrayList<>();
+        for (LoanRequestedItem item : requestedItems) {
+            Long implementId = requireImplementIdByUuid(item.implementUuid());
+
+            var detail = dsl.insertInto(LOAN_DETAIL)
+                    .set(LOAN_DETAIL.LOAN_ID, loanId)
+                    .set(LOAN_DETAIL.IMPLEMENT_ID, implementId)
+                    .set(LOAN_DETAIL.REQUESTED_QUANTITY, item.requestedQuantity())
+                    .returning(LOAN_DETAIL.REQUESTED_QUANTITY, LOAN_DETAIL.RESERVED_QUANTITY, LOAN_DETAIL.DELIVERED_QUANTITY)
+                    .fetchOne();
+
+            if (detail == null) {
+                throw new IllegalStateException("No fue posible crear el detalle del prestamo");
+            }
+
+            details.add(new LoanDetailItem(
+                    item.implementUuid(),
+                    detail.getRequestedQuantity(),
+                    detail.getReservedQuantity(),
+                    detail.getDeliveredQuantity()
+            ));
+        }
+        return details;
     }
 
     private LoanAggregate toAggregate(LoanRow row, List<LoanDetailItem> details) {

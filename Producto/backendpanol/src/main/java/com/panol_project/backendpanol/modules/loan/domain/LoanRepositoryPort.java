@@ -16,9 +16,15 @@ public interface LoanRepositoryPort {
 
     boolean existsPendingLoanConflict(UUID requesterUuid, List<UUID> implementUuids);
 
+    boolean existsPendingLoanConflict(UUID requesterUuid, UUID excludeLoanUuid, List<UUID> implementUuids);
+
     LoanAggregate createPendingLoan(LoanCreateCommand command);
 
+    LoanAggregate updatePendingLoan(LoanUpdateCommand command);
+
     Optional<LoanSummaryView> findVisibleLoanSummaryByUuid(UUID loanUuid);
+
+    LoanSummaryPage findVisibleLoanSummaries(UUID requesterUuid, int page, int size);
 
     List<LoanSummaryView> findAllVisibleLoanSummaries();
 

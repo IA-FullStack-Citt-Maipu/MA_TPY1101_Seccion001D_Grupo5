@@ -9,11 +9,14 @@ import { InventoryCategoriesPage } from "./pages/InventoryCategoriesPage";
 import { DirectorCreateUserPage } from "./pages/DirectorCreateUserPage";
 import { DirectorDashboardPage } from "./pages/DirectorDashboardPage";
 import { InventoryItemDetailPage } from "./pages/InventoryItemDetailPage";
+import { InventoryImplementCreatePage } from "./pages/InventoryImplementCreatePage";
 import { InventoryItemsPage } from "./pages/InventoryItemsPage";
 import { InventoryLocationsPage } from "./pages/InventoryLocationsPage";
 import { InventoryMovesPage } from "./pages/InventoryMovesPage";
 import { LoanCreatePage } from "./pages/LoanCreatePage";
+import { LoanCoordinatorPage } from "./pages/LoanCoordinatorPage";
 import { LoanDetailPage } from "./pages/LoanDetailPage";
+import { LoanHistoryPage } from "./pages/LoanHistoryPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { logout } from "./services/authService";
@@ -137,8 +140,40 @@ function App() {
     const loanDetailMatch = currentHash.match(
       /^#\/inventory\/prestamos\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$/,
     );
-    if (loanDetailMatch) {
+    const loanEditMatch = currentHash.match(
+      /^#\/inventory\/prestamos\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})\/editar$/,
+    );
+    if (loanEditMatch) {
       if (role !== "DOCENTE") {
+        return {
+          key: "loan-edit-forbidden",
+          navigationMode: "inventory",
+          activeSection: "loans",
+          breadcrumbs: [{ label: "Prestamos" }, { label: "Acceso denegado" }],
+          content: (
+            <section className="panel">
+              <div className="content-header"><h1>Acceso denegado</h1></div>
+              <p className="text-muted">No tienes permisos para modificar solicitudes de prestamo.</p>
+            </section>
+          ),
+        };
+      }
+      const loanUuid = loanEditMatch[1];
+      return {
+        key: `loan-edit-${loanUuid}`,
+        navigationMode: "inventory",
+        activeSection: "loans",
+        breadcrumbs: [
+          { label: "Inventario", href: "#/inventory/implementos" },
+          { label: "Prestamos", href: "#/inventory/prestamos" },
+          { label: "Modificar prestamo" },
+        ],
+        content: <LoanCreatePage embedded editLoanUuid={loanUuid} />,
+      };
+    }
+
+    if (loanDetailMatch) {
+      if (role !== "DOCENTE" && role !== "COORDINADOR") {
         return {
           key: "loan-forbidden",
           navigationMode: "inventory",
@@ -159,14 +194,55 @@ function App() {
         activeSection: "loans",
         breadcrumbs: [
           { label: "Inventario", href: "#/inventory/implementos" },
-          { label: "Prestamos", href: "#/inventory/prestamos/nuevo" },
-          { label: "Detalle" },
+          { label: "Prestamos", href: "#/inventory/prestamos" },
+          { label: "Detalle prestamo" },
         ],
         content: <LoanDetailPage loanUuid={loanUuid} embedded />,
       };
     }
 
-    if (currentHash === "#/inventory/prestamos" || currentHash.startsWith("#/inventory/prestamos/nuevo")) {
+    if (currentHash === "#/inventory/prestamos") {
+      if (role !== "DOCENTE" && role !== "COORDINADOR") {
+        return {
+          key: "loan-list-forbidden",
+          navigationMode: "inventory",
+          activeSection: "loans",
+          breadcrumbs: [{ label: "Prestamos" }, { label: "Acceso denegado" }],
+          content: (
+            <section className="panel">
+              <div className="content-header"><h1>Acceso denegado</h1></div>
+              <p className="text-muted">Solo el rol Docente puede acceder a solicitudes de prestamo.</p>
+            </section>
+          ),
+        };
+      }
+      if (role === "COORDINADOR") {
+        return {
+          key: "loan-list-coordinator",
+          navigationMode: "inventory",
+          activeSection: "loans",
+          breadcrumbs: [
+            { label: "Inventario", href: "#/inventory/implementos" },
+            { label: "Prestamos", href: "#/inventory/prestamos" },
+            { label: "Listado prestamos" },
+          ],
+          content: <LoanCoordinatorPage embedded />,
+        };
+      }
+      return {
+        key: "loan-list",
+        navigationMode: "inventory",
+        activeSection: "loans",
+        breadcrumbs: [
+          { label: "Inventario", href: "#/inventory/implementos" },
+          { label: "Prestamos", href: "#/inventory/prestamos" },
+          { label: "Mis prestamos" },
+        ],
+        content: <LoanHistoryPage embedded />,
+      };
+    }
+
+    if (currentHash.startsWith("#/inventory/prestamos/nuevo")) {
       if (role !== "DOCENTE") {
         return {
           key: "loan-create-forbidden",
@@ -185,8 +261,30 @@ function App() {
         key: "loan-create",
         navigationMode: "inventory",
         activeSection: "loans",
-        breadcrumbs: [{ label: "Inventario" }, { label: "Prestamos" }, { label: "Nueva solicitud" }],
+        breadcrumbs: [
+          { label: "Inventario", href: "#/inventory/implementos" },
+          { label: "Prestamos", href: "#/inventory/prestamos" },
+          { label: "Nueva solicitud" },
+        ],
         content: <LoanCreatePage embedded />,
+      };
+    }
+
+    if (
+      currentHash === "#/inventory/implementos/nuevo" ||
+      currentHash === "#/inventory/implementos/new" ||
+      currentHash === "#/inventory/items/new"
+    ) {
+      return {
+        key: "item-create",
+        navigationMode: "inventory",
+        activeSection: "items",
+        breadcrumbs: [
+          { label: "Inventario", href: "#/inventory/implementos" },
+          { label: "Implementos", href: "#/inventory/implementos" },
+          { label: "Nuevo implemento" },
+        ],
+        content: <InventoryImplementCreatePage embedded />,
       };
     }
 

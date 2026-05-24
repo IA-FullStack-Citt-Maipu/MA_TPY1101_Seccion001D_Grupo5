@@ -3,6 +3,7 @@ package com.panol_project.backendpanol.modules.loan.api;
 import com.panol_project.backendpanol.modules.loan.api.dto.CreateLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.api.dto.DeliverLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanItemV2Response;
+import com.panol_project.backendpanol.modules.loan.api.dto.LoanPageV2Response;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanRoomV2Response;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanSubjectV2Response;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanV2Response;
@@ -18,8 +19,11 @@ import com.panol_project.backendpanol.modules.loan.application.dto.EntregarPrest
 import com.panol_project.backendpanol.modules.loan.application.dto.RevisarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.SolicitarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.SolicitarPrestamoItemCommand;
+import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryPage;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
 import com.panol_project.backendpanol.shared.error.ApiException;
+import com.panol_project.backendpanol.shared.error.BadRequestException;
+import com.panol_project.backendpanol.shared.error.NotFoundException;
 import com.panol_project.backendpanol.shared.security.CurrentUserUuidResolver;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -27,18 +31,24 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v2/loans")
 public class LoanV2Controller {
+
+    private static final int DEFAULT_PAGE = 1;
+    private static final int DEFAULT_SIZE = 20;
+    private static final int MAX_SIZE = 100;
 
     private final SolicitarPrestamoUseCase solicitarPrestamoUseCase;
     private final GestionPrestamoUseCase gestionPrestamoUseCase;
@@ -79,11 +89,74 @@ public class LoanV2Controller {
         return toResponse(created);
     }
 
-    @GetMapping
-    public List<LoanV2Response> listarPrestamos() {
-        return gestionPrestamoUseCase.listar().stream()
-                .map(this::toResponse)
+    @PatchMapping("/{loanUuid}")
+    @PreAuthorize("hasRole('DOCENTE')")
+    public LoanV2Response modificarPrestamo(
+            @PathVariable UUID loanUuid,
+            @Valid @RequestBody CreateLoanV2Request request,
+            Authentication authentication
+    ) {
+        UUID requesterUuid = currentUserUuidResolver.resolveCurrentUserUuid(authentication)
+                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "AUTH_REQUIRED", "Autenticacion requerida"));
+
+        List<SolicitarPrestamoItemCommand> items = request.items().stream()
+                .map(item -> new SolicitarPrestamoItemCommand(item.implementUuid(), item.requestedQuantity()))
                 .toList();
+
+        LoanSummaryView updated = solicitarPrestamoUseCase.modificar(
+                loanUuid,
+                new SolicitarPrestamoCommand(
+                        requesterUuid,
+                        request.roomUuid(),
+                        request.subjectUuid(),
+                        request.scheduledAt(),
+                        null,
+                        items
+                )
+        );
+
+        return toResponse(updated);
+    }
+
+    @GetMapping
+    public LoanPageV2Response listarPrestamos(
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "20") Integer size,
+            @RequestParam(defaultValue = "false") Boolean mine,
+            Authentication authentication
+    ) {
+        int resolvedPage = page == null ? DEFAULT_PAGE : page;
+        int resolvedSize = size == null ? DEFAULT_SIZE : size;
+
+        validatePagination(resolvedPage, resolvedSize);
+
+        UUID currentUserUuid = resolveCurrentUserUuid(authentication);
+        boolean isDocente = hasRole(authentication, "ROLE_DOCENTE");
+        boolean onlyMine = isDocente || Boolean.TRUE.equals(mine);
+
+        LoanSummaryPage summaryPage = gestionPrestamoUseCase.listar(
+                onlyMine ? currentUserUuid : null,
+                resolvedPage,
+                resolvedSize
+        );
+
+        return toPageResponse(summaryPage);
+    }
+
+    @GetMapping("/{loanUuid}")
+    public LoanV2Response obtenerPrestamo(
+            @PathVariable UUID loanUuid,
+            Authentication authentication
+    ) {
+        UUID currentUserUuid = resolveCurrentUserUuid(authentication);
+        boolean isDocente = hasRole(authentication, "ROLE_DOCENTE");
+
+        LoanSummaryView loan = gestionPrestamoUseCase.obtenerDetalle(loanUuid);
+        if (isDocente && !currentUserUuid.equals(loan.requesterUuid())) {
+            throw new NotFoundException("LOAN_NOT_FOUND", "Prestamo no encontrado");
+        }
+
+        return toResponse(loan);
     }
 
     @PatchMapping("/{loanUuid}/review")
@@ -175,6 +248,39 @@ public class LoanV2Controller {
                         ))
                         .toList()
         );
+    }
+
+    private LoanPageV2Response toPageResponse(LoanSummaryPage page) {
+        List<LoanV2Response> items = page.items().stream().map(this::toResponse).toList();
+        boolean hasNext = page.page() < page.totalPages();
+        boolean hasPrevious = page.page() > 1;
+        return new LoanPageV2Response(
+                items,
+                page.page(),
+                page.size(),
+                page.totalItems(),
+                page.totalPages(),
+                hasNext,
+                hasPrevious
+        );
+    }
+
+    private void validatePagination(int page, int size) {
+        if (page < 1) {
+            throw new BadRequestException("LOAN_PAGE_INVALID", "page debe ser mayor o igual a 1");
+        }
+        if (size < 1 || size > MAX_SIZE) {
+            throw new BadRequestException("LOAN_SIZE_INVALID", "size debe estar entre 1 y " + MAX_SIZE);
+        }
+    }
+
+    private boolean hasRole(Authentication authentication, String role) {
+        if (authentication == null || authentication.getAuthorities() == null) {
+            return false;
+        }
+        return authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch(role::equals);
     }
 
     private UUID resolveCurrentUserUuid(Authentication authentication) {

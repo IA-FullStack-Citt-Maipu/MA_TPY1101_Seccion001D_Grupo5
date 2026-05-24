@@ -16,11 +16,13 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanReturnResult;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReviewCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReviewDecision;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
+import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryPage;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStockMovement;
 import com.panol_project.backendpanol.shared.error.BadRequestException;
 import com.panol_project.backendpanol.shared.error.NotFoundException;
 import com.panol_project.backendpanol.shared.outbox.application.OutboxService;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,6 +46,16 @@ public class GestionPrestamoUseCase {
     @Transactional(readOnly = true)
     public List<LoanSummaryView> listar() {
         return loanRepositoryPort.findAllVisibleLoanSummaries();
+    }
+
+    @Transactional(readOnly = true)
+    public LoanSummaryPage listar(UUID requesterUuid, int page, int size) {
+        return loanRepositoryPort.findVisibleLoanSummaries(requesterUuid, page, size);
+    }
+
+    @Transactional(readOnly = true)
+    public LoanSummaryView obtenerDetalle(UUID loanUuid) {
+        return findVisibleLoanSummaryOrThrow(loanUuid);
     }
 
     @Transactional

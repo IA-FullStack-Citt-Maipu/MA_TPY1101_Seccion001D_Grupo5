@@ -2,6 +2,7 @@
   Bell,
   BookOpenText,
   Boxes,
+  CircleHelp,
   ClipboardList,
   FileBarChart2,
   Handshake,
@@ -11,6 +12,7 @@
   MapPin,
   Menu,
   Search,
+  Settings,
   Siren,
   Users,
   X,
@@ -22,12 +24,15 @@ import { fetchImplements } from "../../services/implementService";
 import type { ImplementSummary } from "../../types/implement";
 
 const menuInventory = [
+  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, href: "#/inventory/implementos" },
   { key: "items", label: "Implementos", icon: Boxes, href: "#/inventory/implementos" },
   { key: "categories", label: "Categorias", icon: ClipboardList, href: "#/inventory/categories" },
   { key: "locations", label: "Ubicaciones", icon: MapPin, href: "#/inventory/locations" },
+  { key: "users", label: "Usuarios", icon: Users, href: "#/director/users/create" },
   { key: "moves", label: "Movimientos", icon: ClipboardList, href: "#/inventory/moves" },
-  { key: "loans", label: "Prestamos", icon: Handshake, href: "#/inventory/prestamos/nuevo" },
+  { key: "loans", label: "Prestamos", icon: Handshake, href: "#/inventory/prestamos" },
   { key: "reports", label: "Reportes", icon: FileBarChart2, href: "#/inventory/implementos" },
+  { key: "history", label: "Historial", icon: History, href: "#/inventory/implementos" },
 ] as const;
 
 const menuDirector = [
@@ -42,12 +47,15 @@ const menuDirector = [
 ] as const;
 
 export type InventorySection =
+  | "dashboard"
   | "items"
   | "categories"
   | "locations"
+  | "users"
   | "moves"
   | "loans"
   | "reports"
+  | "history"
   | "director-dashboard"
   | "director-users"
   | "director-inventory"
@@ -68,23 +76,29 @@ export function Sidebar({
   activeSection,
   navigationMode,
   onNavigate,
+  onLogout = () => {},
 }: {
   activeSection: InventorySection;
   navigationMode: NavigationMode;
   onNavigate?: () => void;
+  onLogout?: () => void;
 }) {
   const menu = navigationMode === "director" ? menuDirector : menuInventory;
 
   return (
     <aside className="sidebar">
       <div className="sidebar__brand">
-        <div>
-          <strong>{navigationMode === "director" ? "Pañol" : "Coordinador de laboratorio"}</strong>
-          <p>{navigationMode === "director" ? "Gestion de inventario y prestamos" : "Escuela de salud"}</p>
-        </div>
+        <strong>Panol Salud</strong>
+        <p>Medical Inventory</p>
+        {navigationMode === "inventory" ? (
+          <div className="sidebar__mode-pill" aria-label="Modo coordinador">
+            <span />
+            <small>Modo coordinador</small>
+          </div>
+        ) : null}
       </div>
 
-      <section>
+      <section className="sidebar__menu">
         <h3 className="sidebar__title">{navigationMode === "director" ? "Director de carrera" : "Inventario"}</h3>
         <ul className="sidebar__list">
           {menu.map((item) => {
@@ -112,6 +126,26 @@ export function Sidebar({
           <p>Ciencias de la Salud</p>
         </section>
       ) : null}
+
+      {navigationMode === "inventory" ? (
+        <div className="sidebar__footer">
+          <a href="#/inventory/implementos" onClick={onNavigate} className="sidebar__item">
+            <Settings size={18} />
+            <span>Configuracion</span>
+          </a>
+          <button
+            type="button"
+            onClick={() => {
+              onNavigate?.();
+              onLogout();
+            }}
+            className="sidebar__item sidebar__item--logout"
+          >
+            <LogOut size={18} />
+            <span>Cerrar sesion</span>
+          </button>
+        </div>
+      ) : null}
     </aside>
   );
 }
@@ -120,7 +154,6 @@ export function TopBar({
   sidebarOpen,
   onToggleSidebar,
   breadcrumbs,
-  onLogout = () => {},
   searchPlaceholder = "Buscar implementos...",
   notificationCount = 0,
   userName = "Usuario",
@@ -129,7 +162,6 @@ export function TopBar({
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
   breadcrumbs: BreadcrumbPart[];
-  onLogout?: () => void;
   searchPlaceholder?: string;
   notificationCount?: number;
   userName?: string;
@@ -271,12 +303,14 @@ export function TopBar({
           <Bell size={18} />
           {notificationCount > 0 ? <span className="topbar__notify-badge">{notificationCount}</span> : null}
         </button>
+        <button type="button" className="topbar__icon" aria-label="Ayuda">
+          <CircleHelp size={18} />
+        </button>
         <div className="topbar__avatar">{userInitials || "US"}</div>
         <div>
           <strong>{safeUserName}</strong>
           <p>{userRole}</p>
         </div>
-        <button type="button" className="button button--ghost" onClick={onLogout}><LogOut size={16} /> Salir</button>
       </div>
     </header>
   );
@@ -324,13 +358,17 @@ export function InventoryLayout({
 
   return (
     <div className={`app-shell ${sidebarOpen ? "app-shell--sidebar-open" : ""}`}>
-      <Sidebar activeSection={activeSection} navigationMode={navigationMode} onNavigate={closeSidebarOnNavigate} />
+      <Sidebar
+        activeSection={activeSection}
+        navigationMode={navigationMode}
+        onNavigate={closeSidebarOnNavigate}
+        onLogout={onLogout}
+      />
       <div className="app-shell__workspace">
         <TopBar
           sidebarOpen={sidebarOpen}
           onToggleSidebar={() => setSidebarOpen((value) => !value)}
           breadcrumbs={breadcrumbs}
-          onLogout={onLogout}
           searchPlaceholder={searchPlaceholder}
           notificationCount={notificationCount}
           userName={userName}

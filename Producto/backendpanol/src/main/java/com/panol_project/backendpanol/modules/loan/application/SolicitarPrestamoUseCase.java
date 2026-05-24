@@ -8,6 +8,7 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanImplementAvailabil
 import com.panol_project.backendpanol.modules.loan.domain.LoanRepositoryPort;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRequestedItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
+import com.panol_project.backendpanol.modules.loan.domain.LoanUpdateCommand;
 import com.panol_project.backendpanol.shared.error.ApiException;
 import com.panol_project.backendpanol.shared.error.BadRequestException;
 import com.panol_project.backendpanol.shared.error.NotFoundException;
@@ -73,6 +74,67 @@ public class SolicitarPrestamoUseCase {
 
         LoanAggregate loan = loanRepositoryPort.createPendingLoan(
                 new LoanCreateCommand(
+                        requesterUuid,
+                        roomUuid,
+                        subjectUuid,
+                        command.scheduledAt(),
+                        command.dueDate(),
+                        requestedItems
+                )
+        );
+
+        return loanRepositoryPort.findVisibleLoanSummaryByUuid(loan.uuid())
+                .orElseThrow(() -> new NotFoundException("LOAN_NOT_FOUND", "Prestamo no encontrado"));
+    }
+
+    @Transactional
+    public LoanSummaryView modificar(UUID loanUuid, SolicitarPrestamoCommand command) {
+        if (loanUuid == null) {
+            throw new BadRequestException("LOAN_UUID_REQUIRED", "loan_uuid es obligatorio");
+        }
+        validateCommand(command);
+
+        UUID requesterUuid = command.requesterUuid();
+        UUID roomUuid = command.roomUuid();
+        UUID subjectUuid = command.subjectUuid();
+
+        if (!loanRepositoryPort.existsActiveRequesterByUuid(requesterUuid)) {
+            throw new NotFoundException("LOAN_REQUESTER_NOT_FOUND", "El solicitante no existe o esta inactivo");
+        }
+        if (roomUuid != null && !loanRepositoryPort.existsActiveRoomByUuid(roomUuid)) {
+            throw new NotFoundException("LOAN_ROOM_NOT_FOUND", "La sala seleccionada no existe o esta inactiva");
+        }
+        if (subjectUuid != null && !loanRepositoryPort.existsActiveSubjectByUuid(subjectUuid)) {
+            throw new NotFoundException("LOAN_SUBJECT_NOT_FOUND", "La asignatura seleccionada no existe o esta inactiva");
+        }
+
+        List<LoanRequestedItem> requestedItems = command.requestedItems().stream()
+                .map(item -> new LoanRequestedItem(item.implementUuid(), item.requestedQuantity()))
+                .toList();
+
+        for (LoanRequestedItem item : requestedItems) {
+            LoanImplementAvailability implement = loanRepositoryPort.findImplementAvailabilityByUuid(item.implementUuid())
+                    .orElseThrow(() -> new NotFoundException("LOAN_IMPLEMENT_NOT_FOUND", "Implemento no encontrado"));
+            if (!implement.active()) {
+                throw new BadRequestException("LOAN_IMPLEMENT_INACTIVE", "El implemento seleccionado está inactivo");
+            }
+        }
+
+        List<UUID> implementUuids = requestedItems.stream()
+                .map(LoanRequestedItem::implementUuid)
+                .toList();
+
+        if (loanRepositoryPort.existsPendingLoanConflict(requesterUuid, loanUuid, implementUuids)) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "LOAN_DUPLICATE_REQUEST",
+                    "Ya tienes una solicitud pendiente con uno o más de estos implementos"
+            );
+        }
+
+        LoanAggregate loan = loanRepositoryPort.updatePendingLoan(
+                new LoanUpdateCommand(
+                        loanUuid,
                         requesterUuid,
                         roomUuid,
                         subjectUuid,
