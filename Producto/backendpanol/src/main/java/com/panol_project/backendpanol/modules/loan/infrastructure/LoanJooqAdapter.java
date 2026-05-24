@@ -762,7 +762,8 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 .leftJoin(ROOM).on(ROOM.ID.eq(LOAN.ROOM_ID))
                 .leftJoin(SUBJECT).on(SUBJECT.ID.eq(LOAN.SUBJECT_ID))
                 .where(LOAN.UUID.eq(loanUuid))
-                .forUpdate()
+                // Lock only the loan row. Postgres rejects FOR UPDATE over nullable outer-joined tables.
+                .forUpdate().of(LOAN)
                 .fetchOne();
 
         if (record == null) {
