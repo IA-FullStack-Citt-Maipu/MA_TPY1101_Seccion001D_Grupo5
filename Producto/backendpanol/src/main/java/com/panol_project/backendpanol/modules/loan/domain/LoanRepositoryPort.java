@@ -32,5 +32,7 @@ public interface LoanRepositoryPort {
 
     LoanDeliveryResult deliverLoan(LoanDeliveryCommand command);
 
+    LoanReturnResult completeLoan(LoanCompleteCommand command);
+
     LoanReturnResult returnLoan(LoanReturnCommand command);
 }

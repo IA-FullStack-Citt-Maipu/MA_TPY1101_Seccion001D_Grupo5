@@ -15,6 +15,7 @@ import com.panol_project.backendpanol.jooq.enums.IndividualStatusEnum;
 import com.panol_project.backendpanol.jooq.enums.ItemTypeEnum;
 import com.panol_project.backendpanol.jooq.enums.LoanStatusEnum;
 import com.panol_project.backendpanol.modules.loan.domain.LoanAggregate;
+import com.panol_project.backendpanol.modules.loan.domain.LoanCompleteCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanCreateCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanDeliveryCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanDeliveryItem;
@@ -372,6 +373,18 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
             throw new BadRequestException("LOAN_DELIVERY_INVALID_STATE", "Solo se puede entregar un prestamo en estado approved");
         }
 
+        OffsetDateTime now = OffsetDateTime.now();
+        if (current.scheduledAt() == null) {
+            throw new BadRequestException("LOAN_DELIVERY_SCHEDULE_MISSING", "El prestamo no tiene fecha/hora programada");
+        }
+        OffsetDateTime deliveryWindowOpensAt = current.scheduledAt().minusMinutes(10);
+        if (now.isBefore(deliveryWindowOpensAt)) {
+            throw new BadRequestException(
+                    "LOAN_DELIVERY_WINDOW_NOT_OPEN",
+                    "La entrega se habilita 10 minutos antes de la hora de inicio programada"
+            );
+        }
+
         Long actorUserId = requireUserIdByUuid(command.actorUuid());
         Map<UUID, LoanDetailContext> detailByImplementUuid = fetchLoanDetailContextByImplementUuid(current.loanId());
 
@@ -450,7 +463,6 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
             }
         }
 
-        OffsetDateTime now = OffsetDateTime.now();
         int statusUpdated = dsl.update(LOAN)
                 .set(LOAN.STATUS, LoanStatusEnum.delivered)
                 .set(LOAN.DELIVERED_AT, now)
@@ -471,6 +483,108 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 .execute();
 
         return new LoanDeliveryResult(loadLoanAggregateById(current.loanId()), stockMovements);
+    }
+
+    @Override
+    public LoanReturnResult completeLoan(LoanCompleteCommand command) {
+        LoanRow current = requireLoanRowForUpdate(command.loanUuid());
+        if (current.status() != LoanStatus.DELIVERED) {
+            throw new BadRequestException("LOAN_COMPLETE_INVALID_STATE", "Solo se puede completar un prestamo en estado delivered");
+        }
+
+        Long actorUserId = requireUserIdByUuid(command.actorUuid());
+        OffsetDateTime now = OffsetDateTime.now();
+        List<LoanStockMovement> stockMovements = new ArrayList<>();
+
+        Map<UUID, List<UUID>> pendingIndividualsByImplement = new LinkedHashMap<>();
+        dsl.select(IMPLEMENT.UUID, INDIVIDUAL.UUID)
+                .from(LOAN_DETAIL_INDIVIDUAL)
+                .join(IMPLEMENT).on(IMPLEMENT.ID.eq(LOAN_DETAIL_INDIVIDUAL.IMPLEMENT_ID))
+                .join(INDIVIDUAL).on(INDIVIDUAL.ID.eq(LOAN_DETAIL_INDIVIDUAL.INDIVIDUAL_ID))
+                .where(
+                        LOAN_DETAIL_INDIVIDUAL.LOAN_ID.eq(current.loanId())
+                                .and(LOAN_DETAIL_INDIVIDUAL.RETURNED_AT.isNull())
+                )
+                .forUpdate()
+                .fetch(record -> {
+                    UUID implementUuid = record.get(IMPLEMENT.UUID);
+                    UUID individualUuid = record.get(INDIVIDUAL.UUID);
+                    if (implementUuid == null || individualUuid == null) {
+                        return null;
+                    }
+                    pendingIndividualsByImplement
+                            .computeIfAbsent(implementUuid, ignored -> new ArrayList<>())
+                            .add(individualUuid);
+                    return null;
+                });
+
+        if (!pendingIndividualsByImplement.isEmpty()) {
+            dsl.update(LOAN_DETAIL_INDIVIDUAL)
+                    .set(LOAN_DETAIL_INDIVIDUAL.RETURN_CONDITION, IndividualConditionEnum.good)
+                    .set(LOAN_DETAIL_INDIVIDUAL.RETURNED_AT, now)
+                    .where(
+                            LOAN_DETAIL_INDIVIDUAL.LOAN_ID.eq(current.loanId())
+                                    .and(LOAN_DETAIL_INDIVIDUAL.RETURNED_AT.isNull())
+                    )
+                    .execute();
+
+            for (Map.Entry<UUID, List<UUID>> entry : pendingIndividualsByImplement.entrySet()) {
+                List<UUID> individualUuids = entry.getValue();
+                stockMovements.add(new LoanStockMovement(
+                        entry.getKey(),
+                        "LOAN_RETURN",
+                        individualUuids.size(),
+                        List.copyOf(individualUuids),
+                        "good"
+                ));
+            }
+        }
+
+        dsl.select(IMPLEMENT.UUID, LOAN_DETAIL.DELIVERED_QUANTITY)
+                .from(LOAN_DETAIL)
+                .join(IMPLEMENT).on(IMPLEMENT.ID.eq(LOAN_DETAIL.IMPLEMENT_ID))
+                .where(
+                        LOAN_DETAIL.LOAN_ID.eq(current.loanId())
+                                .and(IMPLEMENT.ITEM_TYPE.eq(ItemTypeEnum.fungible))
+                                .and(LOAN_DETAIL.DELIVERED_QUANTITY.gt(0))
+                )
+                .fetch(record -> {
+                    UUID implementUuid = record.get(IMPLEMENT.UUID);
+                    Integer deliveredQuantity = record.get(LOAN_DETAIL.DELIVERED_QUANTITY);
+                    int qty = safe(deliveredQuantity);
+                    if (implementUuid == null || qty <= 0) {
+                        return null;
+                    }
+                    stockMovements.add(new LoanStockMovement(
+                            implementUuid,
+                            "LOAN_RETURN",
+                            qty,
+                            List.of(),
+                            null
+                    ));
+                    return null;
+                });
+
+        int updated = dsl.update(LOAN)
+                .set(LOAN.STATUS, LoanStatusEnum.completed)
+                .set(LOAN.COMPLETED_AT, now)
+                .where(LOAN.ID.eq(current.loanId()))
+                .execute();
+
+        if (updated == 0) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "LOAN_COMPLETE_FORBIDDEN", "No tienes permisos para completar este prestamo");
+        }
+
+        dsl.insertInto(LOAN_STATUS_HISTORY)
+                .set(LOAN_STATUS_HISTORY.LOAN_ID, current.loanId())
+                .set(LOAN_STATUS_HISTORY.ACTOR_USER_ID, actorUserId)
+                .set(LOAN_STATUS_HISTORY.FROM_STATUS, toJooqStatus(current.status()))
+                .set(LOAN_STATUS_HISTORY.TO_STATUS, LoanStatusEnum.completed)
+                .set(LOAN_STATUS_HISTORY.NOTES, "Prestamo completado por coordinador")
+                .set(LOAN_STATUS_HISTORY.CHANGED_AT, now)
+                .execute();
+
+        return new LoanReturnResult(loadLoanAggregateById(current.loanId()), stockMovements);
     }
 
     @Override

@@ -16,6 +16,7 @@ import { InventoryMovesPage } from "./pages/InventoryMovesPage";
 import { LoanCreatePage } from "./pages/LoanCreatePage";
 import { LoanCoordinatorPage } from "./pages/LoanCoordinatorPage";
 import { LoanDetailPage } from "./pages/LoanDetailPage";
+import { LoanDeliveryPage } from "./pages/LoanDeliveryPage";
 import { LoanHistoryPage } from "./pages/LoanHistoryPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
@@ -140,9 +141,41 @@ function App() {
     const loanDetailMatch = currentHash.match(
       /^#\/inventory\/prestamos\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$/,
     );
+    const loanDeliveryMatch = currentHash.match(
+      /^#\/inventory\/prestamos\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})\/entrega$/,
+    );
     const loanEditMatch = currentHash.match(
       /^#\/inventory\/prestamos\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})\/editar$/,
     );
+    if (loanDeliveryMatch) {
+      if (role !== "COORDINADOR") {
+        return {
+          key: "loan-delivery-forbidden",
+          navigationMode: "inventory",
+          activeSection: "loans",
+          breadcrumbs: [{ label: "Prestamos" }, { label: "Acceso denegado" }],
+          content: (
+            <section className="panel">
+              <div className="content-header"><h1>Acceso denegado</h1></div>
+              <p className="text-muted">Solo el rol Coordinador puede registrar entregas.</p>
+            </section>
+          ),
+        };
+      }
+
+      const loanUuid = loanDeliveryMatch[1];
+      return {
+        key: `loan-delivery-${loanUuid}`,
+        navigationMode: "inventory",
+        activeSection: "loans",
+        breadcrumbs: [
+          { label: "Inventario", href: "#/inventory/implementos" },
+          { label: "Prestamos", href: "#/inventory/prestamos" },
+          { label: "Confirmar entrega" },
+        ],
+        content: <LoanDeliveryPage loanUuid={loanUuid} embedded />,
+      };
+    }
     if (loanEditMatch) {
       if (role !== "DOCENTE") {
         return {

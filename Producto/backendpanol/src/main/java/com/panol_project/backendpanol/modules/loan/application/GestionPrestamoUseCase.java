@@ -1,6 +1,7 @@
 package com.panol_project.backendpanol.modules.loan.application;
 
 import com.panol_project.backendpanol.modules.catalog.stock.application.contract.StockMovementContract;
+import com.panol_project.backendpanol.modules.loan.application.dto.CompletarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.DevolverPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.EntregarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.RevisarPrestamoCommand;
@@ -164,6 +165,31 @@ public class GestionPrestamoUseCase {
         );
 
         return findVisibleLoanSummaryOrThrow(returned.loan().uuid());
+    }
+
+    @Transactional
+    public LoanSummaryView completar(CompletarPrestamoCommand command) {
+        LoanReturnResult completed = loanRepositoryPort.completeLoan(
+                new com.panol_project.backendpanol.modules.loan.domain.LoanCompleteCommand(
+                        command.loanUuid(),
+                        command.actorUuid()
+                )
+        );
+
+        applyStockMovements(completed.stockMovements());
+
+        outboxService.enqueue(
+                "loan",
+                completed.loan().uuid(),
+                "LoanCompleted",
+                command.actorUuid(),
+                java.util.Map.of(
+                        "loan_uuid", completed.loan().uuid().toString(),
+                        "status", completed.loan().status().literal()
+                )
+        );
+
+        return findVisibleLoanSummaryOrThrow(completed.loan().uuid());
     }
 
     private void applyStockMovements(List<LoanStockMovement> stockMovements) {

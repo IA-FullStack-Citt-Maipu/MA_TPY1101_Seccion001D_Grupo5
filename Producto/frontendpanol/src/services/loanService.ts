@@ -1,6 +1,6 @@
 import { apiClient } from "./apiClient";
 import { AxiosError } from "axios";
-import type { CreateLoanPayload, LoanPage, LoanSummary } from "../types/loan";
+import type { CreateLoanPayload, DeliverLoanPayload, LoanPage, LoanSummary } from "../types/loan";
 
 export interface FetchLoansQuery {
   page?: number;
@@ -54,5 +54,15 @@ export async function fetchLoanByUuid(loanUuid: string): Promise<LoanSummary | n
 
 export async function reviewLoan(loanUuid: string, payload: ReviewLoanPayload): Promise<LoanSummary> {
   const response = await apiClient.patch<LoanSummary>(`/api/v2/loans/${loanUuid}/review`, payload);
+  return response.data;
+}
+
+export async function deliverLoan(loanUuid: string, payload: DeliverLoanPayload): Promise<LoanSummary> {
+  const response = await apiClient.post<LoanSummary>(`/api/v2/loans/${loanUuid}/delivery`, payload);
+  return response.data;
+}
+
+export async function completeLoan(loanUuid: string): Promise<LoanSummary> {
+  const response = await apiClient.post<LoanSummary>(`/api/v2/loans/${loanUuid}/complete`);
   return response.data;
 }

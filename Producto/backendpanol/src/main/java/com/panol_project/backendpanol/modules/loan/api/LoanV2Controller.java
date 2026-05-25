@@ -11,6 +11,7 @@ import com.panol_project.backendpanol.modules.loan.api.dto.ReturnLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.api.dto.ReviewLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.application.GestionPrestamoUseCase;
 import com.panol_project.backendpanol.modules.loan.application.SolicitarPrestamoUseCase;
+import com.panol_project.backendpanol.modules.loan.application.dto.CompletarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.DevolverPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.DevolverPrestamoFungibleCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.DevolverPrestamoIndividualCommand;
@@ -160,6 +161,7 @@ public class LoanV2Controller {
     }
 
     @PatchMapping("/{loanUuid}/review")
+    @PreAuthorize("hasRole('COORDINADOR')")
     public LoanV2Response revisarPrestamo(
             @PathVariable UUID loanUuid,
             @Valid @RequestBody ReviewLoanV2Request request,
@@ -179,6 +181,7 @@ public class LoanV2Controller {
     }
 
     @PostMapping("/{loanUuid}/delivery")
+    @PreAuthorize("hasRole('COORDINADOR')")
     public LoanV2Response entregarPrestamo(
             @PathVariable UUID loanUuid,
             @Valid @RequestBody DeliverLoanV2Request request,
@@ -197,6 +200,19 @@ public class LoanV2Controller {
                 )
         );
         return toResponse(delivered);
+    }
+
+    @PostMapping("/{loanUuid}/complete")
+    @PreAuthorize("hasRole('COORDINADOR')")
+    public LoanV2Response completarPrestamo(
+            @PathVariable UUID loanUuid,
+            Authentication authentication
+    ) {
+        UUID actorUuid = resolveCurrentUserUuid(authentication);
+        LoanSummaryView completed = gestionPrestamoUseCase.completar(
+                new CompletarPrestamoCommand(loanUuid, actorUuid)
+        );
+        return toResponse(completed);
     }
 
     @PostMapping("/{loanUuid}/return")

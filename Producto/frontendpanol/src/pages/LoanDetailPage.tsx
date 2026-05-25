@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   BookOpenText,
   CalendarDays,
+  CheckCircle2,
   ClipboardList,
   Clock3,
   Copy,
@@ -9,17 +10,19 @@ import {
   Info,
   MapPin,
   Package2,
+  SendHorizontal,
   Trash2,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getErrorMessage } from "../services/apiClient";
-import { fetchLoanByUuid } from "../services/loanService";
+import { completeLoan, fetchLoanByUuid } from "../services/loanService";
 import {
   clearLastCreatedLoan,
   loadLastCreatedLoan,
 } from "../services/loanSessionService";
 import type { LoanSummary } from "../types/loan";
 import { getUserRoleFromToken } from "../utils/auth";
+import { canStartDelivery, getDeliveryWindowOpenAt } from "../utils/loanSchedule";
 
 const DELETE_CONFIRM_TEXT = "eliminar";
 
@@ -46,6 +49,17 @@ function formatDateTime(value: string): string {
   })
     .format(date)
     .replace(".", "");
+}
+
+function formatTime(value: Date | null): string {
+  if (!value) {
+    return "--:--";
+  }
+  return new Intl.DateTimeFormat("es-CL", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(value);
 }
 
 function normalizeStatusLabel(status: string): string {
@@ -112,6 +126,7 @@ export function LoanDetailPage({
 }) {
   const currentRole = getUserRoleFromToken();
   const canEditLoan = currentRole === "DOCENTE";
+  const isCoordinator = currentRole === "COORDINADOR";
   const [loan, setLoan] = useState<LoanSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -187,6 +202,15 @@ export function LoanDetailPage({
     return loan.items.reduce((total, item) => total + item.requested_quantity, 0);
   }, [loan]);
 
+  const canDeliverNow = useMemo(
+    () => (loan ? canStartDelivery(loan) : false),
+    [loan],
+  );
+  const deliveryWindowOpenAt = useMemo(
+    () => (loan ? getDeliveryWindowOpenAt(loan.scheduled_at) : null),
+    [loan],
+  );
+
   const canConfirmDeletion = deleteConfirmationInput.trim().toLowerCase() === DELETE_CONFIRM_TEXT;
 
   function goBackToList() {
@@ -195,6 +219,23 @@ export function LoanDetailPage({
 
   function goToLoanEdit() {
     window.location.hash = `#/inventory/prestamos/${loanUuid}/editar`;
+  }
+
+  function goToLoanDelivery() {
+    window.location.hash = `#/inventory/prestamos/${loanUuid}/entrega`;
+  }
+
+  async function handleCompleteLoan() {
+    if (!loan || loan.status !== "delivered") {
+      return;
+    }
+    setError(null);
+    try {
+      const updated = await completeLoan(loan.uuid);
+      setLoan(updated);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, "No se pudo completar el prestamo."));
+    }
   }
 
   async function copyLoanUuid() {
@@ -332,6 +373,32 @@ export function LoanDetailPage({
                   <button type="button" className="teacher-loan-detail-action-btn" onClick={goToLoanEdit}>
                     <Edit3 size={16} />
                     Modificar solicitud
+                  </button>
+                ) : null}
+                {isCoordinator && loan.status === "approved" ? (
+                  <button
+                    type="button"
+                    className="teacher-loan-detail-action-btn"
+                    onClick={goToLoanDelivery}
+                    disabled={!canDeliverNow}
+                    title={
+                      canDeliverNow
+                        ? "Registrar entrega de implementos"
+                        : `Se habilita 10 minutos antes (${formatTime(deliveryWindowOpenAt)})`
+                    }
+                  >
+                    <SendHorizontal size={16} />
+                    {canDeliverNow ? "Entregar solicitud" : `Desde ${formatTime(deliveryWindowOpenAt)}`}
+                  </button>
+                ) : null}
+                {isCoordinator && loan.status === "delivered" ? (
+                  <button
+                    type="button"
+                    className="teacher-loan-detail-action-btn teacher-loan-detail-action-btn--complete"
+                    onClick={() => void handleCompleteLoan()}
+                  >
+                    <CheckCircle2 size={16} />
+                    Completar prestamo
                   </button>
                 ) : null}
                 <button

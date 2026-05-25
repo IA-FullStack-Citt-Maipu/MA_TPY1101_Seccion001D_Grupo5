@@ -48,3 +48,13 @@ export interface CreateLoanPayload {
   scheduled_at: string;
   items: CreateLoanItemPayload[];
 }
+
+export interface DeliverLoanItemPayload {
+  implement_uuid: string;
+  quantity: number;
+  asset_codes?: string[];
+}
+
+export interface DeliverLoanPayload {
+  items: DeliverLoanItemPayload[];
+}
