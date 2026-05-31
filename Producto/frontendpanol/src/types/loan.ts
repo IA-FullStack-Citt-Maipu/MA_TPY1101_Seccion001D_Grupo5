@@ -27,6 +27,16 @@ export interface LoanSummary {
   items: LoanItem[];
 }
 
+export interface LoanPage {
+  items: LoanSummary[];
+  page: number;
+  size: number;
+  total_items: number;
+  total_pages: number;
+  has_next: boolean;
+  has_previous: boolean;
+}
+
 export interface CreateLoanItemPayload {
   implement_uuid: string;
   requested_quantity: number;
@@ -37,4 +47,14 @@ export interface CreateLoanPayload {
   subject_uuid?: string | null;
   scheduled_at: string;
   items: CreateLoanItemPayload[];
+}
+
+export interface DeliverLoanItemPayload {
+  implement_uuid: string;
+  quantity: number;
+  asset_codes?: string[];
+}
+
+export interface DeliverLoanPayload {
+  items: DeliverLoanItemPayload[];
 }

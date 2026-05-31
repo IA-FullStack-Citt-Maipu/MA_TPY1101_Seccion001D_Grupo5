@@ -1,45 +1,120 @@
+import {
+  ArrowLeft,
+  BookOpenText,
+  CalendarDays,
+  CheckCircle2,
+  ClipboardList,
+  Clock3,
+  Copy,
+  Edit3,
+  Info,
+  MapPin,
+  Package2,
+  SendHorizontal,
+  Trash2,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Badge } from "../components/ui/Badge";
-import { Button } from "../components/ui/Button";
-import { Card } from "../components/ui/Card";
-import { Table } from "../components/ui/Table";
 import { getErrorMessage } from "../services/apiClient";
-import { fetchLoanByUuid } from "../services/loanService";
+import { completeLoan, fetchLoanByUuid } from "../services/loanService";
 import {
   clearLastCreatedLoan,
   loadLastCreatedLoan,
 } from "../services/loanSessionService";
 import type { LoanSummary } from "../types/loan";
+import { getUserRoleFromToken } from "../utils/auth";
+import { canStartDelivery, getDeliveryWindowOpenAt } from "../utils/loanSchedule";
 
-function formatDateTime(value: string): string {
+const DELETE_CONFIRM_TEXT = "eliminar";
+
+function parseDate(value: string): Date | null {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return date;
+}
+
+function formatDateTime(value: string): string {
+  const date = parseDate(value);
+  if (!date) {
     return value;
   }
-  return date.toLocaleString();
+  return new Intl.DateTimeFormat("es-CL", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  })
+    .format(date)
+    .replace(".", "");
 }
 
-function normalizeStatus(status: string): string {
-  const map: Record<string, string> = {
+function formatTime(value: Date | null): string {
+  if (!value) {
+    return "--:--";
+  }
+  return new Intl.DateTimeFormat("es-CL", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(value);
+}
+
+function normalizeStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
     pending: "Pendiente",
     approved: "Aprobado",
-    rejected: "Rechazado",
-    delivered: "Entregado",
-    cancelled: "Cancelado",
+    delivered: "En uso",
     completed: "Completado",
+    cancelled: "Cancelado",
+    rejected: "Rechazado",
     expired: "Expirado",
   };
-  return map[status] ?? status;
+  return labels[status] ?? status;
 }
 
-function statusTone(status: string): "active" | "inactive" | "warn" {
-  if (status === "approved" || status === "completed") {
-    return "active";
+function statusClassName(status: string): string {
+  if (status === "pending") {
+    return "teacher-loans-status teacher-loans-status--pending";
   }
-  if (status === "rejected" || status === "cancelled" || status === "expired") {
-    return "warn";
+  if (status === "approved") {
+    return "teacher-loans-status teacher-loans-status--approved";
   }
-  return "inactive";
+  if (status === "delivered") {
+    return "teacher-loans-status teacher-loans-status--delivered";
+  }
+  if (status === "completed") {
+    return "teacher-loans-status teacher-loans-status--completed";
+  }
+  if (status === "cancelled" || status === "rejected" || status === "expired") {
+    return "teacher-loans-status teacher-loans-status--danger";
+  }
+  return "teacher-loans-status teacher-loans-status--completed";
+}
+
+function itemStatusLabel(item: LoanSummary["items"][number]): string {
+  if (item.delivered_quantity >= item.requested_quantity && item.requested_quantity > 0) {
+    return "Entregado";
+  }
+  if (item.delivered_quantity > 0) {
+    return "Parcial";
+  }
+  if (item.reserved_quantity > 0) {
+    return "Reservado";
+  }
+  return "Por procesar";
+}
+
+function itemStatusClassName(item: LoanSummary["items"][number]): string {
+  if (item.delivered_quantity >= item.requested_quantity && item.requested_quantity > 0) {
+    return "teacher-loan-item-status teacher-loan-item-status--delivered";
+  }
+  if (item.delivered_quantity > 0 || item.reserved_quantity > 0) {
+    return "teacher-loan-item-status teacher-loan-item-status--partial";
+  }
+  return "teacher-loan-item-status teacher-loan-item-status--pending";
 }
 
 export function LoanDetailPage({
@@ -49,10 +124,17 @@ export function LoanDetailPage({
   loanUuid: string;
   embedded?: boolean;
 }) {
+  const currentRole = getUserRoleFromToken();
+  const canEditLoan = currentRole === "DOCENTE";
+  const isCoordinator = currentRole === "COORDINADOR";
   const [loan, setLoan] = useState<LoanSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreatedBanner, setShowCreatedBanner] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState<"" | "ok" | "error">("");
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmationInput, setDeleteConfirmationInput] = useState("");
 
   useEffect(() => {
     const cached = loadLastCreatedLoan(loanUuid);
@@ -82,14 +164,11 @@ export function LoanDetailPage({
         if (cancelled) {
           return;
         }
-        setError(
-          getErrorMessage(requestError, "No se pudo cargar el detalle de la solicitud."),
-        );
+        setError(getErrorMessage(requestError, "No se pudo cargar el detalle de la solicitud."));
       } finally {
-        if (cancelled) {
-          return;
+        if (!cancelled) {
+          setLoading(false);
         }
-        setLoading(false);
       }
     }
 
@@ -113,29 +192,97 @@ export function LoanDetailPage({
     return loan.subject.name;
   }, [loan]);
 
+  const scheduledLabel = useMemo(() => (loan ? formatDateTime(loan.scheduled_at) : "--"), [loan]);
+  const createdLabel = useMemo(() => (loan ? formatDateTime(loan.created_at) : "--"), [loan]);
+
+  const totalRequestedItems = useMemo(() => {
+    if (!loan) {
+      return 0;
+    }
+    return loan.items.reduce((total, item) => total + item.requested_quantity, 0);
+  }, [loan]);
+
+  const canDeliverNow = useMemo(
+    () => (loan ? canStartDelivery(loan) : false),
+    [loan],
+  );
+  const deliveryWindowOpenAt = useMemo(
+    () => (loan ? getDeliveryWindowOpenAt(loan.scheduled_at) : null),
+    [loan],
+  );
+
+  const canConfirmDeletion = deleteConfirmationInput.trim().toLowerCase() === DELETE_CONFIRM_TEXT;
+
+  function goBackToList() {
+    window.location.hash = "#/inventory/prestamos";
+  }
+
+  function goToLoanEdit() {
+    window.location.hash = `#/inventory/prestamos/${loanUuid}/editar`;
+  }
+
+  function goToLoanDelivery() {
+    window.location.hash = `#/inventory/prestamos/${loanUuid}/entrega`;
+  }
+
+  async function handleCompleteLoan() {
+    if (!loan || loan.status !== "delivered") {
+      return;
+    }
+    setError(null);
+    try {
+      const updated = await completeLoan(loan.uuid);
+      setLoan(updated);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, "No se pudo completar el prestamo."));
+    }
+  }
+
+  async function copyLoanUuid() {
+    if (!loan) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(loan.uuid);
+      setCopyFeedback("ok");
+      window.setTimeout(() => setCopyFeedback(""), 1200);
+    } catch {
+      setCopyFeedback("error");
+      window.setTimeout(() => setCopyFeedback(""), 1500);
+    }
+  }
+
+  function openDeleteModal() {
+    setDeleteConfirmationInput("");
+    setShowDeleteModal(true);
+  }
+
+  function closeDeleteModal() {
+    setDeleteConfirmationInput("");
+    setShowDeleteModal(false);
+  }
+
+  function confirmDelete() {
+    if (!canConfirmDeletion) {
+      return;
+    }
+    closeDeleteModal();
+    window.location.hash = "#/inventory/prestamos";
+  }
+
   const content = (
-    <>
-      <section className="content-header">
-        <div>
-          <h1>Detalle de solicitud</h1>
-          <p>Consulta el estado y resumen de la solicitud enviada.</p>
-        </div>
-        <div className="content-header__actions">
-          <Button
-            variant="ghost"
-            onClick={() => {
-              window.location.hash = "#/inventory/prestamos/nuevo";
-            }}
-          >
-            Nueva solicitud
-          </Button>
-        </div>
-      </section>
+    <div className="teacher-loan-detail-page">
+      <nav className="teacher-loan-detail-backnav">
+        <button type="button" className="teacher-loan-detail-backnav__btn" onClick={goBackToList}>
+          <ArrowLeft size={16} />
+          Volver al listado
+        </button>
+      </nav>
 
       {showCreatedBanner && loan ? (
         <div className="success-banner">
-          Solicitud creada correctamente para {formatDateTime(loan.scheduled_at)} en sala{" "}
-          {loan.room?.name ?? "sin sala"} con {loan.items.length} item(s).
+          Solicitud creada correctamente para {scheduledLabel} en sala {loan.room?.name ?? "sin sala"}.
         </div>
       ) : null}
 
@@ -143,88 +290,227 @@ export function LoanDetailPage({
 
       {loading && !loan ? (
         <section className="panel">
-          <p className="text-muted">Cargando detalle de la solicitud...</p>
+          <p className="text-muted">Cargando detalle del prestamo...</p>
         </section>
       ) : null}
 
       {!loading && !loan ? (
         <section className="panel">
-          <p className="text-muted">
-            No se pudo recuperar informacion para esta solicitud.
-          </p>
+          <p className="text-muted">No se pudo recuperar informacion para esta solicitud.</p>
         </section>
       ) : null}
 
       {loan ? (
         <>
-          <section className="loan-grid">
-            <Card>
-              <h2>Resumen</h2>
-              <p>
-                <strong>UUID:</strong> {loan.uuid}
-              </p>
-              <p>
-                <strong>Estado:</strong>{" "}
-                <Badge tone={statusTone(loan.status)}>
-                  {normalizeStatus(loan.status)}
-                </Badge>
-              </p>
-              <p>
-                <strong>Creada:</strong> {formatDateTime(loan.created_at)}
-              </p>
-              <p>
-                <strong>Programada:</strong> {formatDateTime(loan.scheduled_at)}
-              </p>
-            </Card>
-
-            <Card>
-              <h2>Confirmacion de envio</h2>
-              <p>
-                <strong>Sala:</strong> {loan.room?.name ?? "Sin sala"}
-              </p>
-              <p>
-                <strong>Asignatura:</strong> {subjectLabel}
-              </p>
-              <p>
-                <strong>Solicitante:</strong> {loan.requester_uuid}
-              </p>
-            </Card>
+          <section className="teacher-loan-detail-header">
+            <div>
+              <p className="teacher-loan-detail-header__eyebrow">UUID DE SOLICITUD</p>
+              <div className="teacher-loan-detail-header__uuid">
+                <h1>{loan.uuid}</h1>
+                <button
+                  type="button"
+                  className="teacher-loan-detail-copy-btn"
+                  onClick={copyLoanUuid}
+                  aria-label="Copiar UUID"
+                >
+                  <Copy size={16} />
+                </button>
+              </div>
+              {copyFeedback === "ok" ? <small>UUID copiado.</small> : null}
+              {copyFeedback === "error" ? <small>No se pudo copiar.</small> : null}
+            </div>
+            <span className={statusClassName(loan.status)}>{normalizeStatusLabel(loan.status)}</span>
           </section>
 
-          <section className="panel">
-            <h2>Implementos solicitados</h2>
-            <Table>
-              <thead>
-                <tr>
-                  <th>Implemento</th>
-                  <th>Solicitado</th>
-                  <th>Reservado</th>
-                  <th>Entregado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loan.items.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="table-hint">
-                      La solicitud no contiene items.
-                    </td>
-                  </tr>
-                ) : (
-                  loan.items.map((item) => (
-                    <tr key={item.implement_uuid}>
-                      <td>{item.implement_name}</td>
-                      <td>{item.requested_quantity}</td>
-                      <td>{item.reserved_quantity}</td>
-                      <td>{item.delivered_quantity}</td>
+          <section className="teacher-loan-detail-grid">
+            <div className="teacher-loan-detail-grid__left">
+              <article className="teacher-loan-detail-card teacher-loan-detail-card--summary">
+                <header>
+                  <Info size={17} />
+                  <h2>Resumen de informacion</h2>
+                </header>
+                <div className="teacher-loan-detail-info-list">
+                  <div>
+                    <span>Sala / ubicacion</span>
+                    <p>
+                      <MapPin size={15} />
+                      {loan.room?.name ?? "Sin sala"}
+                    </p>
+                  </div>
+                  <div>
+                    <span>Asignatura / practica</span>
+                    <p>
+                      <BookOpenText size={15} />
+                      {subjectLabel}
+                    </p>
+                  </div>
+                  <div>
+                    <span>Fecha programada</span>
+                    <p>
+                      <CalendarDays size={15} />
+                      {scheduledLabel}
+                    </p>
+                  </div>
+                  <div>
+                    <span>Fecha de creacion</span>
+                    <p>
+                      <Clock3 size={15} />
+                      {createdLabel}
+                    </p>
+                  </div>
+                  <div>
+                    <span>Total solicitado</span>
+                    <p>
+                      <Package2 size={15} />
+                      {totalRequestedItems} unidades
+                    </p>
+                  </div>
+                </div>
+              </article>
+
+              <article className="teacher-loan-detail-card teacher-loan-detail-card--actions">
+                {canEditLoan ? (
+                  <button type="button" className="teacher-loan-detail-action-btn" onClick={goToLoanEdit}>
+                    <Edit3 size={16} />
+                    Modificar solicitud
+                  </button>
+                ) : null}
+                {isCoordinator && loan.status === "approved" ? (
+                  <button
+                    type="button"
+                    className="teacher-loan-detail-action-btn"
+                    onClick={goToLoanDelivery}
+                    disabled={!canDeliverNow}
+                    title={
+                      canDeliverNow
+                        ? "Registrar entrega de implementos"
+                        : `Se habilita 10 minutos antes (${formatTime(deliveryWindowOpenAt)})`
+                    }
+                  >
+                    <SendHorizontal size={16} />
+                    {canDeliverNow ? "Entregar solicitud" : `Desde ${formatTime(deliveryWindowOpenAt)}`}
+                  </button>
+                ) : null}
+                {isCoordinator && loan.status === "delivered" ? (
+                  <button
+                    type="button"
+                    className="teacher-loan-detail-action-btn teacher-loan-detail-action-btn--complete"
+                    onClick={() => void handleCompleteLoan()}
+                  >
+                    <CheckCircle2 size={16} />
+                    Completar prestamo
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="teacher-loan-detail-action-btn teacher-loan-detail-action-btn--danger"
+                  onClick={openDeleteModal}
+                >
+                  <Trash2 size={16} />
+                  Eliminar solicitud
+                </button>
+              </article>
+            </div>
+
+            <article className="teacher-loan-detail-items">
+              <header className="teacher-loan-detail-items__header">
+                <h2>
+                  <ClipboardList size={18} />
+                  Implementos solicitados
+                </h2>
+                <span>{loan.items.length} item(s)</span>
+              </header>
+
+              <div className="teacher-loan-detail-items__table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Descripcion del implemento</th>
+                      <th>Solicitado</th>
+                      <th>Reservado</th>
+                      <th>Entregado</th>
+                      <th>Estado</th>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </Table>
+                  </thead>
+                  <tbody>
+                    {loan.items.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="teacher-loan-detail-items__empty">
+                          Esta solicitud no contiene implementos.
+                        </td>
+                      </tr>
+                    ) : (
+                      loan.items.map((item) => (
+                        <tr key={item.implement_uuid}>
+                          <td>
+                            <div className="teacher-loan-detail-item-cell">
+                              <div className="teacher-loan-detail-item-cell__thumb">
+                                <Package2 size={18} />
+                              </div>
+                              <div>
+                                <strong>{item.implement_name}</strong>
+                                <small>{item.implement_uuid}</small>
+                              </div>
+                            </div>
+                          </td>
+                          <td>{item.requested_quantity}</td>
+                          <td>{item.reserved_quantity}</td>
+                          <td>{item.delivered_quantity}</td>
+                          <td>
+                            <span className={itemStatusClassName(item)}>{itemStatusLabel(item)}</span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <footer className="teacher-loan-detail-items__footer">
+                <Info size={16} />
+                <p>
+                  La reserva de implementos se confirma en funcion del stock disponible y del estado
+                  operativo del panol.
+                </p>
+              </footer>
+            </article>
           </section>
         </>
       ) : null}
-    </>
+
+      {showDeleteModal ? (
+        <div className="modal-overlay">
+          <div className="modal teacher-loans-delete-modal">
+            <h3>Eliminar prestamo</h3>
+            <p>
+              Seguro que quieres eliminar esta solicitud? Escribe <strong>"{DELETE_CONFIRM_TEXT}"</strong>{" "}
+              para confirmar.
+            </p>
+            <label htmlFor="loan-delete-detail-confirmation">Confirmacion</label>
+            <input
+              id="loan-delete-detail-confirmation"
+              value={deleteConfirmationInput}
+              onChange={(event) => setDeleteConfirmationInput(event.target.value)}
+              placeholder={DELETE_CONFIRM_TEXT}
+            />
+            <div className="modal-actions">
+              <button type="button" className="button button--ghost" onClick={closeDeleteModal}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="button button--danger"
+                disabled={!canConfirmDeletion}
+                onClick={confirmDelete}
+              >
+                <Trash2 size={16} />
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 
   if (embedded) {
