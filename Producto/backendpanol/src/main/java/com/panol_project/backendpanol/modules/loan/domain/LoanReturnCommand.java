@@ -7,6 +7,6 @@ public record LoanReturnCommand(
         UUID loanUuid,
         UUID actorUuid,
         List<LoanReturnIndividual> returnedIndividuals,
-        List<LoanReturnFungibleItem> fungibleReturns
+        List<LoanReturnConsumableItem> consumableReturns
 ) {
 }

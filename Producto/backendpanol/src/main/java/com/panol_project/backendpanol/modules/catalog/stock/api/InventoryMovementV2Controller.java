@@ -47,7 +47,8 @@ public class InventoryMovementV2Controller {
     @ResponseStatus(HttpStatus.CREATED)
     public InventoryMovementV2Response registrarMovimiento(@PathVariable UUID implementUuid, @Valid @RequestBody RegisterMovementRequest request, Authentication authentication) {
         UUID performedBy = extractUserUuid(authentication);
-        MovementAction domainAction = MovementAction.valueOf(request.action().name());
+        MovementAction domainAction = MovementAction.fromLiteral(request.action().literal())
+                .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "STOCK_MOVEMENT_TYPE_INVALID", "movement_type invalido"));
         InventoryMovement movement = service.registrarMovimiento(
                 implementUuid,
                 domainAction,

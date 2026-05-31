@@ -5,8 +5,9 @@ import java.util.Locale;
 import java.util.Optional;
 
 public enum StockItemType {
-    FUNGIBLE("fungible"),
-    NO_FUNGIBLE("no_fungible");
+    CONSUMABLE("consumable"),
+    REUSABLE("reusable"),
+    INDIVIDUAL("individual");
 
     private final String literal;
 

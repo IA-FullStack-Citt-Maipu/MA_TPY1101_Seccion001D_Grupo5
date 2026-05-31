@@ -6,7 +6,6 @@ public record LoanReviewCommand(
         UUID loanUuid,
         UUID actorUuid,
         LoanReviewDecision decision,
-        String reviewNotes,
-        String rejectionReason
+        String notes
 ) {
 }

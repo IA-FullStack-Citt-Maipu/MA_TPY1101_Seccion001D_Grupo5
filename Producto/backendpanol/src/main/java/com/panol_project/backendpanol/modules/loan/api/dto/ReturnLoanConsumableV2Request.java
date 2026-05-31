@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import java.util.UUID;
 
-public record ReturnLoanFungibleV2Request(
+public record ReturnLoanConsumableV2Request(
         @JsonProperty("implement_uuid")
         @NotNull(message = "implement_uuid es obligatorio")
         UUID implementUuid,

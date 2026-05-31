@@ -11,7 +11,7 @@ public record LoanAggregate(
         UUID subjectUuid,
         LoanStatus status,
         OffsetDateTime scheduledAt,
-        OffsetDateTime dueDate,
+        OffsetDateTime expectedReturnAt,
         OffsetDateTime createdAt,
         List<LoanDetailItem> items
 ) {

@@ -9,6 +9,7 @@ public record LoanSummaryView(
         UUID requesterUuid,
         LoanStatus status,
         OffsetDateTime scheduledAt,
+        OffsetDateTime expectedReturnAt,
         OffsetDateTime createdAt,
         RoomView room,
         SubjectView subject,

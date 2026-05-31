@@ -51,7 +51,7 @@ class StockServiceTest {
                 .thenReturn(Optional.of(new StockRepository.ImplementStockContext(
                         implementUuid,
                         locationUuid,
-                        StockItemType.NO_FUNGIBLE,
+                        StockItemType.INDIVIDUAL,
                         true
                 )));
         when(repository.findStockByImplementUuid(implementUuid))
@@ -59,14 +59,14 @@ class StockServiceTest {
         when(repository.findActiveIndividualsByImplementUuid(implementUuid))
                 .thenReturn(List.of(
                         new IndividualItem(UUID.randomUUID(), implementUuid, "A1", "available", "good", null, locationUuid, true),
-                        new IndividualItem(UUID.randomUUID(), implementUuid, "A2", "loaned", "fair", null, locationUuid, true),
-                        new IndividualItem(UUID.randomUUID(), implementUuid, "A3", "damaged", "poor", null, locationUuid, true)
+                        new IndividualItem(UUID.randomUUID(), implementUuid, "A2", "loaned", "damaged_repairable", null, locationUuid, true),
+                        new IndividualItem(UUID.randomUUID(), implementUuid, "A3", "damaged", "damaged_no_diagnosis", null, locationUuid, true)
                 ));
 
         StockService service = new StockService(repository, outboxService, inventoryMovementRepository, currentUserUuidResolver);
         StockDetail detail = service.getStockDetail(implementUuid);
 
-        assertEquals(StockItemType.NO_FUNGIBLE, detail.itemType());
+        assertEquals(StockItemType.INDIVIDUAL, detail.itemType());
         assertEquals(3, detail.stock().totalStock());
         assertEquals(1, detail.stock().available());
         assertEquals(1, detail.stock().reserved());
@@ -82,12 +82,12 @@ class StockServiceTest {
                 .thenReturn(Optional.of(new StockRepository.ImplementStockContext(
                         implementUuid,
                         locationUuid,
-                        StockItemType.FUNGIBLE,
+                        StockItemType.CONSUMABLE,
                         true
                 )));
 
         doThrow(newJooqDataAccessException(
-                "ERROR: raised by trigger trg_guard_individual_no_fungible (individual_no_fungible)"
+                "ERROR: raised by trigger trg_guard_individual_item_type (fn_guard_individual_item_type)"
         )).when(repository).createIndividuals(eq(implementUuid), eq(locationUuid), any());
 
         StockService service = new StockService(repository, outboxService, inventoryMovementRepository, currentUserUuidResolver);
@@ -97,7 +97,7 @@ class StockServiceTest {
                 () -> service.addEntry(implementUuid, 1, List.of("SER-001"))
         );
 
-        assertEquals("INDIVIDUAL_NOT_ALLOWED_FOR_FUNGIBLE", ex.getCode());
+        assertEquals("INDIVIDUAL_NOT_ALLOWED_FOR_ITEM_TYPE", ex.getCode());
         verify(repository, never()).updateStock(eq(implementUuid), anyInt(), anyInt(), anyInt(), anyInt(), anyInt());
     }
 
@@ -110,7 +110,7 @@ class StockServiceTest {
                 .thenReturn(Optional.of(new StockRepository.ImplementStockContext(
                         implementUuid,
                         locationUuid,
-                        StockItemType.FUNGIBLE,
+                        StockItemType.CONSUMABLE,
                         true
                 )));
 

@@ -14,7 +14,7 @@ public record CreateImplementV2Request(
         @NotNull UUID locationUuid,
         @JsonProperty("item_type")
         @NotBlank
-        @Pattern(regexp = "^(fungible|no_fungible)$")
+        @Pattern(regexp = "^(consumable|reusable|individual)$")
         String itemType,
         @NotNull @JsonProperty("min_stock") Integer minStock,
         String barcode,

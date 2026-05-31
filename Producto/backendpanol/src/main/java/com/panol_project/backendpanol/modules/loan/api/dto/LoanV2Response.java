@@ -16,6 +16,9 @@ public record LoanV2Response(
         @JsonProperty("scheduled_at")
         OffsetDateTime scheduledAt,
 
+        @JsonProperty("expected_return_at")
+        OffsetDateTime expectedReturnAt,
+
         @JsonProperty("created_at")
         OffsetDateTime createdAt,
 

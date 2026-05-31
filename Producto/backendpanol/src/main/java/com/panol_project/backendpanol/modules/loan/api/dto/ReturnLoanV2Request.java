@@ -9,8 +9,8 @@ public record ReturnLoanV2Request(
         @Valid
         List<ReturnLoanIndividualV2Request> returnedIndividuals,
 
-        @JsonProperty("fungible_returns")
+        @JsonProperty("consumable_returns")
         @Valid
-        List<ReturnLoanFungibleV2Request> fungibleReturns
+        List<ReturnLoanConsumableV2Request> consumableReturns
 ) {
 }

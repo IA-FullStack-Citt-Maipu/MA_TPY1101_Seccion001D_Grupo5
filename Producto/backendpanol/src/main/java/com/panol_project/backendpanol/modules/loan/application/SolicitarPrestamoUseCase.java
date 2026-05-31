@@ -78,7 +78,7 @@ public class SolicitarPrestamoUseCase {
                         roomUuid,
                         subjectUuid,
                         command.scheduledAt(),
-                        command.dueDate(),
+                        command.expectedReturnAt(),
                         requestedItems
                 )
         );
@@ -139,7 +139,7 @@ public class SolicitarPrestamoUseCase {
                         roomUuid,
                         subjectUuid,
                         command.scheduledAt(),
-                        command.dueDate(),
+                        command.expectedReturnAt(),
                         requestedItems
                 )
         );

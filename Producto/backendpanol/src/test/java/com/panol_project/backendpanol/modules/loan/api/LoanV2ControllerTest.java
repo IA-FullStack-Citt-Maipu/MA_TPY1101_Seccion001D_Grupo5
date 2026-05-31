@@ -10,7 +10,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.panol_project.backendpanol.modules.catalog.stock.application.contract.StockMovementContract;
 import com.panol_project.backendpanol.modules.loan.application.GestionPrestamoUseCase;
 import com.panol_project.backendpanol.modules.loan.application.SolicitarPrestamoUseCase;
 import com.panol_project.backendpanol.modules.loan.domain.LoanAggregate;
@@ -23,8 +22,6 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
 import com.panol_project.backendpanol.shared.error.security.RestAccessDeniedHandler;
 import com.panol_project.backendpanol.shared.error.security.RestAuthenticationEntryPoint;
 import com.panol_project.backendpanol.shared.security.CurrentUserUuidResolver;
-import com.panol_project.backendpanol.shared.outbox.application.OutboxService;
-import com.panol_project.backendpanol.shared.outbox.domain.OutboxRepository;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -69,15 +66,9 @@ class LoanV2ControllerTest {
     @MockBean
     private LoanRepositoryPort loanRepositoryPort;
 
-    @MockBean
-    private StockMovementContract stockMovementContract;
-
-    @MockBean
-    private OutboxRepository outboxRepository;
-
     @BeforeEach
     void setUp() {
-        Mockito.reset(loanRepositoryPort, stockMovementContract, outboxRepository);
+        Mockito.reset(loanRepositoryPort);
     }
 
     @Test
@@ -106,6 +97,7 @@ class LoanV2ControllerTest {
                 authenticatedUserUuid,
                 LoanStatus.PENDING,
                 scheduledAt,
+                null,
                 OffsetDateTime.parse("2026-05-21T21:00:00-04:00"),
                 new LoanSummaryView.RoomView(roomUuid, "Sala 301"),
                 new LoanSummaryView.SubjectView(subjectUuid, "Anatomia"),
@@ -160,7 +152,10 @@ class LoanV2ControllerTest {
         org.junit.jupiter.api.Assertions.assertEquals(authenticatedUserUuid, command.requesterUuid());
         org.junit.jupiter.api.Assertions.assertEquals(roomUuid, command.roomUuid());
         org.junit.jupiter.api.Assertions.assertEquals(subjectUuid, command.subjectUuid());
-        org.junit.jupiter.api.Assertions.assertNull(command.dueDate());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                scheduledAt.plusHours(2).toInstant(),
+                command.expectedReturnAt().toInstant()
+        );
         org.junit.jupiter.api.Assertions.assertEquals(1, command.requestedItems().size());
         org.junit.jupiter.api.Assertions.assertEquals(implementUuid, command.requestedItems().getFirst().implementUuid());
         org.junit.jupiter.api.Assertions.assertEquals(2, command.requestedItems().getFirst().requestedQuantity());
@@ -361,22 +356,13 @@ class LoanV2ControllerTest {
         }
 
         @Bean
-        OutboxService outboxService(OutboxRepository outboxRepository, ObjectMapper objectMapper) {
-            return new OutboxService(outboxRepository, objectMapper);
-        }
-
-        @Bean
         SolicitarPrestamoUseCase solicitarPrestamoUseCase(LoanRepositoryPort loanRepositoryPort) {
             return new SolicitarPrestamoUseCase(loanRepositoryPort);
         }
 
         @Bean
-        GestionPrestamoUseCase gestionPrestamoUseCase(
-                LoanRepositoryPort loanRepositoryPort,
-                StockMovementContract stockMovementContract,
-                OutboxService outboxService
-        ) {
-            return new GestionPrestamoUseCase(loanRepositoryPort, stockMovementContract, outboxService);
+        GestionPrestamoUseCase gestionPrestamoUseCase(LoanRepositoryPort loanRepositoryPort) {
+            return new GestionPrestamoUseCase(loanRepositoryPort);
         }
 
         @Bean
