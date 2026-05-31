@@ -53,13 +53,17 @@ jobs:
             exit 1
           fi
 
-      - name: Initialize schema for jOOQ codegen (V25)
+      - name: Initialize schema for jOOQ codegen (V25-V32)
         env:
           PGPASSWORD: panol_ci
         run: |
-          psql -v ON_ERROR_STOP=1 \
-            -h 127.0.0.1 -U panol_ci -d panol_ci \
-            -f Producto/backendpanol/src/main/resources/db/migration/v25/V25__schema_alignment_big_bang.sql
+          set -euo pipefail
+          for migration in Producto/backendpanol/src/main/resources/db/migration/v25/*.sql; do
+            echo "Applying ${migration}"
+            psql -v ON_ERROR_STOP=1 \
+              -h 127.0.0.1 -U panol_ci -d panol_ci \
+              -f "${migration}"
+          done
 
       - name: Build backend
         env:
