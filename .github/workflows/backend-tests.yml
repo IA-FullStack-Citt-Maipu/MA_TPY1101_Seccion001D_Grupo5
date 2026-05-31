@@ -76,6 +76,18 @@ jobs:
         run: ./mvnw -B generate-sources
         working-directory: Producto/backendpanol
 
+      - name: Reset schema for backend tests (V25 baseline only)
+        env:
+          PGPASSWORD: panol_ci
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 \
+            -h 127.0.0.1 -U panol_ci -d panol_ci \
+            -c "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;"
+          psql -v ON_ERROR_STOP=1 \
+            -h 127.0.0.1 -U panol_ci -d panol_ci \
+            -f Producto/backendpanol/src/main/resources/db/migration/v25/V25__schema_alignment_big_bang.sql
+
       - name: Run backend tests
         env:
           JOOQ_DB_URL: jdbc:postgresql://127.0.0.1:5432/panol_ci
