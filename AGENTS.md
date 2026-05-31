@@ -2,6 +2,10 @@
 
 Este repositorio corresponde al proyecto **Pañol Salud**. Codex debe actuar como revisor técnico del Pull Request, priorizando errores que puedan romper el sistema, inconsistencias arquitectónicas, código basura y documentación desalineada.
 
+## Review guidelines
+
+Estas son las reglas que Codex debe seguir al revisar Pull Requests de este repositorio.
+
 ## Alcance de revisión
 
 Codex debe revisar **solamente** cambios dentro de estas carpetas:
@@ -10,6 +14,31 @@ Codex debe revisar **solamente** cambios dentro de estas carpetas:
 - `infra/`
 
 Si el PR modifica archivos fuera de esas carpetas, Codex debe ignorarlos salvo que afecten directamente la ejecución, configuración o documentación necesaria para `Producto/` o `infra/`.
+
+## Excepciones de alcance
+
+Aunque el alcance normal sea `Producto/` e `infra/`, Codex **sí debe revisar** estos archivos cuando sean modificados:
+
+- `AGENTS.md`
+- `.github/workflows/request-codex-review.yml`
+
+Motivo: estos archivos definen las reglas de revisión, automatización de revisión y comportamiento de CI relacionado con Codex. Si se modifican, un error puede afectar futuras revisiones del repositorio.
+
+Para PRs que modifiquen `AGENTS.md`, Codex debe revisar especialmente:
+
+- Que las instrucciones sean claras, accionables y no ambiguas.
+- Que el alcance de revisión esté bien delimitado.
+- Que las reglas no generen ruido excesivo en futuras revisiones.
+- Que las prioridades distingan entre errores bloqueantes y recomendaciones futuras.
+- Que no se contradigan las reglas de arquitectura del proyecto.
+
+Para PRs que modifiquen `.github/workflows/request-codex-review.yml`, Codex debe revisar especialmente:
+
+- Que el workflow no exponga secretos.
+- Que tenga permisos mínimos necesarios.
+- Que no genere comentarios duplicados innecesarios.
+- Que no ejecute código no confiable del PR.
+- Que el trigger respete el alcance definido para `Producto/`, `infra/`, `AGENTS.md` y el propio workflow.
 
 ## Prioridad de revisión
 
@@ -221,5 +250,5 @@ Estas recomendaciones deben ser pocas, concretas y no deben distraer de los prob
 - No pedir cambios fuera del alcance del PR salvo que el PR rompa algo existente.
 - No proponer reescrituras completas si basta con una corrección puntual.
 - No mezclar preferencias personales con errores reales.
-- No revisar carpetas fuera de `Producto/` e `infra/`, salvo impacto directo comprobable.
+- No revisar carpetas fuera de `Producto/` e `infra/`, salvo impacto directo comprobable o excepción definida en este archivo.
 - No aprobar código con secretos expuestos, errores de compilación evidentes o ruptura clara del flujo principal.
