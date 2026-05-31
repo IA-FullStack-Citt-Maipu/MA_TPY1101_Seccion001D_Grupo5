@@ -7,6 +7,6 @@ public record DevolverPrestamoCommand(
         UUID loanUuid,
         UUID actorUuid,
         List<DevolverPrestamoIndividualCommand> returnedIndividuals,
-        List<DevolverPrestamoFungibleCommand> fungibleReturns
+        List<DevolverPrestamoConsumableCommand> consumableReturns
 ) {
 }

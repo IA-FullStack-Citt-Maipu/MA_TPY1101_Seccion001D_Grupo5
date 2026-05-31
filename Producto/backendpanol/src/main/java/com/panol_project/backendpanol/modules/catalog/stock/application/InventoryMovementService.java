@@ -42,7 +42,7 @@ public class InventoryMovementService implements InventoryMovementQueryContract 
         );
         InventoryMovement saved = repository.save(movement);
         outboxService.enqueue("implement", implementUuid, "InventoryMovementRegistered", performedByUuid, Map.of(
-                "action", action.name(),
+                "action", action.literal(),
                 "quantity", quantity,
                 "notes", notes == null ? "" : notes
         ));
@@ -71,7 +71,7 @@ public class InventoryMovementService implements InventoryMovementQueryContract 
         return new InventoryMovementView(
                 movement.getId(),
                 movement.getImplementUuid(),
-                movement.getAction() == null ? null : movement.getAction().name(),
+                movement.getAction() == null ? null : movement.getAction().literal(),
                 movement.getQuantity(),
                 movement.getPerformedByUuid(),
                 movement.getPerformedByName(),

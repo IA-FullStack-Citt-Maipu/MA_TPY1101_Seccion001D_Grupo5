@@ -2,10 +2,9 @@ package com.panol_project.backendpanol.modules.loan.domain;
 
 import java.util.UUID;
 
-public record LoanReviewCommand(
+public record LoanCancelCommand(
         UUID loanUuid,
         UUID actorUuid,
-        LoanReviewDecision decision,
         String notes
 ) {
 }

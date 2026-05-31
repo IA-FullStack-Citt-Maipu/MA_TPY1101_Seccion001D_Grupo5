@@ -32,11 +32,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class StockService implements StockMovementContract {
 
     private static final Set<String> VALID_INDIVIDUAL_STATUS = Set.of(
-            "available", "loaned", "maintenance", "damaged"
+            "available", "loaned", "maintenance", "damaged", "blocked", "retired"
     );
 
     private static final Set<String> VALID_INDIVIDUAL_CONDITION = Set.of(
-            "good", "fair", "poor"
+            "good", "damaged_repairable", "damaged_no_diagnosis", "irreparable"
     );
 
     private final StockRepository repository;
@@ -63,7 +63,7 @@ public class StockService implements StockMovementContract {
         StockCounters counters = repository.findStockByImplementUuid(implementUuid)
                 .orElse(new StockCounters(0, 0, 0, 0, 0, 0));
 
-        List<IndividualItem> individuals = context.itemType() == StockItemType.NO_FUNGIBLE
+        List<IndividualItem> individuals = context.itemType() == StockItemType.INDIVIDUAL
                 ? repository.findActiveIndividualsByImplementUuid(implementUuid)
                 : List.of();
 
@@ -77,7 +77,7 @@ public class StockService implements StockMovementContract {
 
         repository.ensureStockRow(implementUuid);
 
-        boolean shouldCreateIndividuals = context.itemType() == StockItemType.NO_FUNGIBLE
+        boolean shouldCreateIndividuals = context.itemType() == StockItemType.INDIVIDUAL
                 || (assetCodes != null && !assetCodes.isEmpty());
 
         if (shouldCreateIndividuals) {
@@ -87,10 +87,10 @@ public class StockService implements StockMovementContract {
             } catch (DataIntegrityViolationException ex) {
                 throw new ConflictException("INDIVIDUAL_ASSET_CODE_DUPLICATE", "Uno o mas codigos de activo ya existen");
             } catch (DataAccessException ex) {
-                if (isNoFungibleGuardViolation(ex)) {
+                if (isIndividualItemTypeGuardViolation(ex)) {
                     throw new BadRequestException(
-                            "INDIVIDUAL_NOT_ALLOWED_FOR_FUNGIBLE",
-                            "No se pueden crear unidades individuales para implementos fungibles"
+                            "INDIVIDUAL_NOT_ALLOWED_FOR_ITEM_TYPE",
+                            "No se pueden crear unidades individuales para implementos que no son de tipo individual"
                     );
                 }
                 throw ex;
@@ -116,21 +116,23 @@ public class StockService implements StockMovementContract {
         if (movementType == null) {
             throw new BadRequestException(
                     "STOCK_MOVEMENT_TYPE_INVALID",
-                    "movement_type invalido. Usa STOCK_IN, STOCK_OUT, LOAN_DELIVERY, LOAN_RETURN, DAMAGE_REPORT o MANUAL_ADJUSTMENT"
+                    "movement_type invalido. Usa stock_in, stock_out, loan_delivery, loan_return, damage_report, manual_adjustment, consumption, discard o loss"
             );
         }
 
         repository.ensureStockRow(implementUuid);
 
         int movementQty;
-        if (context.itemType() == StockItemType.NO_FUNGIBLE) {
+        if (context.itemType() == StockItemType.INDIVIDUAL) {
             movementQty = applyMovementForIndividualImplement(context, movementType, individualUuids, conditionRaw);
         } else {
-            movementQty = applyMovementForFungibleImplement(context, movementType, quantity);
+            movementQty = applyMovementForBulkImplement(context, movementType, quantity);
         }
 
-        recordInventoryMovement(implementUuid, MovementAction.valueOf(movementType.name()), movementQty, "Stock movement");
-        outboxService.enqueue("implement", implementUuid, "StockMovementApplied", null, java.util.Map.of("movement_type", movementType.name()));
+        MovementAction action = MovementAction.fromLiteral(movementType.literal())
+                .orElseThrow(() -> new BadRequestException("STOCK_MOVEMENT_TYPE_INVALID", "movement_type invalido"));
+        recordInventoryMovement(implementUuid, action, movementQty, "Stock movement");
+        outboxService.enqueue("implement", implementUuid, "StockMovementApplied", null, java.util.Map.of("movement_type", movementType.literal()));
         return getStockDetail(implementUuid);
     }
 
@@ -146,7 +148,7 @@ public class StockService implements StockMovementContract {
         StockMovementType parsedType = StockMovementType.fromLiteral(movementType)
                 .orElseThrow(() -> new BadRequestException(
                         "STOCK_MOVEMENT_TYPE_INVALID",
-                        "movement_type invalido. Usa STOCK_IN, STOCK_OUT, LOAN_DELIVERY, LOAN_RETURN, DAMAGE_REPORT o MANUAL_ADJUSTMENT"
+                        "movement_type invalido. Usa stock_in, stock_out, loan_delivery, loan_return, damage_report, manual_adjustment, consumption, discard o loss"
                 ));
 
         applyMovement(implementUuid, parsedType, quantity, individualUuids, condition);
@@ -163,8 +165,8 @@ public class StockService implements StockMovementContract {
             Boolean active
     ) {
         var context = requireContext(implementUuid);
-        if (context.itemType() != StockItemType.NO_FUNGIBLE) {
-            throw new BadRequestException("INDIVIDUAL_NOT_ALLOWED", "Solo los implementos no_fungible tienen registros individuales");
+        if (context.itemType() != StockItemType.INDIVIDUAL) {
+            throw new BadRequestException("INDIVIDUAL_NOT_ALLOWED", "Solo los implementos de tipo individual tienen registros individuales");
         }
 
         String status = normalizeOptionalLiteral(statusRaw, VALID_INDIVIDUAL_STATUS, "INDIVIDUAL_STATUS_INVALID", "status invalido");
@@ -183,7 +185,7 @@ public class StockService implements StockMovementContract {
         return getStockDetail(implementUuid);
     }
 
-    private int applyMovementForFungibleImplement(
+    private int applyMovementForBulkImplement(
             StockRepository.ImplementStockContext context,
             StockMovementType movementType,
             Integer quantity
@@ -218,7 +220,7 @@ public class StockService implements StockMovementContract {
             case STOCK_IN -> throw new BadRequestException("INDIVIDUAL_MOVEMENT_INVALID", "Para sumar stock individual usa /entries con asset_codes");
             case STOCK_OUT -> {
                 applyMovementDelta(context.implementUuid(), movementType, qty);
-                repository.updateIndividualsState(uuids, "damaged", condition == null ? "poor" : condition, null, null, false);
+                repository.updateIndividualsState(uuids, "retired", condition == null ? "irreparable" : condition, null, null, false);
             }
             case LOAN_DELIVERY -> {
                 applyMovementDelta(context.implementUuid(), movementType, qty);
@@ -230,10 +232,20 @@ public class StockService implements StockMovementContract {
             }
             case DAMAGE_REPORT -> {
                 applyMovementDelta(context.implementUuid(), movementType, qty);
-                repository.updateIndividualsState(uuids, "damaged", condition == null ? "poor" : condition, null, null, null);
+                repository.updateIndividualsState(uuids, "damaged", condition == null ? "damaged_no_diagnosis" : condition, null, null, null);
             }
             case MANUAL_ADJUSTMENT ->
-                    repository.updateIndividualsState(uuids, "available", condition == null ? "fair" : condition, null, null, null);
+                    repository.updateIndividualsState(uuids, "available", condition == null ? "good" : condition, null, null, null);
+            case CONSUMPTION ->
+                    throw new BadRequestException("INDIVIDUAL_MOVEMENT_INVALID", "consumption solo aplica para implementos no individuales");
+            case DISCARD -> {
+                applyMovementDelta(context.implementUuid(), movementType, qty);
+                repository.updateIndividualsState(uuids, "retired", condition == null ? "irreparable" : condition, null, null, false);
+            }
+            case LOSS -> {
+                applyMovementDelta(context.implementUuid(), movementType, qty);
+                repository.updateIndividualsState(uuids, "retired", condition == null ? "irreparable" : condition, null, null, false);
+            }
         }
 
         syncStockRowForIndividuals(context.implementUuid());
@@ -277,6 +289,18 @@ public class StockService implements StockMovementContract {
                 availableDelta = -qty;
                 damagedDelta = qty;
             }
+            case CONSUMPTION -> {
+                totalDelta = -qty;
+                availableDelta = -qty;
+            }
+            case DISCARD -> {
+                totalDelta = -qty;
+                availableDelta = -qty;
+            }
+            case LOSS -> {
+                totalDelta = -qty;
+                availableDelta = -qty;
+            }
             case MANUAL_ADJUSTMENT -> {
                 totalDelta = qty;
                 availableDelta = qty;
@@ -312,7 +336,7 @@ public class StockService implements StockMovementContract {
             switch (status) {
                 case "available" -> available++;
                 case "loaned" -> loaned++;
-                case "damaged", "maintenance" -> damaged++;
+                case "damaged", "maintenance", "blocked" -> damaged++;
                 default -> {
                 }
             }
@@ -451,15 +475,14 @@ public class StockService implements StockMovementContract {
         inventoryMovementRepository.save(movement);
     }
 
-    private boolean isNoFungibleGuardViolation(Throwable throwable) {
+    private boolean isIndividualItemTypeGuardViolation(Throwable throwable) {
         Throwable current = throwable;
         while (current != null) {
             String message = current.getMessage();
             if (message != null) {
                 String normalized = message.toLowerCase();
-                if (normalized.contains("individual_no_fungible")
-                        || normalized.contains("trg_guard_individual_no_fungible")
-                        || normalized.contains("fn_guard_individual_no_fungible")) {
+                if (normalized.contains("trg_guard_individual_item_type")
+                        || normalized.contains("fn_guard_individual_item_type")) {
                     return true;
                 }
             }

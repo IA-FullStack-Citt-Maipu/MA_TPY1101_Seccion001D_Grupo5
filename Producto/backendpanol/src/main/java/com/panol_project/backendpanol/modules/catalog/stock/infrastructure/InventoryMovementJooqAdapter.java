@@ -48,7 +48,7 @@ public class InventoryMovementJooqAdapter implements InventoryMovementRepository
                 : OffsetDateTime.ofInstant(movement.getTimestamp(), ZoneOffset.UTC);
 
         Map<String, Object> deltaChanges = new LinkedHashMap<>();
-        deltaChanges.put("action", movement.getAction() == null ? null : movement.getAction().name());
+        deltaChanges.put("action", movement.getAction() == null ? null : movement.getAction().literal());
         deltaChanges.put("quantity", movement.getQuantity());
         deltaChanges.put("notes", movement.getNotes());
 
@@ -62,8 +62,8 @@ public class InventoryMovementJooqAdapter implements InventoryMovementRepository
                 .set(
                         INVENTORY_MOVEMENT.MOVEMENT_TYPE,
                         movement.getAction() == null
-                                ? InventoryMovementTypeEnum.MANUAL_ADJUSTMENT
-                                : InventoryMovementTypeEnum.valueOf(movement.getAction().name())
+                                ? InventoryMovementTypeEnum.manual_adjustment
+                                : InventoryMovementTypeEnum.lookupLiteral(movement.getAction().literal())
                 )
                 .set(INVENTORY_MOVEMENT.QUANTITY, movement.getQuantity())
                 .set(INVENTORY_MOVEMENT.DELTA_CHANGES, toJsonb(deltaChanges))
@@ -131,7 +131,9 @@ public class InventoryMovementJooqAdapter implements InventoryMovementRepository
     private InventoryMovement toDomain(
             Record8<Long, UUID, InventoryMovementTypeEnum, Integer, UUID, OffsetDateTime, JSONB, String> record
     ) {
-        MovementAction action = record.value3() == null ? null : MovementAction.valueOf(record.value3().name());
+        MovementAction action = record.value3() == null
+                ? null
+                : MovementAction.fromLiteral(record.value3().getLiteral()).orElse(null);
         String performerName = record.get("performedByName", String.class);
         InventoryMovement movement = new InventoryMovement(
                 record.value2(),

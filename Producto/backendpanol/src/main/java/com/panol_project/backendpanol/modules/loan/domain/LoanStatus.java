@@ -7,11 +7,13 @@ import java.util.Optional;
 public enum LoanStatus {
     PENDING("pending"),
     APPROVED("approved"),
+    PREPARED("prepared"),
     REJECTED("rejected"),
     DELIVERED("delivered"),
     COMPLETED("completed"),
     CANCELLED("cancelled"),
-    EXPIRED("expired");
+    EXPIRED("expired"),
+    OVERDUE("overdue");
 
     private final String literal;
 

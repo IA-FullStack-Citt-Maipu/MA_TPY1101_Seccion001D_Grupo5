@@ -169,11 +169,11 @@ class SolicitarPrestamoPersistenceTest {
 
         assertEquals(systemNotificationsBefore, userNotificationCount(systemOutboxUserId, expectedTitle, expectedMessage));
 
-        assertEquals(0, dsl.selectCount()
+        assertEquals(1, dsl.selectCount()
                 .from(OUTBOX_EVENT)
                 .where(OUTBOX_EVENT.AGGREGATE_ID.eq(created.uuid()))
                 .fetchOne(0, Integer.class));
-        assertEquals(0, dsl.selectCount()
+        assertEquals(1, dsl.selectCount()
                 .from(OUTBOX_EVENTS)
                 .where(OUTBOX_EVENTS.AGGREGATE_ID.eq(created.uuid()))
                 .fetchOne(0, Integer.class));
@@ -322,7 +322,7 @@ class SolicitarPrestamoPersistenceTest {
                 .set(IMPLEMENT.UUID, implementUuid)
                 .set(IMPLEMENT.NAME, "Implemento IT " + suffix)
                 .set(IMPLEMENT.DESCRIPTION, "Implemento de prueba")
-                .set(IMPLEMENT.ITEM_TYPE, ItemTypeEnum.fungible)
+                .set(IMPLEMENT.ITEM_TYPE, ItemTypeEnum.consumable)
                 .set(IMPLEMENT.ACTIVE, true)
                 .execute();
         implementUuidsToCleanup.add(implementUuid);

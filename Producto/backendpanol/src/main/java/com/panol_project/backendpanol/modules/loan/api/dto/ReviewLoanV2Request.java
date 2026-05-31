@@ -7,10 +7,7 @@ public record ReviewLoanV2Request(
         @NotBlank(message = "decision es obligatorio")
         String decision,
 
-        @JsonProperty("review_notes")
-        String reviewNotes,
-
-        @JsonProperty("rejection_reason")
-        String rejectionReason
+        @JsonProperty("notes")
+        String notes
 ) {
 }

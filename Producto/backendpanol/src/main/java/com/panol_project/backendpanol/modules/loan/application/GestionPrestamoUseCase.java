@@ -1,27 +1,29 @@
 package com.panol_project.backendpanol.modules.loan.application;
 
-import com.panol_project.backendpanol.modules.catalog.stock.application.contract.StockMovementContract;
+import com.panol_project.backendpanol.modules.loan.application.dto.CancelarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.CompletarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.DevolverPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.EntregarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.RevisarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanAggregate;
+import com.panol_project.backendpanol.modules.loan.domain.LoanCancelCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanDeliveryCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanDeliveryItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanDeliveryResult;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRepositoryPort;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReturnCommand;
-import com.panol_project.backendpanol.modules.loan.domain.LoanReturnFungibleItem;
+import com.panol_project.backendpanol.modules.loan.domain.LoanReturnConsumableItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReturnIndividual;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReturnResult;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReviewCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReviewDecision;
+import com.panol_project.backendpanol.modules.loan.domain.LoanStateDatesView;
+import com.panol_project.backendpanol.modules.loan.domain.LoanStatusTimelineEntry;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryPage;
-import com.panol_project.backendpanol.modules.loan.domain.LoanStockMovement;
 import com.panol_project.backendpanol.shared.error.BadRequestException;
 import com.panol_project.backendpanol.shared.error.NotFoundException;
-import com.panol_project.backendpanol.shared.outbox.application.OutboxService;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -31,17 +33,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class GestionPrestamoUseCase {
 
     private final LoanRepositoryPort loanRepositoryPort;
-    private final StockMovementContract stockMovementContract;
-    private final OutboxService outboxService;
 
-    public GestionPrestamoUseCase(
-            LoanRepositoryPort loanRepositoryPort,
-            StockMovementContract stockMovementContract,
-            OutboxService outboxService
-    ) {
+    public GestionPrestamoUseCase(LoanRepositoryPort loanRepositoryPort) {
         this.loanRepositoryPort = loanRepositoryPort;
-        this.stockMovementContract = stockMovementContract;
-        this.outboxService = outboxService;
     }
 
     @Transactional(readOnly = true)
@@ -64,10 +58,11 @@ public class GestionPrestamoUseCase {
         LoanReviewDecision decision = LoanReviewDecision.fromLiteral(command.decision())
                 .orElseThrow(() -> new BadRequestException("LOAN_REVIEW_DECISION_INVALID", "decision debe ser APPROVE o REJECT"));
 
+        String notes = normalizeOptionalText(command.notes());
+
         if (decision == LoanReviewDecision.REJECT) {
-            String rejectionReason = normalizeOptionalText(command.rejectionReason());
-            if (rejectionReason == null) {
-                throw new BadRequestException("LOAN_REJECTION_REASON_REQUIRED", "rejection_reason es obligatorio al rechazar");
+            if (notes == null) {
+                throw new BadRequestException("LOAN_REJECTION_NOTES_REQUIRED", "notes es obligatorio al rechazar");
             }
         }
 
@@ -76,24 +71,23 @@ public class GestionPrestamoUseCase {
                         command.loanUuid(),
                         command.actorUuid(),
                         decision,
-                        normalizeOptionalText(command.reviewNotes()),
-                        normalizeOptionalText(command.rejectionReason())
-                )
-        );
-
-        outboxService.enqueue(
-                "loan",
-                updated.uuid(),
-                "LoanReviewed",
-                command.actorUuid(),
-                java.util.Map.of(
-                        "loan_uuid", updated.uuid().toString(),
-                        "decision", decision.name(),
-                        "status", updated.status().literal()
+                        notes
                 )
         );
 
         return findVisibleLoanSummaryOrThrow(updated.uuid());
+    }
+
+    @Transactional
+    public LoanSummaryView cancelar(CancelarPrestamoCommand command) {
+        LoanAggregate cancelled = loanRepositoryPort.cancelLoan(
+                new LoanCancelCommand(
+                        command.loanUuid(),
+                        command.actorUuid(),
+                        normalizeOptionalText(command.notes())
+                )
+        );
+        return findVisibleLoanSummaryOrThrow(cancelled.uuid());
     }
 
     @Transactional
@@ -110,28 +104,15 @@ public class GestionPrestamoUseCase {
                 )
         );
 
-        applyStockMovements(delivery.stockMovements());
-
-        outboxService.enqueue(
-                "loan",
-                delivery.loan().uuid(),
-                "LoanDelivered",
-                command.actorUuid(),
-                java.util.Map.of(
-                        "loan_uuid", delivery.loan().uuid().toString(),
-                        "status", delivery.loan().status().literal()
-                )
-        );
-
         return findVisibleLoanSummaryOrThrow(delivery.loan().uuid());
     }
 
     @Transactional
     public LoanSummaryView devolver(DevolverPrestamoCommand command) {
         boolean hasIndividuals = command.returnedIndividuals() != null && !command.returnedIndividuals().isEmpty();
-        boolean hasFungible = command.fungibleReturns() != null && !command.fungibleReturns().isEmpty();
-        if (!hasIndividuals && !hasFungible) {
-            throw new BadRequestException("LOAN_RETURN_EMPTY", "Debes incluir al menos un retorno (individual o fungible)");
+        boolean hasConsumable = command.consumableReturns() != null && !command.consumableReturns().isEmpty();
+        if (!hasIndividuals && !hasConsumable) {
+            throw new BadRequestException("LOAN_RETURN_EMPTY", "Debes incluir al menos un retorno (individual o consumable/reusable)");
         }
 
         LoanReturnResult returned = loanRepositoryPort.returnLoan(
@@ -143,24 +124,11 @@ public class GestionPrestamoUseCase {
                                 : command.returnedIndividuals().stream()
                                         .map(item -> new LoanReturnIndividual(item.individualUuid(), item.returnCondition()))
                                         .toList(),
-                        command.fungibleReturns() == null
+                        command.consumableReturns() == null
                                 ? List.of()
-                                : command.fungibleReturns().stream()
-                                        .map(item -> new LoanReturnFungibleItem(item.implementUuid(), item.quantity()))
+                                : command.consumableReturns().stream()
+                                        .map(item -> new LoanReturnConsumableItem(item.implementUuid(), item.quantity()))
                                         .toList()
-                )
-        );
-
-        applyStockMovements(returned.stockMovements());
-
-        outboxService.enqueue(
-                "loan",
-                returned.loan().uuid(),
-                "LoanCompleted",
-                command.actorUuid(),
-                java.util.Map.of(
-                        "loan_uuid", returned.loan().uuid().toString(),
-                        "status", returned.loan().status().literal()
                 )
         );
 
@@ -176,32 +144,29 @@ public class GestionPrestamoUseCase {
                 )
         );
 
-        applyStockMovements(completed.stockMovements());
-
-        outboxService.enqueue(
-                "loan",
-                completed.loan().uuid(),
-                "LoanCompleted",
-                command.actorUuid(),
-                java.util.Map.of(
-                        "loan_uuid", completed.loan().uuid().toString(),
-                        "status", completed.loan().status().literal()
-                )
-        );
-
         return findVisibleLoanSummaryOrThrow(completed.loan().uuid());
     }
 
-    private void applyStockMovements(List<LoanStockMovement> stockMovements) {
-        for (LoanStockMovement movement : stockMovements) {
-            stockMovementContract.applyMovement(
-                    movement.implementUuid(),
-                    movement.movementType(),
-                    movement.quantity(),
-                    movement.individualUuids(),
-                    movement.condition()
-            );
-        }
+    @Transactional(readOnly = true)
+    public LoanStateDatesView obtenerFechasEstado(UUID loanUuid) {
+        return loanRepositoryPort.findLoanStateDatesByUuid(loanUuid)
+                .orElseThrow(() -> new NotFoundException("LOAN_NOT_FOUND", "Prestamo no encontrado"));
+    }
+
+    @Transactional(readOnly = true)
+    public List<LoanStatusTimelineEntry> obtenerTimelineEstado(UUID loanUuid) {
+        findVisibleLoanSummaryOrThrow(loanUuid);
+        return loanRepositoryPort.findLoanStatusTimelineByUuid(loanUuid);
+    }
+
+    @Transactional
+    public int marcarPrestamosOverdue(UUID actorUuid, OffsetDateTime currentTime) {
+        return loanRepositoryPort.markOverdueLoans(actorUuid, currentTime);
+    }
+
+    @Transactional
+    public int expirarPrestamosPendientes(UUID actorUuid, OffsetDateTime currentTime, int graceMinutes) {
+        return loanRepositoryPort.expirePendingLoans(actorUuid, currentTime, graceMinutes);
     }
 
     private String normalizeOptionalText(String raw) {

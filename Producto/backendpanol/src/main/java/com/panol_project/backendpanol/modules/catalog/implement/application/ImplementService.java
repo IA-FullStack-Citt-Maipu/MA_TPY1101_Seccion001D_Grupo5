@@ -250,7 +250,7 @@ public class ImplementService implements ImplementLookupContract {
         return ImplementItemType.fromLiteral(itemType)
                 .orElseThrow(() -> new BadRequestException(
                         "IMPLEMENT_ITEM_TYPE_INVALID",
-                        "El tipo de implemento debe ser fungible o no_fungible"
+                        "El tipo de implemento debe ser consumable, reusable o individual"
                 ));
     }
 

@@ -48,13 +48,21 @@ jobs:
             exit 1
           fi
 
-      - name: Initialize schema for jOOQ codegen (V25)
+      - name: Initialize schema for jOOQ codegen (V25-V32)
         env:
           PGPASSWORD: panol_ci
         run: |
+          set -euo pipefail
+          base_dir="Producto/backendpanol/src/main/resources/db/migration/v25"
           psql -v ON_ERROR_STOP=1 \
             -h 127.0.0.1 -U panol_ci -d panol_ci \
-            -f Producto/backendpanol/src/main/resources/db/migration/v25/V25__schema_alignment_big_bang.sql
+            -f "${base_dir}/beforeMigrate.sql"
+          for migration in "${base_dir}"/V*.sql; do
+            echo "Applying ${migration}"
+            psql -v ON_ERROR_STOP=1 \
+              -h 127.0.0.1 -U panol_ci -d panol_ci \
+              -f "${migration}"
+          done
 
       - name: Make Maven Wrapper executable
         run: chmod +x ./mvnw
@@ -67,6 +75,18 @@ jobs:
           JOOQ_DB_PASSWORD: panol_ci
         run: ./mvnw -B generate-sources
         working-directory: Producto/backendpanol
+
+      - name: Reset schema for backend tests (V25 baseline only)
+        env:
+          PGPASSWORD: panol_ci
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 \
+            -h 127.0.0.1 -U panol_ci -d panol_ci \
+            -c "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;"
+          psql -v ON_ERROR_STOP=1 \
+            -h 127.0.0.1 -U panol_ci -d panol_ci \
+            -f Producto/backendpanol/src/main/resources/db/migration/v25/V25__schema_alignment_big_bang.sql
 
       - name: Run backend tests
         env:

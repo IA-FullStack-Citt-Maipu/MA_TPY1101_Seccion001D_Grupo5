@@ -9,7 +9,7 @@ public record SolicitarPrestamoCommand(
         UUID roomUuid,
         UUID subjectUuid,
         OffsetDateTime scheduledAt,
-        OffsetDateTime dueDate,
+        OffsetDateTime expectedReturnAt,
         List<SolicitarPrestamoItemCommand> requestedItems
 ) {
 }

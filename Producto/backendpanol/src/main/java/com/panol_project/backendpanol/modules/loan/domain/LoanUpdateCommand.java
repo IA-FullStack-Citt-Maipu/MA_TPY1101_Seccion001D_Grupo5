@@ -10,7 +10,7 @@ public record LoanUpdateCommand(
         UUID roomUuid,
         UUID subjectUuid,
         OffsetDateTime scheduledAt,
-        OffsetDateTime dueDate,
+        OffsetDateTime expectedReturnAt,
         List<LoanRequestedItem> requestedItems
 ) {
 }
