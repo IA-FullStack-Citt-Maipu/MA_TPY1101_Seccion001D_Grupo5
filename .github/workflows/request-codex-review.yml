@@ -1,0 +1,81 @@
+name: Request Codex Review
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - ready_for_review
+      - synchronize
+    branches:
+      - dev
+    paths:
+      - 'Producto/**'
+      - 'infra/**'
+      - 'AGENTS.md'
+      - '.github/workflows/request-codex-review.yml'
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  request-codex-review:
+    name: Request Codex review on PR
+    runs-on: ubuntu-latest
+    if: ${{ github.event.pull_request.draft == false }}
+
+    steps:
+      - name: Request Codex review
+        uses: actions/github-script@v7
+        with:
+          # Optional: create a repository secret named CODEX_REVIEW_TOKEN with a fine-grained PAT
+          # if GitHub Actions bot comments do not trigger Codex in your repo.
+          # Required permissions for that token: pull requests read + issues write.
+          github-token: ${{ secrets.CODEX_REVIEW_TOKEN || github.token }}
+          script: |
+            const pr = context.payload.pull_request;
+            const { owner, repo } = context.repo;
+            const headSha = pr.head.sha;
+            const marker = `<!-- codex-review-request:${headSha} -->`;
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number: pr.number,
+              per_page: 100,
+            });
+
+            const alreadyRequestedForThisCommit = comments.some((comment) =>
+              comment.body && comment.body.includes(marker)
+            );
+
+            if (alreadyRequestedForThisCommit) {
+              core.info(`Codex review already requested for PR #${pr.number} at ${headSha}.`);
+              return;
+            }
+
+            const body = [
+              '@codex review',
+              '',
+              marker,
+              '',
+              'Revisa este Pull Request siguiendo estrictamente las instrucciones de `AGENTS.md`.',
+              '',
+              'Prioridades de revisión:',
+              '- Detectar cambios que puedan romper compilación, ejecución, despliegue o flujos funcionales.',
+              '- Revisar arquitectura modular, hexagonal y basada en eventos.',
+              '- Detectar código muerto, basura, duplicado o sin uso claro.',
+              '- Validar consistencia entre código, infraestructura y documentación `.md`.',
+              '- Respetar el alcance definido: `Producto/`, `infra/`, `AGENTS.md` y este workflow.',
+              '',
+              `Commit revisado: ${headSha}`,
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: pr.number,
+              body,
+            });
