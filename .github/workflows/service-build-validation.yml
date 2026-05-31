@@ -58,7 +58,11 @@ jobs:
           PGPASSWORD: panol_ci
         run: |
           set -euo pipefail
-          for migration in Producto/backendpanol/src/main/resources/db/migration/v25/*.sql; do
+          base_dir="Producto/backendpanol/src/main/resources/db/migration/v25"
+          psql -v ON_ERROR_STOP=1 \
+            -h 127.0.0.1 -U panol_ci -d panol_ci \
+            -f "${base_dir}/beforeMigrate.sql"
+          for migration in "${base_dir}"/V*.sql; do
             echo "Applying ${migration}"
             psql -v ON_ERROR_STOP=1 \
               -h 127.0.0.1 -U panol_ci -d panol_ci \
