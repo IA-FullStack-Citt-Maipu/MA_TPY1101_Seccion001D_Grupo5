@@ -1,26 +1,32 @@
 package com.panol_project.backendpanol.modules.loan.api;
 
+import com.panol_project.backendpanol.modules.loan.api.dto.CancelLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.api.dto.CreateLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.api.dto.DeliverLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanItemV2Response;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanPageV2Response;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanRoomV2Response;
+import com.panol_project.backendpanol.modules.loan.api.dto.LoanStateDatesV2Response;
+import com.panol_project.backendpanol.modules.loan.api.dto.LoanStatusTimelineEntryV2Response;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanSubjectV2Response;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanV2Response;
 import com.panol_project.backendpanol.modules.loan.api.dto.ReturnLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.api.dto.ReviewLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.application.GestionPrestamoUseCase;
 import com.panol_project.backendpanol.modules.loan.application.SolicitarPrestamoUseCase;
+import com.panol_project.backendpanol.modules.loan.application.dto.CancelarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.CompletarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.DevolverPrestamoCommand;
-import com.panol_project.backendpanol.modules.loan.application.dto.DevolverPrestamoFungibleCommand;
+import com.panol_project.backendpanol.modules.loan.application.dto.DevolverPrestamoConsumableCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.DevolverPrestamoIndividualCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.EntregarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.EntregarPrestamoItemCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.RevisarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.SolicitarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.SolicitarPrestamoItemCommand;
+import com.panol_project.backendpanol.modules.loan.domain.LoanStateDatesView;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryPage;
+import com.panol_project.backendpanol.modules.loan.domain.LoanStatusTimelineEntry;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
 import com.panol_project.backendpanol.shared.error.ApiException;
 import com.panol_project.backendpanol.shared.error.BadRequestException;
@@ -82,7 +88,7 @@ public class LoanV2Controller {
                         request.roomUuid(),
                         request.subjectUuid(),
                         request.scheduledAt(),
-                        null,
+                        request.scheduledAt() == null ? null : request.scheduledAt().plusHours(2),
                         items
                 )
         );
@@ -111,7 +117,7 @@ public class LoanV2Controller {
                         request.roomUuid(),
                         request.subjectUuid(),
                         request.scheduledAt(),
-                        null,
+                        request.scheduledAt() == null ? null : request.scheduledAt().plusHours(2),
                         items
                 )
         );
@@ -149,15 +155,28 @@ public class LoanV2Controller {
             @PathVariable UUID loanUuid,
             Authentication authentication
     ) {
-        UUID currentUserUuid = resolveCurrentUserUuid(authentication);
-        boolean isDocente = hasRole(authentication, "ROLE_DOCENTE");
-
-        LoanSummaryView loan = gestionPrestamoUseCase.obtenerDetalle(loanUuid);
-        if (isDocente && !currentUserUuid.equals(loan.requesterUuid())) {
-            throw new NotFoundException("LOAN_NOT_FOUND", "Prestamo no encontrado");
-        }
-
+        LoanSummaryView loan = findLoanVisibleForCurrentUser(authentication, loanUuid);
         return toResponse(loan);
+    }
+
+    @GetMapping("/{loanUuid}/state-dates")
+    public LoanStateDatesV2Response obtenerFechasEstadoPrestamo(
+            @PathVariable UUID loanUuid,
+            Authentication authentication
+    ) {
+        findLoanVisibleForCurrentUser(authentication, loanUuid);
+        return toStateDatesResponse(gestionPrestamoUseCase.obtenerFechasEstado(loanUuid));
+    }
+
+    @GetMapping("/{loanUuid}/status-timeline")
+    public List<LoanStatusTimelineEntryV2Response> obtenerTimelineEstadoPrestamo(
+            @PathVariable UUID loanUuid,
+            Authentication authentication
+    ) {
+        findLoanVisibleForCurrentUser(authentication, loanUuid);
+        return gestionPrestamoUseCase.obtenerTimelineEstado(loanUuid).stream()
+                .map(this::toTimelineResponse)
+                .toList();
     }
 
     @PatchMapping("/{loanUuid}/review")
@@ -173,8 +192,7 @@ public class LoanV2Controller {
                         loanUuid,
                         actorUuid,
                         request.decision(),
-                        request.reviewNotes(),
-                        request.rejectionReason()
+                        request.notes()
                 )
         );
         return toResponse(reviewed);
@@ -215,6 +233,26 @@ public class LoanV2Controller {
         return toResponse(completed);
     }
 
+    @PatchMapping("/{loanUuid}/cancel")
+    @PreAuthorize("hasAnyRole('DOCENTE', 'COORDINADOR')")
+    public LoanV2Response cancelarPrestamo(
+            @PathVariable UUID loanUuid,
+            @RequestBody(required = false) CancelLoanV2Request request,
+            Authentication authentication
+    ) {
+        findLoanVisibleForCurrentUser(authentication, loanUuid);
+        UUID actorUuid = resolveCurrentUserUuid(authentication);
+
+        LoanSummaryView cancelled = gestionPrestamoUseCase.cancelar(
+                new CancelarPrestamoCommand(
+                        loanUuid,
+                        actorUuid,
+                        request == null ? null : request.notes()
+                )
+        );
+        return toResponse(cancelled);
+    }
+
     @PostMapping("/{loanUuid}/return")
     public LoanV2Response devolverPrestamo(
             @PathVariable UUID loanUuid,
@@ -233,10 +271,10 @@ public class LoanV2Controller {
                                                 item.individualUuid(),
                                                 item.returnCondition()
                                         )).toList(),
-                        request.fungibleReturns() == null
+                        request.consumableReturns() == null
                                 ? List.of()
-                                : request.fungibleReturns().stream()
-                                        .map(item -> new DevolverPrestamoFungibleCommand(
+                                : request.consumableReturns().stream()
+                                        .map(item -> new DevolverPrestamoConsumableCommand(
                                                 item.implementUuid(),
                                                 item.quantity()
                                         )).toList()
@@ -251,6 +289,7 @@ public class LoanV2Controller {
                 loan.requesterUuid(),
                 loan.status().literal(),
                 loan.scheduledAt(),
+                loan.expectedReturnAt(),
                 loan.createdAt(),
                 loan.room() == null ? null : new LoanRoomV2Response(loan.room().uuid(), loan.room().name()),
                 loan.subject() == null ? null : new LoanSubjectV2Response(loan.subject().uuid(), loan.subject().name()),
@@ -263,6 +302,32 @@ public class LoanV2Controller {
                                 item.deliveredQuantity()
                         ))
                         .toList()
+        );
+    }
+
+    private LoanStateDatesV2Response toStateDatesResponse(LoanStateDatesView dates) {
+        return new LoanStateDatesV2Response(
+                dates.approvedAt(),
+                dates.preparedAt(),
+                dates.deliveredAt(),
+                dates.completedAt(),
+                dates.rejectedAt(),
+                dates.cancelledAt(),
+                dates.expiredAt(),
+                dates.overdueAt()
+        );
+    }
+
+    private LoanStatusTimelineEntryV2Response toTimelineResponse(LoanStatusTimelineEntry entry) {
+        return new LoanStatusTimelineEntryV2Response(
+                entry.historyId(),
+                entry.fromStatus() == null ? null : entry.fromStatus().literal(),
+                entry.toStatus() == null ? null : entry.toStatus().literal(),
+                entry.actorUserId(),
+                entry.actorName(),
+                entry.actorEmail(),
+                entry.notes(),
+                entry.changedAt()
         );
     }
 
@@ -299,8 +364,22 @@ public class LoanV2Controller {
                 .anyMatch(role::equals);
     }
 
+    private LoanSummaryView findLoanVisibleForCurrentUser(Authentication authentication, UUID loanUuid) {
+        UUID currentUserUuid = resolveCurrentUserUuid(authentication);
+        boolean isDocente = hasRole(authentication, "ROLE_DOCENTE");
+
+        LoanSummaryView loan = gestionPrestamoUseCase.obtenerDetalle(loanUuid);
+        if (isDocente && !currentUserUuid.equals(loan.requesterUuid())) {
+            throw new NotFoundException("LOAN_NOT_FOUND", "Prestamo no encontrado");
+        }
+        return loan;
+    }
+
     private UUID resolveCurrentUserUuid(Authentication authentication) {
         return currentUserUuidResolver.resolveCurrentUserUuid(authentication)
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "AUTH_REQUIRED", "Autenticacion requerida"));
     }
 }
+
+
+

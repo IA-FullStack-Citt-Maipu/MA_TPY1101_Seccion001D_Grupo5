@@ -2,6 +2,7 @@ package com.panol_project.backendpanol.modules.loan.domain;
 
 import java.util.List;
 import java.util.Optional;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public interface LoanRepositoryPort {
@@ -30,9 +31,19 @@ public interface LoanRepositoryPort {
 
     LoanAggregate reviewLoan(LoanReviewCommand command);
 
+    LoanAggregate cancelLoan(LoanCancelCommand command);
+
     LoanDeliveryResult deliverLoan(LoanDeliveryCommand command);
 
     LoanReturnResult completeLoan(LoanCompleteCommand command);
 
     LoanReturnResult returnLoan(LoanReturnCommand command);
+
+    Optional<LoanStateDatesView> findLoanStateDatesByUuid(UUID loanUuid);
+
+    List<LoanStatusTimelineEntry> findLoanStatusTimelineByUuid(UUID loanUuid);
+
+    int markOverdueLoans(UUID actorUuid, OffsetDateTime currentTime);
+
+    int expirePendingLoans(UUID actorUuid, OffsetDateTime currentTime, int graceMinutes);
 }

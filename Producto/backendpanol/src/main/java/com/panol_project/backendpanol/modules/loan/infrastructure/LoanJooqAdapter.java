@@ -9,12 +9,17 @@ import static com.panol_project.backendpanol.jooq.tables.LoanStatusHistory.LOAN_
 import static com.panol_project.backendpanol.jooq.tables.Room.ROOM;
 import static com.panol_project.backendpanol.jooq.tables.Subject.SUBJECT;
 import static com.panol_project.backendpanol.jooq.tables.User.USER;
+import static com.panol_project.backendpanol.jooq.tables.VLoanStateDates.V_LOAN_STATE_DATES;
+import static com.panol_project.backendpanol.jooq.tables.VLoanStatusTimeline.V_LOAN_STATUS_TIMELINE;
 
-import com.panol_project.backendpanol.jooq.enums.IndividualConditionEnum;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.panol_project.backendpanol.jooq.enums.IndividualAllocationStatusEnum;
 import com.panol_project.backendpanol.jooq.enums.IndividualStatusEnum;
 import com.panol_project.backendpanol.jooq.enums.ItemTypeEnum;
 import com.panol_project.backendpanol.jooq.enums.LoanStatusEnum;
+import com.panol_project.backendpanol.jooq.enums.ReturnConditionEnum;
 import com.panol_project.backendpanol.modules.loan.domain.LoanAggregate;
+import com.panol_project.backendpanol.modules.loan.domain.LoanCancelCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanCompleteCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanCreateCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanDeliveryCommand;
@@ -25,18 +30,20 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanImplementAvailabil
 import com.panol_project.backendpanol.modules.loan.domain.LoanRepositoryPort;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRequestedItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReturnCommand;
-import com.panol_project.backendpanol.modules.loan.domain.LoanReturnFungibleItem;
+import com.panol_project.backendpanol.modules.loan.domain.LoanReturnConsumableItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReturnIndividual;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReturnResult;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReviewCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReviewDecision;
+import com.panol_project.backendpanol.modules.loan.domain.LoanStateDatesView;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStatus;
-import com.panol_project.backendpanol.modules.loan.domain.LoanStockMovement;
+import com.panol_project.backendpanol.modules.loan.domain.LoanStatusTimelineEntry;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryPage;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
 import com.panol_project.backendpanol.modules.loan.domain.LoanUpdateCommand;
 import com.panol_project.backendpanol.shared.error.ApiException;
 import com.panol_project.backendpanol.shared.error.BadRequestException;
+import com.panol_project.backendpanol.shared.error.ConflictException;
 import com.panol_project.backendpanol.shared.error.NotFoundException;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -62,9 +69,11 @@ import org.springframework.stereotype.Repository;
 public class LoanJooqAdapter implements LoanRepositoryPort {
 
     private final DSLContext dsl;
+    private final ObjectMapper objectMapper;
 
-    public LoanJooqAdapter(DSLContext dsl) {
+    public LoanJooqAdapter(DSLContext dsl, ObjectMapper objectMapper) {
         this.dsl = dsl;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -173,7 +182,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 .set(LOAN.SUBJECT_ID, subjectId)
                 .set(LOAN.STATUS, LoanStatusEnum.pending)
                 .set(LOAN.SCHEDULED_AT, command.scheduledAt())
-                .set(LOAN.DUE_DATE, command.dueDate())
+                .set(LOAN.EXPECTED_RETURN_AT, resolveExpectedReturnAt(command.scheduledAt(), command.expectedReturnAt()))
                 .set(LOAN.CREATED_AT, now)
                 .returning(LOAN.ID, LOAN.STATUS, LOAN.CREATED_AT, LOAN.UUID)
                 .fetchOne();
@@ -203,7 +212,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 command.subjectUuid(),
                 toDomainStatus(insertedLoan.getStatus()),
                 command.scheduledAt(),
-                command.dueDate(),
+                resolveExpectedReturnAt(command.scheduledAt(), command.expectedReturnAt()),
                 insertedLoan.getCreatedAt(),
                 details
         );
@@ -226,7 +235,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 .set(LOAN.ROOM_ID, roomId)
                 .set(LOAN.SUBJECT_ID, subjectId)
                 .set(LOAN.SCHEDULED_AT, command.scheduledAt())
-                .set(LOAN.DUE_DATE, command.dueDate())
+                .set(LOAN.EXPECTED_RETURN_AT, resolveExpectedReturnAt(command.scheduledAt(), command.expectedReturnAt()))
                 .where(LOAN.ID.eq(current.loanId()))
                 .execute();
 
@@ -255,7 +264,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 command.subjectUuid(),
                 LoanStatus.PENDING,
                 command.scheduledAt(),
-                command.dueDate(),
+                resolveExpectedReturnAt(command.scheduledAt(), command.expectedReturnAt()),
                 current.createdAt(),
                 details
         );
@@ -318,47 +327,27 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
         }
 
         Long actorUserId = requireUserIdByUuid(command.actorUuid());
-        OffsetDateTime now = OffsetDateTime.now();
-
-        LoanStatusEnum targetStatus;
-        String reviewNotes = normalizeOptionalText(command.reviewNotes());
-        String rejectionReason = normalizeOptionalText(command.rejectionReason());
-        OffsetDateTime approvedAt = null;
+        String notes = normalizeOptionalText(command.notes());
 
         if (command.decision() == LoanReviewDecision.APPROVE) {
-            targetStatus = LoanStatusEnum.approved;
-            approvedAt = now;
-            rejectionReason = null;
+            callApproveLoanFunction(current.loanId(), actorUserId, notes);
         } else if (command.decision() == LoanReviewDecision.REJECT) {
-            targetStatus = LoanStatusEnum.rejected;
-            if (rejectionReason == null) {
-                throw new BadRequestException("LOAN_REJECTION_REASON_REQUIRED", "rejection_reason es obligatorio al rechazar");
+            if (notes == null) {
+                throw new BadRequestException("LOAN_REJECTION_NOTES_REQUIRED", "notes es obligatorio al rechazar");
             }
+            callLoanStatusChangeFunction(current.loanId(), actorUserId, LoanStatusEnum.rejected, notes);
         } else {
             throw new BadRequestException("LOAN_REVIEW_DECISION_INVALID", "decision invalida");
         }
 
-        int updated = dsl.update(LOAN)
-                .set(LOAN.STATUS, targetStatus)
-                .set(LOAN.REVIEW_NOTES, reviewNotes)
-                .set(LOAN.REJECTION_REASON, rejectionReason)
-                .set(LOAN.APPROVED_AT, approvedAt)
-                .where(LOAN.ID.eq(current.loanId()))
-                .execute();
+        return loadLoanAggregateById(current.loanId());
+    }
 
-        if (updated == 0) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "LOAN_REVIEW_FORBIDDEN", "No tienes permisos para revisar este prestamo");
-        }
-
-        dsl.insertInto(LOAN_STATUS_HISTORY)
-                .set(LOAN_STATUS_HISTORY.LOAN_ID, current.loanId())
-                .set(LOAN_STATUS_HISTORY.ACTOR_USER_ID, actorUserId)
-                .set(LOAN_STATUS_HISTORY.FROM_STATUS, toJooqStatus(current.status()))
-                .set(LOAN_STATUS_HISTORY.TO_STATUS, targetStatus)
-                .set(LOAN_STATUS_HISTORY.NOTES, reviewNotes != null ? reviewNotes : rejectionReason)
-                .set(LOAN_STATUS_HISTORY.CHANGED_AT, now)
-                .execute();
-
+    @Override
+    public LoanAggregate cancelLoan(LoanCancelCommand command) {
+        LoanRow current = requireLoanRowForUpdate(command.loanUuid());
+        Long actorUserId = requireUserIdByUuid(command.actorUuid());
+        callCancelLoanFunction(current.loanId(), actorUserId, normalizeOptionalText(command.notes()));
         return loadLoanAggregateById(current.loanId());
     }
 
@@ -369,8 +358,11 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
         }
 
         LoanRow current = requireLoanRowForUpdate(command.loanUuid());
-        if (current.status() != LoanStatus.APPROVED) {
-            throw new BadRequestException("LOAN_DELIVERY_INVALID_STATE", "Solo se puede entregar un prestamo en estado approved");
+        if (current.status() != LoanStatus.APPROVED && current.status() != LoanStatus.PREPARED) {
+            throw new BadRequestException(
+                    "LOAN_DELIVERY_INVALID_STATE",
+                    "Solo se puede entregar un prestamo en estado approved o prepared"
+            );
         }
 
         OffsetDateTime now = OffsetDateTime.now();
@@ -387,355 +379,141 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
 
         Long actorUserId = requireUserIdByUuid(command.actorUuid());
         Map<UUID, LoanDetailContext> detailByImplementUuid = fetchLoanDetailContextByImplementUuid(current.loanId());
+        Map<UUID, LoanDeliveryItem> requestedItems = toDeliveryItemMap(command.items(), detailByImplementUuid);
 
-        List<LoanStockMovement> stockMovements = new ArrayList<>();
-        Set<UUID> repeatedImplementRequests = new HashSet<>();
-
-        for (LoanDeliveryItem item : command.items()) {
-            UUID implementUuid = item.implementUuid();
-            if (implementUuid == null) {
-                throw new BadRequestException("LOAN_DELIVERY_IMPLEMENT_REQUIRED", "Cada item de entrega requiere implement_uuid");
-            }
-            if (!repeatedImplementRequests.add(implementUuid)) {
-                throw new BadRequestException("LOAN_DELIVERY_DUPLICATE_IMPLEMENT", "No puedes repetir implementos en la misma entrega");
+        for (LoanDetailContext detailContext : detailByImplementUuid.values()) {
+            int requiredQuantity = resolveRequiredDeliveryQuantity(detailContext);
+            if (requiredQuantity <= 0) {
+                throw new BadRequestException(
+                        "LOAN_DELIVERY_QUANTITY_INVALID",
+                        "Todas las lineas del prestamo deben tener cantidad reservada para preparar/entregar"
+                );
             }
 
-            LoanDetailContext detailContext = detailByImplementUuid.get(implementUuid);
-            if (detailContext == null) {
-                throw new BadRequestException("LOAN_DELIVERY_IMPLEMENT_NOT_REQUESTED", "El implemento no forma parte del prestamo");
+            LoanDeliveryItem requestedItem = requestedItems.get(detailContext.implementUuid());
+            if (requestedItem == null) {
+                throw new BadRequestException(
+                        "LOAN_DELIVERY_IMPLEMENT_MISSING",
+                        "Debes incluir todos los implementos solicitados para la entrega"
+                );
             }
 
-            int outstanding = detailContext.requestedQuantity() - detailContext.deliveredQuantity();
-            if (outstanding <= 0) {
-                throw new BadRequestException("LOAN_DELIVERY_ALREADY_COMPLETE", "El implemento ya fue entregado completamente");
-            }
-
-            if (detailContext.itemType() == ItemTypeEnum.no_fungible) {
-                List<String> normalizedAssetCodes = normalizeAssetCodes(item.assetCodes());
-                int qty = normalizedAssetCodes.size();
-                if (qty > outstanding) {
-                    throw new BadRequestException("LOAN_DELIVERY_QUANTITY_EXCEEDED", "La entrega supera lo solicitado para el implemento");
-                }
-
-                List<IndividualSelection> selectedIndividuals = fetchAvailableIndividualsByAssetCodes(detailContext.implementId(), normalizedAssetCodes);
-                if (selectedIndividuals.size() != normalizedAssetCodes.size()) {
-                    throw new BadRequestException("LOAN_DELIVERY_INDIVIDUAL_INVALID", "Algunos asset_codes no existen, no pertenecen al implemento o no estan disponibles");
-                }
-
-                int insertedLinks = 0;
-                for (IndividualSelection selected : selectedIndividuals) {
-                    insertedLinks += dsl.insertInto(LOAN_DETAIL_INDIVIDUAL)
-                            .set(LOAN_DETAIL_INDIVIDUAL.LOAN_ID, current.loanId())
-                            .set(LOAN_DETAIL_INDIVIDUAL.IMPLEMENT_ID, detailContext.implementId())
-                            .set(LOAN_DETAIL_INDIVIDUAL.INDIVIDUAL_ID, selected.individualId())
-                            .onConflictDoNothing()
-                            .execute();
-                }
-                if (insertedLinks != selectedIndividuals.size()) {
-                    throw new BadRequestException("LOAN_DELIVERY_INDIVIDUAL_DUPLICATE", "Uno o mas individuales ya estaban vinculados al prestamo");
-                }
-
-                incrementLoanDetailDeliveryCounters(current.loanId(), detailContext.implementId(), qty, outstanding);
-                stockMovements.add(new LoanStockMovement(
-                        detailContext.implementUuid(),
-                        "LOAN_DELIVERY",
-                        qty,
-                        selectedIndividuals.stream().map(IndividualSelection::individualUuid).toList(),
-                        null
-                ));
-            } else {
-                Integer quantity = item.quantity();
-                if (quantity == null || quantity <= 0) {
-                    throw new BadRequestException("LOAN_DELIVERY_QUANTITY_REQUIRED", "quantity es obligatorio para implementos fungible");
-                }
-                if (quantity > outstanding) {
-                    throw new BadRequestException("LOAN_DELIVERY_QUANTITY_EXCEEDED", "La entrega supera lo solicitado para el implemento");
-                }
-
-                incrementLoanDetailDeliveryCounters(current.loanId(), detailContext.implementId(), quantity, outstanding);
-                stockMovements.add(new LoanStockMovement(
-                        detailContext.implementUuid(),
-                        "LOAN_DELIVERY",
-                        quantity,
-                        List.of(),
-                        null
-                ));
+            if (detailContext.itemType() == ItemTypeEnum.individual) {
+                assignIndividualsForDelivery(current.loanId(), detailContext, requestedItem, requiredQuantity);
+            } else if (requestedItem.quantity() != null && !requestedItem.quantity().equals(requiredQuantity)) {
+                throw new BadRequestException(
+                        "LOAN_DELIVERY_QUANTITY_MISMATCH",
+                        "La cantidad indicada no coincide con la cantidad reservada para el implemento"
+                );
             }
         }
 
-        int statusUpdated = dsl.update(LOAN)
-                .set(LOAN.STATUS, LoanStatusEnum.delivered)
-                .set(LOAN.DELIVERED_AT, now)
-                .where(LOAN.ID.eq(current.loanId()))
-                .execute();
-
-        if (statusUpdated == 0) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "LOAN_DELIVERY_FORBIDDEN", "No tienes permisos para entregar este prestamo");
+        if (current.status() == LoanStatus.APPROVED) {
+            callPrepareLoanFunction(current.loanId(), actorUserId, "Preparado para entrega");
         }
+        callDeliverLoanFunction(current.loanId(), actorUserId, "Entrega registrada en panol");
 
-        dsl.insertInto(LOAN_STATUS_HISTORY)
-                .set(LOAN_STATUS_HISTORY.LOAN_ID, current.loanId())
-                .set(LOAN_STATUS_HISTORY.ACTOR_USER_ID, actorUserId)
-                .set(LOAN_STATUS_HISTORY.FROM_STATUS, toJooqStatus(current.status()))
-                .set(LOAN_STATUS_HISTORY.TO_STATUS, LoanStatusEnum.delivered)
-                .set(LOAN_STATUS_HISTORY.NOTES, "Entrega registrada en pañol")
-                .set(LOAN_STATUS_HISTORY.CHANGED_AT, now)
-                .execute();
-
-        return new LoanDeliveryResult(loadLoanAggregateById(current.loanId()), stockMovements);
+        return new LoanDeliveryResult(loadLoanAggregateById(current.loanId()));
     }
 
     @Override
     public LoanReturnResult completeLoan(LoanCompleteCommand command) {
         LoanRow current = requireLoanRowForUpdate(command.loanUuid());
-        if (current.status() != LoanStatus.DELIVERED) {
-            throw new BadRequestException("LOAN_COMPLETE_INVALID_STATE", "Solo se puede completar un prestamo en estado delivered");
+        if (current.status() != LoanStatus.DELIVERED && current.status() != LoanStatus.OVERDUE) {
+            throw new BadRequestException(
+                    "LOAN_COMPLETE_INVALID_STATE",
+                    "Solo se puede completar un prestamo en estado delivered o overdue"
+            );
         }
 
         Long actorUserId = requireUserIdByUuid(command.actorUuid());
-        OffsetDateTime now = OffsetDateTime.now();
-        List<LoanStockMovement> stockMovements = new ArrayList<>();
+        List<LoanReturnPayloadItem> payloadItems = buildFullReturnAsGoodPayload(current.loanId());
+        callCompleteLoanFunction(current.loanId(), actorUserId, "Prestamo completado por coordinador", payloadItems);
 
-        Map<UUID, List<UUID>> pendingIndividualsByImplement = new LinkedHashMap<>();
-        dsl.select(IMPLEMENT.UUID, INDIVIDUAL.UUID)
-                .from(LOAN_DETAIL_INDIVIDUAL)
-                .join(IMPLEMENT).on(IMPLEMENT.ID.eq(LOAN_DETAIL_INDIVIDUAL.IMPLEMENT_ID))
-                .join(INDIVIDUAL).on(INDIVIDUAL.ID.eq(LOAN_DETAIL_INDIVIDUAL.INDIVIDUAL_ID))
-                .where(
-                        LOAN_DETAIL_INDIVIDUAL.LOAN_ID.eq(current.loanId())
-                                .and(LOAN_DETAIL_INDIVIDUAL.RETURNED_AT.isNull())
-                )
-                .forUpdate()
-                .fetch(record -> {
-                    UUID implementUuid = record.get(IMPLEMENT.UUID);
-                    UUID individualUuid = record.get(INDIVIDUAL.UUID);
-                    if (implementUuid == null || individualUuid == null) {
-                        return null;
-                    }
-                    pendingIndividualsByImplement
-                            .computeIfAbsent(implementUuid, ignored -> new ArrayList<>())
-                            .add(individualUuid);
-                    return null;
-                });
-
-        if (!pendingIndividualsByImplement.isEmpty()) {
-            dsl.update(LOAN_DETAIL_INDIVIDUAL)
-                    .set(LOAN_DETAIL_INDIVIDUAL.RETURN_CONDITION, IndividualConditionEnum.good)
-                    .set(LOAN_DETAIL_INDIVIDUAL.RETURNED_AT, now)
-                    .where(
-                            LOAN_DETAIL_INDIVIDUAL.LOAN_ID.eq(current.loanId())
-                                    .and(LOAN_DETAIL_INDIVIDUAL.RETURNED_AT.isNull())
-                    )
-                    .execute();
-
-            for (Map.Entry<UUID, List<UUID>> entry : pendingIndividualsByImplement.entrySet()) {
-                List<UUID> individualUuids = entry.getValue();
-                stockMovements.add(new LoanStockMovement(
-                        entry.getKey(),
-                        "LOAN_RETURN",
-                        individualUuids.size(),
-                        List.copyOf(individualUuids),
-                        "good"
-                ));
-            }
-        }
-
-        dsl.select(IMPLEMENT.UUID, LOAN_DETAIL.DELIVERED_QUANTITY)
-                .from(LOAN_DETAIL)
-                .join(IMPLEMENT).on(IMPLEMENT.ID.eq(LOAN_DETAIL.IMPLEMENT_ID))
-                .where(
-                        LOAN_DETAIL.LOAN_ID.eq(current.loanId())
-                                .and(IMPLEMENT.ITEM_TYPE.eq(ItemTypeEnum.fungible))
-                                .and(LOAN_DETAIL.DELIVERED_QUANTITY.gt(0))
-                )
-                .fetch(record -> {
-                    UUID implementUuid = record.get(IMPLEMENT.UUID);
-                    Integer deliveredQuantity = record.get(LOAN_DETAIL.DELIVERED_QUANTITY);
-                    int qty = safe(deliveredQuantity);
-                    if (implementUuid == null || qty <= 0) {
-                        return null;
-                    }
-                    stockMovements.add(new LoanStockMovement(
-                            implementUuid,
-                            "LOAN_RETURN",
-                            qty,
-                            List.of(),
-                            null
-                    ));
-                    return null;
-                });
-
-        int updated = dsl.update(LOAN)
-                .set(LOAN.STATUS, LoanStatusEnum.completed)
-                .set(LOAN.COMPLETED_AT, now)
-                .where(LOAN.ID.eq(current.loanId()))
-                .execute();
-
-        if (updated == 0) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "LOAN_COMPLETE_FORBIDDEN", "No tienes permisos para completar este prestamo");
-        }
-
-        dsl.insertInto(LOAN_STATUS_HISTORY)
-                .set(LOAN_STATUS_HISTORY.LOAN_ID, current.loanId())
-                .set(LOAN_STATUS_HISTORY.ACTOR_USER_ID, actorUserId)
-                .set(LOAN_STATUS_HISTORY.FROM_STATUS, toJooqStatus(current.status()))
-                .set(LOAN_STATUS_HISTORY.TO_STATUS, LoanStatusEnum.completed)
-                .set(LOAN_STATUS_HISTORY.NOTES, "Prestamo completado por coordinador")
-                .set(LOAN_STATUS_HISTORY.CHANGED_AT, now)
-                .execute();
-
-        return new LoanReturnResult(loadLoanAggregateById(current.loanId()), stockMovements);
+        return new LoanReturnResult(loadLoanAggregateById(current.loanId()));
     }
 
     @Override
     public LoanReturnResult returnLoan(LoanReturnCommand command) {
         LoanRow current = requireLoanRowForUpdate(command.loanUuid());
-        if (current.status() != LoanStatus.DELIVERED) {
-            throw new BadRequestException("LOAN_RETURN_INVALID_STATE", "Solo se puede devolver un prestamo en estado delivered");
+        if (current.status() != LoanStatus.DELIVERED && current.status() != LoanStatus.OVERDUE) {
+            throw new BadRequestException(
+                    "LOAN_RETURN_INVALID_STATE",
+                    "Solo se puede devolver un prestamo en estado delivered o overdue"
+            );
         }
 
         Long actorUserId = requireUserIdByUuid(command.actorUuid());
-        Map<UUID, LoanDetailContext> detailByImplementUuid = fetchLoanDetailContextByImplementUuid(current.loanId());
-        Map<String, GroupedReturnMovement> groupedNoFungibleReturns = new LinkedHashMap<>();
-        List<LoanStockMovement> stockMovements = new ArrayList<>();
-        OffsetDateTime now = OffsetDateTime.now();
+        List<LoanReturnPayloadItem> payloadItems = buildReturnPayloadFromCommand(current.loanId(), command);
+        callCompleteLoanFunction(current.loanId(), actorUserId, "Retorno completo registrado", payloadItems);
 
-        List<LoanReturnIndividual> returnedIndividuals = command.returnedIndividuals() == null ? List.of() : command.returnedIndividuals();
-        Set<UUID> repeatedIndividuals = new HashSet<>();
-        for (LoanReturnIndividual returned : returnedIndividuals) {
-            if (returned.individualUuid() == null) {
-                throw new BadRequestException("LOAN_RETURN_INDIVIDUAL_REQUIRED", "individual_uuid es obligatorio para retornos no_fungible");
-            }
-            if (!repeatedIndividuals.add(returned.individualUuid())) {
-                throw new BadRequestException("LOAN_RETURN_INDIVIDUAL_DUPLICATE", "No puedes repetir individuales en el mismo retorno");
-            }
+        return new LoanReturnResult(loadLoanAggregateById(current.loanId()));
+    }
 
-            Long individualId = findIndividualIdByUuid(returned.individualUuid());
-            if (individualId == null) {
-                throw new BadRequestException("LOAN_RETURN_INDIVIDUAL_NOT_FOUND", "El individual no pertenece a este prestamo");
-            }
-
-            IndividualConditionEnum returnCondition = IndividualConditionEnum.lookupLiteral(normalizeCondition(returned.returnCondition()));
-            if (returnCondition == null) {
-                throw new BadRequestException("LOAN_RETURN_CONDITION_INVALID", "return_condition debe ser good, fair o poor");
-            }
-
-            var link = dsl.select(
-                            LOAN_DETAIL_INDIVIDUAL.LOAN_ID,
-                            LOAN_DETAIL_INDIVIDUAL.IMPLEMENT_ID,
-                            LOAN_DETAIL_INDIVIDUAL.INDIVIDUAL_ID,
-                            LOAN_DETAIL_INDIVIDUAL.RETURNED_AT,
-                            IMPLEMENT.UUID
-                    )
-                    .from(LOAN_DETAIL_INDIVIDUAL)
-                    .join(IMPLEMENT).on(IMPLEMENT.ID.eq(LOAN_DETAIL_INDIVIDUAL.IMPLEMENT_ID))
-                    .where(
-                            LOAN_DETAIL_INDIVIDUAL.LOAN_ID.eq(current.loanId())
-                                    .and(LOAN_DETAIL_INDIVIDUAL.INDIVIDUAL_ID.eq(individualId))
-                    )
-                    .forUpdate()
-                    .fetchOne();
-
-            if (link == null) {
-                throw new BadRequestException("LOAN_RETURN_INDIVIDUAL_NOT_FOUND", "El individual no pertenece a este prestamo");
-            }
-            if (link.get(LOAN_DETAIL_INDIVIDUAL.RETURNED_AT) != null) {
-                throw new BadRequestException("LOAN_RETURN_INDIVIDUAL_ALREADY_RETURNED", "El individual ya fue registrado como devuelto");
-            }
-
-            dsl.update(LOAN_DETAIL_INDIVIDUAL)
-                    .set(LOAN_DETAIL_INDIVIDUAL.RETURN_CONDITION, returnCondition)
-                    .set(LOAN_DETAIL_INDIVIDUAL.RETURNED_AT, now)
-                    .where(
-                            LOAN_DETAIL_INDIVIDUAL.LOAN_ID.eq(current.loanId())
-                                    .and(LOAN_DETAIL_INDIVIDUAL.INDIVIDUAL_ID.eq(link.get(LOAN_DETAIL_INDIVIDUAL.INDIVIDUAL_ID)))
-                    )
-                    .execute();
-
-            UUID implementUuid = link.get(IMPLEMENT.UUID);
-            String conditionLiteral = returnCondition.getLiteral();
-            String key = implementUuid + "|" + conditionLiteral;
-            GroupedReturnMovement grouped = groupedNoFungibleReturns.computeIfAbsent(
-                    key,
-                    ignored -> new GroupedReturnMovement(implementUuid, conditionLiteral, new ArrayList<>())
-            );
-            grouped.individualUuids().add(returned.individualUuid());
-        }
-
-        for (GroupedReturnMovement grouped : groupedNoFungibleReturns.values()) {
-            stockMovements.add(new LoanStockMovement(
-                    grouped.implementUuid(),
-                    "LOAN_RETURN",
-                    grouped.individualUuids().size(),
-                    List.copyOf(grouped.individualUuids()),
-                    grouped.condition()
-            ));
-        }
-
-        List<LoanReturnFungibleItem> fungibleReturns = command.fungibleReturns() == null ? List.of() : command.fungibleReturns();
-        Set<UUID> repeatedFungible = new HashSet<>();
-        for (LoanReturnFungibleItem fungibleReturn : fungibleReturns) {
-            if (fungibleReturn.implementUuid() == null) {
-                throw new BadRequestException("LOAN_RETURN_FUNGIBLE_IMPLEMENT_REQUIRED", "implement_uuid es obligatorio para retornos fungible");
-            }
-            if (!repeatedFungible.add(fungibleReturn.implementUuid())) {
-                throw new BadRequestException("LOAN_RETURN_FUNGIBLE_DUPLICATE", "No puedes repetir implementos fungible en el mismo retorno");
-            }
-            if (fungibleReturn.quantity() == null || fungibleReturn.quantity() <= 0) {
-                throw new BadRequestException("LOAN_RETURN_FUNGIBLE_QUANTITY_INVALID", "quantity debe ser mayor a cero");
-            }
-
-            LoanDetailContext detail = detailByImplementUuid.get(fungibleReturn.implementUuid());
-            if (detail == null) {
-                throw new BadRequestException("LOAN_RETURN_FUNGIBLE_NOT_REQUESTED", "El implemento fungible no forma parte del prestamo");
-            }
-            if (detail.itemType() != ItemTypeEnum.fungible) {
-                throw new BadRequestException("LOAN_RETURN_FUNGIBLE_TYPE_INVALID", "El implemento indicado no es de tipo fungible");
-            }
-
-            stockMovements.add(new LoanStockMovement(
-                    detail.implementUuid(),
-                    "LOAN_RETURN",
-                    fungibleReturn.quantity(),
-                    List.of(),
-                    null
-            ));
-        }
-
-        Integer pendingNoFungible = dsl.selectCount()
-                .from(LOAN_DETAIL_INDIVIDUAL)
-                .join(IMPLEMENT).on(IMPLEMENT.ID.eq(LOAN_DETAIL_INDIVIDUAL.IMPLEMENT_ID))
-                .where(
-                        LOAN_DETAIL_INDIVIDUAL.LOAN_ID.eq(current.loanId())
-                                .and(IMPLEMENT.ITEM_TYPE.eq(ItemTypeEnum.no_fungible))
-                                .and(LOAN_DETAIL_INDIVIDUAL.RETURNED_AT.isNull())
+    @Override
+    public Optional<LoanStateDatesView> findLoanStateDatesByUuid(UUID loanUuid) {
+        Record record = dsl.select(
+                        V_LOAN_STATE_DATES.APPROVED_AT,
+                        V_LOAN_STATE_DATES.PREPARED_AT,
+                        V_LOAN_STATE_DATES.DELIVERED_AT,
+                        V_LOAN_STATE_DATES.COMPLETED_AT,
+                        V_LOAN_STATE_DATES.REJECTED_AT,
+                        V_LOAN_STATE_DATES.CANCELLED_AT,
+                        V_LOAN_STATE_DATES.EXPIRED_AT,
+                        V_LOAN_STATE_DATES.OVERDUE_AT
                 )
-                .fetchOne(0, Integer.class);
+                .from(LOAN)
+                .leftJoin(V_LOAN_STATE_DATES).on(V_LOAN_STATE_DATES.LOAN_ID.eq(LOAN.ID))
+                .where(LOAN.UUID.eq(loanUuid))
+                .fetchOne();
 
-        if (pendingNoFungible != null && pendingNoFungible > 0) {
-            throw new BadRequestException("LOAN_RETURN_PENDING_INDIVIDUALS", "Aun existen individuales entregados sin retorno registrado");
+        if (record == null) {
+            return Optional.empty();
         }
 
-        int updated = dsl.update(LOAN)
-                .set(LOAN.STATUS, LoanStatusEnum.completed)
-                .set(LOAN.COMPLETED_AT, now)
-                .where(LOAN.ID.eq(current.loanId()))
-                .execute();
+        return Optional.of(new LoanStateDatesView(
+                record.get(V_LOAN_STATE_DATES.APPROVED_AT),
+                record.get(V_LOAN_STATE_DATES.PREPARED_AT),
+                record.get(V_LOAN_STATE_DATES.DELIVERED_AT),
+                record.get(V_LOAN_STATE_DATES.COMPLETED_AT),
+                record.get(V_LOAN_STATE_DATES.REJECTED_AT),
+                record.get(V_LOAN_STATE_DATES.CANCELLED_AT),
+                record.get(V_LOAN_STATE_DATES.EXPIRED_AT),
+                record.get(V_LOAN_STATE_DATES.OVERDUE_AT)
+        ));
+    }
 
-        if (updated == 0) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "LOAN_RETURN_FORBIDDEN", "No tienes permisos para cerrar este prestamo");
-        }
+    @Override
+    public List<LoanStatusTimelineEntry> findLoanStatusTimelineByUuid(UUID loanUuid) {
+        return dsl.selectFrom(V_LOAN_STATUS_TIMELINE)
+                .where(V_LOAN_STATUS_TIMELINE.LOAN_UUID.eq(loanUuid))
+                .orderBy(V_LOAN_STATUS_TIMELINE.CHANGED_AT.asc(), V_LOAN_STATUS_TIMELINE.HISTORY_ID.asc())
+                .fetch(record -> new LoanStatusTimelineEntry(
+                        record.get(V_LOAN_STATUS_TIMELINE.HISTORY_ID),
+                        toDomainStatusNullable(record.get(V_LOAN_STATUS_TIMELINE.FROM_STATUS)),
+                        toDomainStatus(record.get(V_LOAN_STATUS_TIMELINE.TO_STATUS)),
+                        record.get(V_LOAN_STATUS_TIMELINE.ACTOR_USER_ID),
+                        record.get(V_LOAN_STATUS_TIMELINE.ACTOR_NAME),
+                        record.get(V_LOAN_STATUS_TIMELINE.ACTOR_EMAIL),
+                        record.get(V_LOAN_STATUS_TIMELINE.NOTES),
+                        record.get(V_LOAN_STATUS_TIMELINE.CHANGED_AT)
+                ));
+    }
 
-        dsl.insertInto(LOAN_STATUS_HISTORY)
-                .set(LOAN_STATUS_HISTORY.LOAN_ID, current.loanId())
-                .set(LOAN_STATUS_HISTORY.ACTOR_USER_ID, actorUserId)
-                .set(LOAN_STATUS_HISTORY.FROM_STATUS, toJooqStatus(current.status()))
-                .set(LOAN_STATUS_HISTORY.TO_STATUS, LoanStatusEnum.completed)
-                .set(LOAN_STATUS_HISTORY.NOTES, "Retorno completo registrado")
-                .set(LOAN_STATUS_HISTORY.CHANGED_AT, now)
-                .execute();
+    @Override
+    public int markOverdueLoans(UUID actorUuid, OffsetDateTime currentTime) {
+        Long actorUserId = requireUserIdByUuid(actorUuid);
+        return callMarkOverdueLoansFunction(actorUserId, currentTime == null ? OffsetDateTime.now() : currentTime);
+    }
 
-        return new LoanReturnResult(loadLoanAggregateById(current.loanId()), stockMovements);
+    @Override
+    public int expirePendingLoans(UUID actorUuid, OffsetDateTime currentTime, int graceMinutes) {
+        Long actorUserId = requireUserIdByUuid(actorUuid);
+        return callExpirePendingLoansFunction(
+                actorUserId,
+                currentTime == null ? OffsetDateTime.now() : currentTime,
+                Math.max(0, graceMinutes)
+        );
     }
 
     private LoanAggregate loadLoanAggregateById(Long loanId) {
@@ -762,6 +540,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                         requesterUuidField,
                         LOAN.STATUS,
                         LOAN.SCHEDULED_AT,
+                        LOAN.EXPECTED_RETURN_AT,
                         LOAN.CREATED_AT,
                         roomUuidField,
                         roomNameField,
@@ -782,6 +561,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                     record.get(requesterUuidField),
                     toDomainStatus(record.get(LOAN.STATUS)),
                     record.get(LOAN.SCHEDULED_AT),
+                    record.get(LOAN.EXPECTED_RETURN_AT),
                     record.get(LOAN.CREATED_AT),
                     record.get(roomUuidField),
                     record.get(roomNameField),
@@ -796,6 +576,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                     record.get(requesterUuidField),
                     toDomainStatus(record.get(LOAN.STATUS)),
                     record.get(LOAN.SCHEDULED_AT),
+                    record.get(LOAN.EXPECTED_RETURN_AT),
                     record.get(LOAN.CREATED_AT),
                     record.get(roomUuidField),
                     record.get(roomNameField),
@@ -810,6 +591,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                     record.get(requesterUuidField),
                     toDomainStatus(record.get(LOAN.STATUS)),
                     record.get(LOAN.SCHEDULED_AT),
+                    record.get(LOAN.EXPECTED_RETURN_AT),
                     record.get(LOAN.CREATED_AT),
                     record.get(roomUuidField),
                     record.get(roomNameField),
@@ -824,6 +606,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                         record.get(requesterUuidField),
                         toDomainStatus(record.get(LOAN.STATUS)),
                         record.get(LOAN.SCHEDULED_AT),
+                        record.get(LOAN.EXPECTED_RETURN_AT),
                         record.get(LOAN.CREATED_AT),
                         record.get(roomUuidField),
                         record.get(roomNameField),
@@ -868,7 +651,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                         subjectUuidField,
                         LOAN.STATUS,
                         LOAN.SCHEDULED_AT,
-                        LOAN.DUE_DATE,
+                        LOAN.EXPECTED_RETURN_AT,
                         LOAN.CREATED_AT
                 )
                 .from(LOAN)
@@ -892,7 +675,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 record.get(subjectUuidField),
                 toDomainStatus(record.get(LOAN.STATUS)),
                 record.get(LOAN.SCHEDULED_AT),
-                record.get(LOAN.DUE_DATE),
+                record.get(LOAN.EXPECTED_RETURN_AT),
                 record.get(LOAN.CREATED_AT)
         );
     }
@@ -915,7 +698,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                         subjectUuidField,
                         LOAN.STATUS,
                         LOAN.SCHEDULED_AT,
-                        LOAN.DUE_DATE,
+                        LOAN.EXPECTED_RETURN_AT,
                         LOAN.CREATED_AT
                 )
                 .from(LOAN)
@@ -932,7 +715,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                         record.get(subjectUuidField),
                         toDomainStatus(record.get(LOAN.STATUS)),
                         record.get(LOAN.SCHEDULED_AT),
-                        record.get(LOAN.DUE_DATE),
+                        record.get(LOAN.EXPECTED_RETURN_AT),
                         record.get(LOAN.CREATED_AT)
                 ));
     }
@@ -1053,22 +836,114 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 ));
     }
 
-    private void incrementLoanDetailDeliveryCounters(Long loanId, Long implementId, int qty, int outstanding) {
-        if (qty <= 0) {
-            throw new BadRequestException("LOAN_DELIVERY_QUANTITY_INVALID", "La cantidad de entrega debe ser mayor a cero");
-        }
-        if (qty > outstanding) {
-            throw new BadRequestException("LOAN_DELIVERY_QUANTITY_EXCEEDED", "La entrega supera la cantidad pendiente");
+    private List<IndividualSelection> fetchAvailableIndividuals(Long implementId, int limit) {
+        if (limit <= 0) {
+            return List.of();
         }
 
-        dsl.update(LOAN_DETAIL)
-                .set(LOAN_DETAIL.RESERVED_QUANTITY, LOAN_DETAIL.RESERVED_QUANTITY.add(qty))
-                .set(LOAN_DETAIL.DELIVERED_QUANTITY, LOAN_DETAIL.DELIVERED_QUANTITY.add(qty))
+        return dsl.select(INDIVIDUAL.ID, INDIVIDUAL.UUID, INDIVIDUAL.ASSET_CODE)
+                .from(INDIVIDUAL)
                 .where(
-                        LOAN_DETAIL.LOAN_ID.eq(loanId)
-                                .and(LOAN_DETAIL.IMPLEMENT_ID.eq(implementId))
+                        INDIVIDUAL.IMPLEMENT_ID.eq(implementId)
+                                .and(INDIVIDUAL.ACTIVE.isTrue())
+                                .and(INDIVIDUAL.STATUS.eq(IndividualStatusEnum.available))
+                )
+                .orderBy(INDIVIDUAL.ID.asc())
+                .limit(limit)
+                .fetch(record -> new IndividualSelection(
+                        record.get(INDIVIDUAL.ID),
+                        record.get(INDIVIDUAL.UUID),
+                        record.get(INDIVIDUAL.ASSET_CODE)
+                ));
+    }
+
+    private Map<UUID, LoanDeliveryItem> toDeliveryItemMap(
+            List<LoanDeliveryItem> items,
+            Map<UUID, LoanDetailContext> detailByImplementUuid
+    ) {
+        Map<UUID, LoanDeliveryItem> mapped = new LinkedHashMap<>();
+        for (LoanDeliveryItem item : items) {
+            if (item == null || item.implementUuid() == null) {
+                throw new BadRequestException("LOAN_DELIVERY_IMPLEMENT_REQUIRED", "Cada item de entrega requiere implement_uuid");
+            }
+            if (!detailByImplementUuid.containsKey(item.implementUuid())) {
+                throw new BadRequestException("LOAN_DELIVERY_IMPLEMENT_NOT_REQUESTED", "El implemento no forma parte del prestamo");
+            }
+            if (mapped.putIfAbsent(item.implementUuid(), item) != null) {
+                throw new BadRequestException("LOAN_DELIVERY_DUPLICATE_IMPLEMENT", "No puedes repetir implementos en la misma entrega");
+            }
+        }
+        return mapped;
+    }
+
+    private int resolveRequiredDeliveryQuantity(LoanDetailContext detailContext) {
+        int reserved = detailContext.reservedQuantity();
+        if (reserved > 0) {
+            return reserved;
+        }
+        return detailContext.requestedQuantity();
+    }
+
+    private void assignIndividualsForDelivery(
+            Long loanId,
+            LoanDetailContext detailContext,
+            LoanDeliveryItem requestedItem,
+            int requiredQuantity
+    ) {
+        List<IndividualSelection> selectedIndividuals;
+
+        if (requestedItem.assetCodes() != null && !requestedItem.assetCodes().isEmpty()) {
+            List<String> normalizedAssetCodes = normalizeAssetCodes(requestedItem.assetCodes());
+            if (normalizedAssetCodes.size() != requiredQuantity) {
+                throw new BadRequestException(
+                        "LOAN_DELIVERY_ASSET_CODES_QUANTITY_MISMATCH",
+                        "La cantidad de asset_codes debe coincidir con la cantidad requerida del implemento"
+                );
+            }
+            selectedIndividuals = fetchAvailableIndividualsByAssetCodes(detailContext.implementId(), normalizedAssetCodes);
+            if (selectedIndividuals.size() != normalizedAssetCodes.size()) {
+                throw new BadRequestException(
+                        "LOAN_DELIVERY_INDIVIDUAL_INVALID",
+                        "Algunos asset_codes no existen, no pertenecen al implemento o no estan disponibles"
+                );
+            }
+        } else {
+            selectedIndividuals = fetchAvailableIndividuals(detailContext.implementId(), requiredQuantity);
+            if (selectedIndividuals.size() != requiredQuantity) {
+                throw new BadRequestException(
+                        "LOAN_DELIVERY_INDIVIDUAL_SHORTAGE",
+                        "No hay suficientes individuales disponibles para completar la entrega"
+                );
+            }
+        }
+
+        dsl.deleteFrom(LOAN_DETAIL_INDIVIDUAL)
+                .where(
+                        LOAN_DETAIL_INDIVIDUAL.LOAN_ID.eq(loanId)
+                                .and(LOAN_DETAIL_INDIVIDUAL.IMPLEMENT_ID.eq(detailContext.implementId()))
+                                .and(LOAN_DETAIL_INDIVIDUAL.ALLOCATION_STATUS.in(
+                                        IndividualAllocationStatusEnum.reserved,
+                                        IndividualAllocationStatusEnum.prepared
+                                ))
                 )
                 .execute();
+
+        int insertedLinks = 0;
+        for (IndividualSelection selected : selectedIndividuals) {
+            insertedLinks += dsl.insertInto(LOAN_DETAIL_INDIVIDUAL)
+                    .set(LOAN_DETAIL_INDIVIDUAL.LOAN_ID, loanId)
+                    .set(LOAN_DETAIL_INDIVIDUAL.IMPLEMENT_ID, detailContext.implementId())
+                    .set(LOAN_DETAIL_INDIVIDUAL.INDIVIDUAL_ID, selected.individualId())
+                    .set(LOAN_DETAIL_INDIVIDUAL.ALLOCATION_STATUS, IndividualAllocationStatusEnum.reserved)
+                    .onConflictDoNothing()
+                    .execute();
+        }
+        if (insertedLinks != selectedIndividuals.size()) {
+            throw new BadRequestException(
+                    "LOAN_DELIVERY_INDIVIDUAL_DUPLICATE",
+                    "Uno o mas individuales ya estaban vinculados al prestamo"
+            );
+        }
     }
 
     private List<LoanDetailItem> insertLoanDetails(Long loanId, List<LoanRequestedItem> requestedItems) {
@@ -1105,7 +980,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 row.subjectUuid(),
                 row.status(),
                 row.scheduledAt(),
-                row.dueDate(),
+                row.expectedReturnAt(),
                 row.createdAt(),
                 details
         );
@@ -1124,11 +999,456 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 row.requesterUuid(),
                 row.status(),
                 row.scheduledAt(),
+                row.expectedReturnAt(),
                 row.createdAt(),
                 room,
                 subject,
                 items
         );
+    }
+
+    private void callCancelLoanFunction(Long loanId, Long actorUserId, String notes) {
+        try {
+            dsl.fetch(
+                    "select * from public.fn_cancel_loan(?::bigint, ?::bigint, ?::text)",
+                    loanId,
+                    actorUserId,
+                    notes
+            );
+        } catch (org.jooq.exception.DataAccessException ex) {
+            throw mapLoanFunctionException(
+                    ex,
+                    "LOAN_CANCEL_FAILED",
+                    "No fue posible cancelar el prestamo"
+            );
+        }
+    }
+
+    private void callApproveLoanFunction(Long loanId, Long actorUserId, String notes) {
+        try {
+            dsl.fetch(
+                    "select * from public.fn_approve_loan(?::bigint, ?::bigint, ?::text)",
+                    loanId,
+                    actorUserId,
+                    notes
+            );
+        } catch (org.jooq.exception.DataAccessException ex) {
+            throw mapLoanFunctionException(
+                    ex,
+                    "LOAN_REVIEW_APPROVE_FAILED",
+                    "No fue posible aprobar el prestamo"
+            );
+        }
+    }
+
+    private void callPrepareLoanFunction(Long loanId, Long actorUserId, String notes) {
+        try {
+            dsl.fetch(
+                    "select * from public.fn_prepare_loan(?::bigint, ?::bigint, ?::text)",
+                    loanId,
+                    actorUserId,
+                    notes
+            );
+        } catch (org.jooq.exception.DataAccessException ex) {
+            throw mapLoanFunctionException(
+                    ex,
+                    "LOAN_PREPARE_FAILED",
+                    "No fue posible preparar el prestamo"
+            );
+        }
+    }
+
+    private void callDeliverLoanFunction(Long loanId, Long actorUserId, String notes) {
+        try {
+            dsl.fetch(
+                    "select * from public.fn_deliver_loan(?::bigint, ?::bigint, ?::text)",
+                    loanId,
+                    actorUserId,
+                    notes
+            );
+        } catch (org.jooq.exception.DataAccessException ex) {
+            throw mapLoanFunctionException(
+                    ex,
+                    "LOAN_DELIVERY_FAILED",
+                    "No fue posible entregar el prestamo"
+            );
+        }
+    }
+
+    private void callCompleteLoanFunction(
+            Long loanId,
+            Long actorUserId,
+            String notes,
+            List<LoanReturnPayloadItem> payloadItems
+    ) {
+        try {
+            dsl.fetch(
+                    "select * from public.fn_complete_loan(?::bigint, ?::bigint, ?::text, ?::jsonb)",
+                    loanId,
+                    actorUserId,
+                    notes,
+                    toJsonbPayload(payloadItems)
+            );
+        } catch (org.jooq.exception.DataAccessException ex) {
+            throw mapLoanFunctionException(
+                    ex,
+                    "LOAN_COMPLETE_FAILED",
+                    "No fue posible completar el prestamo"
+            );
+        }
+    }
+
+    private void callLoanStatusChangeFunction(Long loanId, Long actorUserId, LoanStatusEnum status, String notes) {
+        try {
+            dsl.fetch(
+                    "select * from public.fn_loan_change_status(?::bigint, ?::loan_status_enum, ?::bigint, ?::text)",
+                    loanId,
+                    status.getLiteral(),
+                    actorUserId,
+                    notes
+            );
+        } catch (org.jooq.exception.DataAccessException ex) {
+            throw mapLoanFunctionException(
+                    ex,
+                    "LOAN_STATUS_CHANGE_FAILED",
+                    "No fue posible cambiar el estado del prestamo"
+            );
+        }
+    }
+
+    private int callMarkOverdueLoansFunction(Long actorUserId, OffsetDateTime currentTime) {
+        try {
+            Record record = dsl.fetchOne(
+                    "select overdue_count from public.fn_mark_overdue_loans(?::bigint, ?::timestamptz)",
+                    actorUserId,
+                    currentTime
+            );
+            Integer overdueCount = record == null ? 0 : record.get("overdue_count", Integer.class);
+            return overdueCount == null ? 0 : overdueCount;
+        } catch (org.jooq.exception.DataAccessException ex) {
+            throw mapLoanFunctionException(
+                    ex,
+                    "LOAN_MARK_OVERDUE_FAILED",
+                    "No fue posible marcar prestamos overdue"
+            );
+        }
+    }
+
+    private int callExpirePendingLoansFunction(Long actorUserId, OffsetDateTime currentTime, int graceMinutes) {
+        try {
+            Record record = dsl.fetchOne(
+                    "select expired_count from public.fn_expire_pending_loans(?::bigint, ?::timestamptz, ?::integer)",
+                    actorUserId,
+                    currentTime,
+                    graceMinutes
+            );
+            Integer expiredCount = record == null ? 0 : record.get("expired_count", Integer.class);
+            return expiredCount == null ? 0 : expiredCount;
+        } catch (org.jooq.exception.DataAccessException ex) {
+            throw mapLoanFunctionException(
+                    ex,
+                    "LOAN_EXPIRE_PENDING_FAILED",
+                    "No fue posible expirar prestamos pendientes"
+            );
+        }
+    }
+
+    private List<LoanReturnPayloadItem> buildFullReturnAsGoodPayload(Long loanId) {
+        Map<UUID, LoanDetailContext> detailByImplement = fetchLoanDetailContextByImplementUuid(loanId);
+        if (detailByImplement.isEmpty()) {
+            throw new BadRequestException("LOAN_COMPLETE_EMPTY", "El prestamo no tiene implementos para completar");
+        }
+
+        List<LoanReturnPayloadItem> payloadItems = new ArrayList<>();
+        for (LoanDetailContext detail : detailByImplement.values()) {
+            int deliveredQuantity = detail.deliveredQuantity();
+            if (deliveredQuantity < 0) {
+                throw new BadRequestException("LOAN_COMPLETE_INVALID_DETAIL", "El prestamo contiene cantidades invalidas");
+            }
+            payloadItems.add(new LoanReturnPayloadItem(
+                    detail.implementId(),
+                    deliveredQuantity,
+                    0,
+                    0,
+                    0,
+                    0,
+                    null
+            ));
+        }
+        return payloadItems;
+    }
+
+    private List<LoanReturnPayloadItem> buildReturnPayloadFromCommand(Long loanId, LoanReturnCommand command) {
+        Map<UUID, LoanDetailContext> detailByImplement = fetchLoanDetailContextByImplementUuid(loanId);
+        if (detailByImplement.isEmpty()) {
+            throw new BadRequestException("LOAN_RETURN_EMPTY_DETAIL", "El prestamo no tiene implementos asociados");
+        }
+
+        List<LoanReturnIndividual> returnedIndividuals = command.returnedIndividuals() == null
+                ? List.of()
+                : command.returnedIndividuals();
+        List<LoanReturnConsumableItem> consumableReturns = command.consumableReturns() == null
+                ? List.of()
+                : command.consumableReturns();
+
+        Map<UUID, MutableReturnBreakdown> individualBreakdownByImplement = buildIndividualBreakdownByImplement(
+                loanId,
+                returnedIndividuals,
+                detailByImplement
+        );
+        Map<UUID, Integer> returnedConsumableByImplement = buildConsumableReturnMap(consumableReturns, detailByImplement);
+
+        List<LoanReturnPayloadItem> payloadItems = new ArrayList<>();
+        for (LoanDetailContext detail : detailByImplement.values()) {
+            int deliveredQuantity = detail.deliveredQuantity();
+            if (detail.itemType() == ItemTypeEnum.individual) {
+                MutableReturnBreakdown breakdown = individualBreakdownByImplement.getOrDefault(
+                        detail.implementUuid(),
+                        new MutableReturnBreakdown()
+                );
+
+                if (breakdown.total() != deliveredQuantity) {
+                    throw new BadRequestException(
+                            "LOAN_RETURN_PENDING_INDIVIDUALS",
+                            "Debes registrar el retorno de todos los individuales entregados"
+                    );
+                }
+
+                payloadItems.add(new LoanReturnPayloadItem(
+                        detail.implementId(),
+                        breakdown.good,
+                        breakdown.damaged,
+                        breakdown.lost,
+                        0,
+                        breakdown.discarded,
+                        null
+                ));
+                continue;
+            }
+
+            Integer returnedQuantity = returnedConsumableByImplement.get(detail.implementUuid());
+            if (returnedQuantity == null && deliveredQuantity == 0) {
+                returnedQuantity = 0;
+            }
+            if (returnedQuantity == null) {
+                throw new BadRequestException(
+                        "LOAN_RETURN_CONSUMABLE_MISSING",
+                        "Debes indicar retorno para todos los implementos consumable/reusable"
+                );
+            }
+            if (returnedQuantity < 0 || returnedQuantity > deliveredQuantity) {
+                throw new BadRequestException(
+                        "LOAN_RETURN_CONSUMABLE_QUANTITY_INVALID",
+                        "La cantidad de retorno supera lo entregado"
+                );
+            }
+
+            payloadItems.add(new LoanReturnPayloadItem(
+                    detail.implementId(),
+                    returnedQuantity,
+                    0,
+                    0,
+                    deliveredQuantity - returnedQuantity,
+                    0,
+                    null
+            ));
+        }
+
+        return payloadItems;
+    }
+
+    private Map<UUID, MutableReturnBreakdown> buildIndividualBreakdownByImplement(
+            Long loanId,
+            List<LoanReturnIndividual> returnedIndividuals,
+            Map<UUID, LoanDetailContext> detailByImplement
+    ) {
+        if (returnedIndividuals.isEmpty()) {
+            return Map.of();
+        }
+
+        Set<UUID> repeatedIndividuals = new HashSet<>();
+        List<UUID> requestedIndividualUuids = new ArrayList<>();
+        for (LoanReturnIndividual returned : returnedIndividuals) {
+            if (returned == null || returned.individualUuid() == null) {
+                throw new BadRequestException(
+                        "LOAN_RETURN_INDIVIDUAL_REQUIRED",
+                        "individual_uuid es obligatorio para retornos de implementos individuales"
+                );
+            }
+            if (!repeatedIndividuals.add(returned.individualUuid())) {
+                throw new BadRequestException("LOAN_RETURN_INDIVIDUAL_DUPLICATE", "No puedes repetir individuales en el mismo retorno");
+            }
+            requestedIndividualUuids.add(returned.individualUuid());
+        }
+
+        Field<UUID> individualUuidField = INDIVIDUAL.UUID.as("individual_uuid");
+        Field<UUID> implementUuidField = IMPLEMENT.UUID.as("implement_uuid");
+        Map<UUID, UUID> implementByIndividual = dsl.select(individualUuidField, implementUuidField)
+                .from(LOAN_DETAIL_INDIVIDUAL)
+                .join(INDIVIDUAL).on(INDIVIDUAL.ID.eq(LOAN_DETAIL_INDIVIDUAL.INDIVIDUAL_ID))
+                .join(IMPLEMENT).on(IMPLEMENT.ID.eq(LOAN_DETAIL_INDIVIDUAL.IMPLEMENT_ID))
+                .where(
+                        LOAN_DETAIL_INDIVIDUAL.LOAN_ID.eq(loanId)
+                                .and(individualUuidField.in(requestedIndividualUuids))
+                )
+                .fetchMap(individualUuidField, implementUuidField);
+
+        if (implementByIndividual.size() != requestedIndividualUuids.size()) {
+            throw new BadRequestException(
+                    "LOAN_RETURN_INDIVIDUAL_NOT_FOUND",
+                    "Uno o mas individuales no pertenecen a este prestamo"
+            );
+        }
+
+        Map<UUID, MutableReturnBreakdown> result = new HashMap<>();
+        for (LoanReturnIndividual returned : returnedIndividuals) {
+            UUID implementUuid = implementByIndividual.get(returned.individualUuid());
+            LoanDetailContext detail = detailByImplement.get(implementUuid);
+            if (detail == null || detail.itemType() != ItemTypeEnum.individual) {
+                throw new BadRequestException(
+                        "LOAN_RETURN_INDIVIDUAL_NOT_FOUND",
+                        "El individual no pertenece a un implemento individual del prestamo"
+                );
+            }
+
+            ReturnConditionEnum condition = parseReturnCondition(returned.returnCondition());
+            MutableReturnBreakdown breakdown = result.computeIfAbsent(implementUuid, ignored -> new MutableReturnBreakdown());
+            breakdown.add(condition);
+        }
+
+        return result;
+    }
+
+    private Map<UUID, Integer> buildConsumableReturnMap(
+            List<LoanReturnConsumableItem> consumableReturns,
+            Map<UUID, LoanDetailContext> detailByImplement
+    ) {
+        if (consumableReturns.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<UUID, Integer> returnedByImplement = new HashMap<>();
+        for (LoanReturnConsumableItem consumableReturn : consumableReturns) {
+            if (consumableReturn == null || consumableReturn.implementUuid() == null) {
+                throw new BadRequestException(
+                        "LOAN_RETURN_CONSUMABLE_IMPLEMENT_REQUIRED",
+                        "implement_uuid es obligatorio para retornos de implementos consumables/reusables"
+                );
+            }
+            if (returnedByImplement.containsKey(consumableReturn.implementUuid())) {
+                throw new BadRequestException(
+                        "LOAN_RETURN_CONSUMABLE_DUPLICATE",
+                        "No puedes repetir implementos consumables/reusables en el mismo retorno"
+                );
+            }
+            if (consumableReturn.quantity() == null || consumableReturn.quantity() < 0) {
+                throw new BadRequestException(
+                        "LOAN_RETURN_CONSUMABLE_QUANTITY_INVALID",
+                        "quantity debe ser mayor o igual a cero"
+                );
+            }
+
+            LoanDetailContext detail = detailByImplement.get(consumableReturn.implementUuid());
+            if (detail == null) {
+                throw new BadRequestException(
+                        "LOAN_RETURN_CONSUMABLE_NOT_REQUESTED",
+                        "El implemento consumable/reusable no forma parte del prestamo"
+                );
+            }
+            if (detail.itemType() == ItemTypeEnum.individual) {
+                throw new BadRequestException(
+                        "LOAN_RETURN_CONSUMABLE_TYPE_INVALID",
+                        "El implemento indicado no corresponde a un tipo consumable/reusable"
+                );
+            }
+
+            returnedByImplement.put(consumableReturn.implementUuid(), consumableReturn.quantity());
+        }
+
+        return returnedByImplement;
+    }
+
+    private ReturnConditionEnum parseReturnCondition(String rawCondition) {
+        ReturnConditionEnum condition = ReturnConditionEnum.lookupLiteral(
+                rawCondition == null ? null : rawCondition.trim().toLowerCase(Locale.ROOT)
+        );
+        if (condition == null) {
+            throw new BadRequestException(
+                    "LOAN_RETURN_CONDITION_INVALID",
+                    "return_condition debe ser good, damaged, lost o discarded"
+            );
+        }
+        return condition;
+    }
+
+    private org.jooq.JSONB toJsonbPayload(List<LoanReturnPayloadItem> payloadItems) {
+        List<Map<String, Object>> payload = payloadItems.stream()
+                .map(item -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("implement_id", item.implementId());
+                    row.put("returned_quantity", item.returnedQuantity());
+                    row.put("damaged_quantity", item.damagedQuantity());
+                    row.put("lost_quantity", item.lostQuantity());
+                    row.put("consumed_quantity", item.consumedQuantity());
+                    row.put("discarded_quantity", item.discardedQuantity());
+                    row.put("return_notes", item.returnNotes());
+                    return row;
+                })
+                .toList();
+        try {
+            return org.jooq.JSONB.valueOf(objectMapper.writeValueAsString(payload));
+        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+            throw new IllegalStateException("No fue posible serializar el payload de cierre de prestamo", ex);
+        }
+    }
+
+    private RuntimeException mapLoanFunctionException(
+            org.jooq.exception.DataAccessException ex,
+            String fallbackCode,
+            String fallbackMessage
+    ) {
+        String rawMessage = extractErrorMessage(ex);
+        String normalized = rawMessage.toLowerCase(Locale.ROOT);
+
+        if (normalized.contains("loan not found")) {
+            return new NotFoundException("LOAN_NOT_FOUND", rawMessage);
+        }
+        if (normalized.contains("actor user not found")) {
+            return new NotFoundException("LOAN_ACTOR_NOT_FOUND", rawMessage);
+        }
+        if (normalized.contains("insufficient availability")
+                || normalized.contains("insufficient physical stock")
+                || normalized.contains("reserved stock is insufficient")
+                || normalized.contains("stock update failed")
+                || normalized.contains("stock release failed")) {
+            return new ConflictException("LOAN_STOCK_CONFLICT", rawMessage);
+        }
+        if (normalized.contains("invalid")
+                || normalized.contains("cannot be completed")
+                || normalized.contains("cannot be cancelled")
+                || normalized.contains("is not pending")
+                || normalized.contains("is not approved")
+                || normalized.contains("is not prepared")
+                || normalized.contains("missing return payload")
+                || normalized.contains("mismatch")
+                || normalized.contains("negative quantities")
+                || normalized.contains("not allowed")) {
+            return new BadRequestException(fallbackCode, rawMessage);
+        }
+
+        return new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, fallbackCode, fallbackMessage);
+    }
+
+    private String extractErrorMessage(Throwable throwable) {
+        Throwable current = throwable;
+        String message = throwable.getMessage();
+        while (current != null) {
+            if (current.getMessage() != null && !current.getMessage().isBlank()) {
+                message = current.getMessage();
+            }
+            current = current.getCause();
+        }
+        return message == null ? "Error interno en funciones de prestamo" : message;
     }
 
     private Long requireUserIdByUuid(UUID userUuid) {
@@ -1175,7 +1495,6 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 .where(
                         IMPLEMENT.UUID.eq(implementUuid)
                                 .and(IMPLEMENT.ACTIVE.isTrue())
-                                .and(IMPLEMENT.ITEM_TYPE.in(ItemTypeEnum.fungible, ItemTypeEnum.no_fungible))
                 )
                 .fetchOne(IMPLEMENT.ID);
 
@@ -1185,16 +1504,6 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
         return implementId;
     }
 
-    private Long findIndividualIdByUuid(UUID individualUuid) {
-        if (individualUuid == null) {
-            return null;
-        }
-        return dsl.select(INDIVIDUAL.ID)
-                .from(INDIVIDUAL)
-                .where(INDIVIDUAL.UUID.eq(individualUuid))
-                .fetchOne(INDIVIDUAL.ID);
-    }
-
     private LoanStatus toDomainStatus(LoanStatusEnum statusEnum) {
         if (statusEnum == null) {
             return LoanStatus.PENDING;
@@ -1202,27 +1511,20 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
         return LoanStatus.fromLiteral(statusEnum.getLiteral()).orElse(LoanStatus.PENDING);
     }
 
-    private LoanStatusEnum toJooqStatus(LoanStatus status) {
-        if (status == null) {
-            return LoanStatusEnum.pending;
+    private LoanStatus toDomainStatusNullable(LoanStatusEnum statusEnum) {
+        if (statusEnum == null) {
+            return null;
         }
-        return LoanStatusEnum.lookupLiteral(status.literal());
+        return LoanStatus.fromLiteral(statusEnum.getLiteral()).orElse(null);
     }
 
     private int safe(Integer value) {
         return value == null ? 0 : value;
     }
 
-    private String normalizeCondition(String raw) {
-        if (raw == null) {
-            return "";
-        }
-        return raw.trim().toLowerCase(Locale.ROOT);
-    }
-
     private List<String> normalizeAssetCodes(List<String> assetCodes) {
         if (assetCodes == null || assetCodes.isEmpty()) {
-            throw new BadRequestException("LOAN_DELIVERY_ASSET_CODES_REQUIRED", "asset_codes es obligatorio para implementos no_fungible");
+            throw new BadRequestException("LOAN_DELIVERY_ASSET_CODES_REQUIRED", "asset_codes es obligatorio para implementos de tipo individual");
         }
 
         Set<String> seen = new HashSet<>();
@@ -1249,6 +1551,16 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
         return normalized.isEmpty() ? null : normalized;
     }
 
+    private OffsetDateTime resolveExpectedReturnAt(OffsetDateTime scheduledAt, OffsetDateTime expectedReturnAt) {
+        if (expectedReturnAt != null) {
+            return expectedReturnAt;
+        }
+        if (scheduledAt == null) {
+            throw new BadRequestException("LOAN_EXPECTED_RETURN_REQUIRED", "expected_return_at no puede ser nulo si scheduled_at no existe");
+        }
+        return scheduledAt.plusHours(2);
+    }
+
     private record LoanRow(
             Long loanId,
             UUID loanUuid,
@@ -1257,7 +1569,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
             UUID subjectUuid,
             LoanStatus status,
             OffsetDateTime scheduledAt,
-            OffsetDateTime dueDate,
+            OffsetDateTime expectedReturnAt,
             OffsetDateTime createdAt
     ) {
     }
@@ -1268,6 +1580,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
             UUID requesterUuid,
             LoanStatus status,
             OffsetDateTime scheduledAt,
+            OffsetDateTime expectedReturnAt,
             OffsetDateTime createdAt,
             UUID roomUuid,
             String roomName,
@@ -1293,10 +1606,40 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
     ) {
     }
 
-    private record GroupedReturnMovement(
-            UUID implementUuid,
-            String condition,
-            List<UUID> individualUuids
+    private static final class MutableReturnBreakdown {
+        private int good;
+        private int damaged;
+        private int lost;
+        private int discarded;
+
+        private void add(ReturnConditionEnum condition) {
+            if (condition == ReturnConditionEnum.good) {
+                good++;
+            } else if (condition == ReturnConditionEnum.damaged) {
+                damaged++;
+            } else if (condition == ReturnConditionEnum.lost) {
+                lost++;
+            } else if (condition == ReturnConditionEnum.discarded) {
+                discarded++;
+            }
+        }
+
+        private int total() {
+            return good + damaged + lost + discarded;
+        }
+    }
+
+    private record LoanReturnPayloadItem(
+            Long implementId,
+            Integer returnedQuantity,
+            Integer damagedQuantity,
+            Integer lostQuantity,
+            Integer consumedQuantity,
+            Integer discardedQuantity,
+            String returnNotes
     ) {
     }
 }
+
+
+
