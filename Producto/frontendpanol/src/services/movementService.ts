@@ -2,12 +2,15 @@ import { apiClient } from "./apiClient";
 import type { InventoryMovementDetail } from "../types/implement";
 
 export type ManualMovementType =
-  | "STOCK_IN"
-  | "STOCK_OUT"
-  | "LOAN_DELIVERY"
-  | "LOAN_RETURN"
-  | "DAMAGE_REPORT"
-  | "MANUAL_ADJUSTMENT";
+  | "stock_in"
+  | "stock_out"
+  | "loan_delivery"
+  | "loan_return"
+  | "damage_report"
+  | "manual_adjustment"
+  | "consumption"
+  | "discard"
+  | "loss";
 
 export interface RegisterMovementPayload {
   action: ManualMovementType;

@@ -24,15 +24,15 @@ import { fetchImplements } from "../../services/implementService";
 import type { ImplementSummary } from "../../types/implement";
 
 const menuInventory = [
-  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, href: "#/inventory/implementos" },
+  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, href: "#/inventory/dashboard" },
   { key: "items", label: "Implementos", icon: Boxes, href: "#/inventory/implementos" },
   { key: "categories", label: "Categorias", icon: ClipboardList, href: "#/inventory/categories" },
   { key: "locations", label: "Ubicaciones", icon: MapPin, href: "#/inventory/locations" },
   { key: "users", label: "Usuarios", icon: Users, href: "#/director/users/create" },
   { key: "moves", label: "Movimientos", icon: ClipboardList, href: "#/inventory/moves" },
   { key: "loans", label: "Prestamos", icon: Handshake, href: "#/inventory/prestamos" },
-  { key: "reports", label: "Reportes", icon: FileBarChart2, href: "#/inventory/implementos" },
-  { key: "history", label: "Historial", icon: History, href: "#/inventory/implementos" },
+  { key: "reports", label: "Reportes", icon: FileBarChart2, href: "#/inventory/monitoring/outbox" },
+  { key: "history", label: "Historial", icon: History, href: "#/inventory/prestamos/calendario" },
 ] as const;
 
 const menuDirector = [

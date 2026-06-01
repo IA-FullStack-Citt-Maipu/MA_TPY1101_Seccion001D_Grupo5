@@ -23,7 +23,7 @@ interface DeliveryItemState {
   delivered: number;
   outstanding: number;
   selected: boolean;
-  itemType: "fungible" | "no_fungible" | "unknown";
+  itemType: "consumable" | "reusable" | "individual" | "unknown";
   quantity: number;
   maxQuantity: number;
   availableStock: number | null;
@@ -67,11 +67,14 @@ function formatTime(value: Date | null): string {
 }
 
 function mapItemType(detail: StockDetail): DeliveryItemState["itemType"] {
-  if (detail.item_type === "fungible") {
-    return "fungible";
+  if (detail.item_type === "consumable") {
+    return "consumable";
   }
-  if (detail.item_type === "no_fungible") {
-    return "no_fungible";
+  if (detail.item_type === "reusable") {
+    return "reusable";
+  }
+  if (detail.item_type === "individual") {
+    return "individual";
   }
   return "unknown";
 }
@@ -79,6 +82,7 @@ function mapItemType(detail: StockDetail): DeliveryItemState["itemType"] {
 export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: string; embedded?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [loan, setLoan] = useState<LoanSummary | null>(null);
   const [items, setItems] = useState<DeliveryItemState[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -154,7 +158,7 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
           }
 
           const itemType = mapItemType(stock);
-          if (itemType === "no_fungible") {
+          if (itemType === "individual") {
             const availableAssetCodes = (stock.individuals ?? [])
               .filter((individual) => individual.active && individual.status === "available")
               .map((individual) => individual.asset_code)
@@ -219,13 +223,20 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
     };
   }, [loanUuid]);
 
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 30000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
   const deliveryWindowOpensAt = useMemo(
     () => (loan ? getDeliveryWindowOpenAt(loan.scheduled_at) : null),
     [loan],
   );
   const isWindowOpen = useMemo(
-    () => (deliveryWindowOpensAt ? Date.now() >= deliveryWindowOpensAt.getTime() : false),
-    [deliveryWindowOpensAt],
+    () => (deliveryWindowOpensAt ? nowMs >= deliveryWindowOpensAt.getTime() : false),
+    [deliveryWindowOpensAt, nowMs],
   );
 
   const selectedItems = useMemo(() => {
@@ -233,7 +244,7 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
       if (!item.selected) {
         return false;
       }
-      if (item.itemType === "no_fungible") {
+      if (item.itemType === "individual") {
         return item.selectedAssetCodes.length > 0;
       }
       return item.quantity > 0;
@@ -241,7 +252,7 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
   }, [items]);
 
   const summaryCount = useMemo(
-    () => selectedItems.reduce((total, item) => total + (item.itemType === "no_fungible" ? item.selectedAssetCodes.length : item.quantity), 0),
+    () => selectedItems.reduce((total, item) => total + (item.itemType === "individual" ? item.selectedAssetCodes.length : item.quantity), 0),
     [selectedItems],
   );
 
@@ -249,7 +260,7 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
     if (!loan || submitting || !isWindowOpen) {
       return false;
     }
-    if (loan.status !== "approved") {
+    if (loan.status !== "approved" && loan.status !== "prepared") {
       return false;
     }
     return selectedItems.length > 0;
@@ -273,7 +284,7 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
         if (!nextSelected) {
           return { ...item, selected: false };
         }
-        if (item.itemType === "no_fungible") {
+        if (item.itemType === "individual") {
           const selectedAssetCodes = item.selectedAssetCodes.length > 0
             ? item.selectedAssetCodes
             : item.availableAssetCodes.slice(0, Math.min(item.outstanding, item.maxQuantity));
@@ -293,7 +304,7 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
   function adjustFungibleQuantity(implementUuid: string, delta: number) {
     setItems((previous) =>
       previous.map((item) => {
-        if (item.implementUuid !== implementUuid || item.itemType === "no_fungible") {
+        if (item.implementUuid !== implementUuid || item.itemType === "individual") {
           return item;
         }
         const next = Math.max(0, Math.min(item.maxQuantity, item.quantity + delta));
@@ -309,7 +320,7 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
   function toggleAssetCode(implementUuid: string, assetCode: string) {
     setItems((previous) =>
       previous.map((item) => {
-        if (item.implementUuid !== implementUuid || item.itemType !== "no_fungible") {
+        if (item.implementUuid !== implementUuid || item.itemType !== "individual") {
           return item;
         }
 
@@ -340,8 +351,8 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
       setError("No hay datos de prestamo para registrar la entrega.");
       return;
     }
-    if (loan.status !== "approved") {
-      setError("Solo puedes entregar solicitudes en estado aprobado.");
+    if (loan.status !== "approved" && loan.status !== "prepared") {
+      setError("Solo puedes entregar solicitudes en estado aprobado o preparado.");
       return;
     }
     if (!isWindowOpen) {
@@ -351,7 +362,7 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
 
     const payloadItems: DeliverLoanPayload["items"] = [];
     for (const item of selectedItems) {
-      if (item.itemType === "no_fungible") {
+      if (item.itemType === "individual") {
         if (item.selectedAssetCodes.length <= 0) {
           continue;
         }
@@ -452,7 +463,7 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
                       </div>
                     </div>
 
-                    {item.itemType === "no_fungible" ? (
+                    {item.itemType === "individual" ? (
                       <div className="loan-delivery-individuals">
                         <p>Selecciona unidades individuales ({item.selectedAssetCodes.length}/{item.maxQuantity})</p>
                         {item.availableAssetCodes.length === 0 ? (

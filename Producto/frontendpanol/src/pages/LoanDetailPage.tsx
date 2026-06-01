@@ -1,4 +1,5 @@
 import {
+  ArrowRight,
   ArrowLeft,
   BookOpenText,
   CalendarDays,
@@ -10,17 +11,27 @@ import {
   Info,
   MapPin,
   Package2,
+  Plus,
+  ShieldAlert,
   SendHorizontal,
+  TimerReset,
   Trash2,
+  User,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getErrorMessage } from "../services/apiClient";
-import { completeLoan, fetchLoanByUuid } from "../services/loanService";
+import {
+  cancelLoan,
+  completeLoan,
+  fetchLoanByUuid,
+  fetchLoanStateDates,
+  fetchLoanStatusTimeline,
+} from "../services/loanService";
 import {
   clearLastCreatedLoan,
   loadLastCreatedLoan,
 } from "../services/loanSessionService";
-import type { LoanSummary } from "../types/loan";
+import type { LoanStateDates, LoanStatusTimelineEntry, LoanSummary } from "../types/loan";
 import { getUserRoleFromToken } from "../utils/auth";
 import { canStartDelivery, getDeliveryWindowOpenAt } from "../utils/loanSchedule";
 
@@ -66,7 +77,9 @@ function normalizeStatusLabel(status: string): string {
   const labels: Record<string, string> = {
     pending: "Pendiente",
     approved: "Aprobado",
+    prepared: "Preparado",
     delivered: "En uso",
+    overdue: "Atrasado",
     completed: "Completado",
     cancelled: "Cancelado",
     rejected: "Rechazado",
@@ -82,8 +95,14 @@ function statusClassName(status: string): string {
   if (status === "approved") {
     return "teacher-loans-status teacher-loans-status--approved";
   }
+  if (status === "prepared") {
+    return "teacher-loans-status teacher-loans-status--approved";
+  }
   if (status === "delivered") {
     return "teacher-loans-status teacher-loans-status--delivered";
+  }
+  if (status === "overdue") {
+    return "teacher-loans-status teacher-loans-status--danger";
   }
   if (status === "completed") {
     return "teacher-loans-status teacher-loans-status--completed";
@@ -117,6 +136,42 @@ function itemStatusClassName(item: LoanSummary["items"][number]): string {
   return "teacher-loan-item-status teacher-loan-item-status--pending";
 }
 
+function timelineTransitionTitle(entry: LoanStatusTimelineEntry): string {
+  if (entry.from_status == null && entry.to_status === "pending") {
+    return "Creacion de Solicitud";
+  }
+
+  const transitionKey = `${entry.from_status ?? "new"}->${entry.to_status}`;
+  const labels: Record<string, string> = {
+    "pending->approved": "Aprobacion de Solicitud",
+    "pending->rejected": "Rechazo de Solicitud",
+    "pending->cancelled": "Cancelacion de Solicitud",
+    "approved->prepared": "Preparacion de Implementos",
+    "prepared->delivered": "Entrega de Implementos",
+    "delivered->completed": "Cierre de Prestamo",
+    "delivered->overdue": "Prestamo Atrasado",
+    "overdue->completed": "Cierre de Prestamo",
+  };
+
+  return labels[transitionKey] ?? "Actualizacion de Estado";
+}
+
+function timelineStatusChipClass(
+  status: LoanStatusTimelineEntry["to_status"] | LoanStatusTimelineEntry["from_status"],
+): string {
+  if (status == null) {
+    return "teacher-loan-timeline-chip teacher-loan-timeline-chip--new";
+  }
+  if (status === "pending") return "teacher-loan-timeline-chip teacher-loan-timeline-chip--pending";
+  if (status === "approved" || status === "prepared") return "teacher-loan-timeline-chip teacher-loan-timeline-chip--approved";
+  if (status === "delivered") return "teacher-loan-timeline-chip teacher-loan-timeline-chip--delivered";
+  if (status === "completed") return "teacher-loan-timeline-chip teacher-loan-timeline-chip--completed";
+  if (status === "rejected" || status === "cancelled" || status === "expired" || status === "overdue") {
+    return "teacher-loan-timeline-chip teacher-loan-timeline-chip--danger";
+  }
+  return "teacher-loan-timeline-chip";
+}
+
 export function LoanDetailPage({
   loanUuid,
   embedded = false,
@@ -132,6 +187,10 @@ export function LoanDetailPage({
   const [error, setError] = useState<string | null>(null);
   const [showCreatedBanner, setShowCreatedBanner] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState<"" | "ok" | "error">("");
+  const [stateDates, setStateDates] = useState<LoanStateDates | null>(null);
+  const [timeline, setTimeline] = useState<LoanStatusTimelineEntry[]>([]);
+  const [loadingTraceability, setLoadingTraceability] = useState(false);
+  const [processingLoan, setProcessingLoan] = useState(false);
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmationInput, setDeleteConfirmationInput] = useState("");
@@ -139,6 +198,7 @@ export function LoanDetailPage({
   useEffect(() => {
     const cached = loadLastCreatedLoan(loanUuid);
     if (cached) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoan(cached);
       setShowCreatedBanner(true);
     }
@@ -150,8 +210,13 @@ export function LoanDetailPage({
     async function loadDetail() {
       setLoading(true);
       setError(null);
+      setLoadingTraceability(true);
       try {
-        const resolved = await fetchLoanByUuid(loanUuid);
+        const [resolved, resolvedStateDates, resolvedTimeline] = await Promise.all([
+          fetchLoanByUuid(loanUuid),
+          fetchLoanStateDates(loanUuid),
+          fetchLoanStatusTimeline(loanUuid),
+        ]);
         if (cancelled) {
           return;
         }
@@ -160,6 +225,8 @@ export function LoanDetailPage({
           return;
         }
         setLoan(resolved);
+        setStateDates(resolvedStateDates);
+        setTimeline(resolvedTimeline);
       } catch (requestError) {
         if (cancelled) {
           return;
@@ -168,6 +235,7 @@ export function LoanDetailPage({
       } finally {
         if (!cancelled) {
           setLoading(false);
+          setLoadingTraceability(false);
         }
       }
     }
@@ -225,16 +293,29 @@ export function LoanDetailPage({
     window.location.hash = `#/inventory/prestamos/${loanUuid}/entrega`;
   }
 
+  async function refreshTraceability(loanId: string) {
+    const [resolvedStateDates, resolvedTimeline] = await Promise.all([
+      fetchLoanStateDates(loanId),
+      fetchLoanStatusTimeline(loanId),
+    ]);
+    setStateDates(resolvedStateDates);
+    setTimeline(resolvedTimeline);
+  }
+
   async function handleCompleteLoan() {
-    if (!loan || loan.status !== "delivered") {
+    if (!loan || (loan.status !== "delivered" && loan.status !== "overdue")) {
       return;
     }
     setError(null);
+    setProcessingLoan(true);
     try {
       const updated = await completeLoan(loan.uuid);
       setLoan(updated);
+      await refreshTraceability(updated.uuid);
     } catch (requestError) {
       setError(getErrorMessage(requestError, "No se pudo completar el prestamo."));
+    } finally {
+      setProcessingLoan(false);
     }
   }
 
@@ -263,12 +344,25 @@ export function LoanDetailPage({
     setShowDeleteModal(false);
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     if (!canConfirmDeletion) {
       return;
     }
-    closeDeleteModal();
-    window.location.hash = "#/inventory/prestamos";
+    if (!loan) {
+      return;
+    }
+    setError(null);
+    setProcessingLoan(true);
+    try {
+      const cancelled = await cancelLoan(loan.uuid, { notes: "Cancelado por docente desde detalle" });
+      setLoan(cancelled);
+      await refreshTraceability(cancelled.uuid);
+      closeDeleteModal();
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, "No se pudo cancelar el prestamo."));
+    } finally {
+      setProcessingLoan(false);
+    }
   }
 
   const content = (
@@ -359,6 +453,13 @@ export function LoanDetailPage({
                     </p>
                   </div>
                   <div>
+                    <span>Retorno esperado</span>
+                    <p>
+                      <TimerReset size={15} />
+                      {formatDateTime(loan.expected_return_at)}
+                    </p>
+                  </div>
+                  <div>
                     <span>Total solicitado</span>
                     <p>
                       <Package2 size={15} />
@@ -375,7 +476,7 @@ export function LoanDetailPage({
                     Modificar solicitud
                   </button>
                 ) : null}
-                {isCoordinator && loan.status === "approved" ? (
+                {isCoordinator && (loan.status === "approved" || loan.status === "prepared") ? (
                   <button
                     type="button"
                     className="teacher-loan-detail-action-btn"
@@ -391,11 +492,12 @@ export function LoanDetailPage({
                     {canDeliverNow ? "Entregar solicitud" : `Desde ${formatTime(deliveryWindowOpenAt)}`}
                   </button>
                 ) : null}
-                {isCoordinator && loan.status === "delivered" ? (
+                {isCoordinator && (loan.status === "delivered" || loan.status === "overdue") ? (
                   <button
                     type="button"
                     className="teacher-loan-detail-action-btn teacher-loan-detail-action-btn--complete"
                     onClick={() => void handleCompleteLoan()}
+                    disabled={processingLoan}
                   >
                     <CheckCircle2 size={16} />
                     Completar prestamo
@@ -405,9 +507,10 @@ export function LoanDetailPage({
                   type="button"
                   className="teacher-loan-detail-action-btn teacher-loan-detail-action-btn--danger"
                   onClick={openDeleteModal}
+                  disabled={processingLoan || !canEditLoan}
                 >
                   <Trash2 size={16} />
-                  Eliminar solicitud
+                  Cancelar solicitud
                 </button>
               </article>
             </div>
@@ -475,15 +578,86 @@ export function LoanDetailPage({
               </footer>
             </article>
           </section>
+
+          <section className="teacher-loan-detail-grid">
+            <article className="teacher-loan-detail-card teacher-loan-detail-card--summary">
+              <header>
+                <ShieldAlert size={17} />
+                <h2>Fechas por estado</h2>
+              </header>
+              <div className="teacher-loan-detail-info-list">
+                <div><span>Aprobado</span><p>{stateDates?.approved_at ? formatDateTime(stateDates.approved_at) : "--"}</p></div>
+                <div><span>Preparado</span><p>{stateDates?.prepared_at ? formatDateTime(stateDates.prepared_at) : "--"}</p></div>
+                <div><span>Entregado</span><p>{stateDates?.delivered_at ? formatDateTime(stateDates.delivered_at) : "--"}</p></div>
+                <div><span>Atrasado</span><p>{stateDates?.overdue_at ? formatDateTime(stateDates.overdue_at) : "--"}</p></div>
+                <div><span>Completado</span><p>{stateDates?.completed_at ? formatDateTime(stateDates.completed_at) : "--"}</p></div>
+                <div><span>Cancelado</span><p>{stateDates?.cancelled_at ? formatDateTime(stateDates.cancelled_at) : "--"}</p></div>
+              </div>
+            </article>
+
+            <article className="teacher-loan-detail-items teacher-loan-timeline-panel">
+              <header className="teacher-loan-detail-items__header teacher-loan-timeline-panel__header">
+                <h2>
+                  <ClipboardList size={18} />
+                  Historial de Actividad
+                </h2>
+                <span>{timeline.length} evento(s)</span>
+              </header>
+              <div className="teacher-loan-timeline-wrap">
+                {loadingTraceability ? (
+                  <div className="teacher-loan-detail-items__empty">Cargando timeline...</div>
+                ) : timeline.length === 0 ? (
+                  <div className="teacher-loan-detail-items__empty">Sin eventos de estado.</div>
+                ) : (
+                  <div className="teacher-loan-timeline-list">
+                    {timeline.map((entry, index) => (
+                      <article
+                        key={entry.history_id}
+                        className={`teacher-loan-timeline-entry${index === timeline.length - 1 ? " is-last" : ""}`}
+                      >
+                        <div className={`teacher-loan-timeline-entry__node${entry.from_status == null ? "" : " is-done"}`}>
+                          {entry.from_status == null ? <Plus size={16} /> : <CheckCircle2 size={16} />}
+                        </div>
+                        <div className="teacher-loan-timeline-entry__card">
+                          <div className="teacher-loan-timeline-entry__meta">
+                            <div className="teacher-loan-timeline-entry__chips">
+                              <span className={timelineStatusChipClass(entry.from_status)}>
+                                {entry.from_status ? normalizeStatusLabel(entry.from_status).toUpperCase() : "NUEVO"}
+                              </span>
+                              <ArrowRight size={13} />
+                              <span className={timelineStatusChipClass(entry.to_status)}>
+                                {normalizeStatusLabel(entry.to_status).toUpperCase()}
+                              </span>
+                            </div>
+                            <time>{formatDateTime(entry.changed_at)}</time>
+                          </div>
+                          <h3>{timelineTransitionTitle(entry)}</h3>
+                          <p className="teacher-loan-timeline-entry__actor">
+                            <User size={14} />
+                            {entry.actor_name ?? entry.actor_email ?? `User #${entry.actor_user_id}`}
+                          </p>
+                          {entry.notes ? (
+                            <blockquote className="teacher-loan-timeline-entry__notes">
+                              "{entry.notes}"
+                            </blockquote>
+                          ) : null}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </article>
+          </section>
         </>
       ) : null}
 
       {showDeleteModal ? (
         <div className="modal-overlay">
           <div className="modal teacher-loans-delete-modal">
-            <h3>Eliminar prestamo</h3>
+            <h3>Cancelar prestamo</h3>
             <p>
-              Seguro que quieres eliminar esta solicitud? Escribe <strong>"{DELETE_CONFIRM_TEXT}"</strong>{" "}
+              Seguro que quieres cancelar esta solicitud? Escribe <strong>"{DELETE_CONFIRM_TEXT}"</strong>{" "}
               para confirmar.
             </p>
             <label htmlFor="loan-delete-detail-confirmation">Confirmacion</label>
@@ -501,10 +675,10 @@ export function LoanDetailPage({
                 type="button"
                 className="button button--danger"
                 disabled={!canConfirmDeletion}
-                onClick={confirmDelete}
+                onClick={() => void confirmDelete()}
               >
                 <Trash2 size={16} />
-                Eliminar
+                {processingLoan ? "Cancelando..." : "Cancelar"}
               </button>
             </div>
           </div>

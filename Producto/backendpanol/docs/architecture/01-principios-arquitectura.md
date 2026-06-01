@@ -1,5 +1,5 @@
 ﻿- Estado del documento: vigente
-- Ultima verificacion: 2026-05-16
+- Ultima verificacion: 2026-05-31
 - Fuente de verdad: ver matriz canonica vigente y codigo fuente actual
 
 # 01 - Principios de Arquitectura
@@ -30,7 +30,7 @@ Asegurar que cada incremento preserve decisiones base:
 
 5. **Migraciones por corte controlado**
 - Priorizar cambios incrementales por módulo con feature parity.
-- Los cambios masivos de refactor de esquema deben ejecutarse con plan de corte, rollback y verificación (ej. `db/migration/v25/V25__schema_alignment_big_bang.sql`).
+- Los cambios masivos de refactor de esquema deben ejecutarse con plan de corte, rollback y verificación (ej. baseline `V25` + refinamientos `V29..V31`).
 
 ## Regla de oro
 

@@ -17,12 +17,15 @@ import { Badge } from "../components/ui/Badge";
 import { Table } from "../components/ui/Table";
 
 const ACTION_LABELS: Record<string, string> = {
-  STOCK_IN: "Ingreso de stock",
-  STOCK_OUT: "Salida de stock",
-  LOAN_DELIVERY: "Entrega de préstamo",
-  LOAN_RETURN: "Devolución de préstamo",
-  DAMAGE_REPORT: "Reporte de daño",
-  MANUAL_ADJUSTMENT: "Ajuste manual",
+  stock_in: "Ingreso de stock",
+  stock_out: "Salida de stock",
+  loan_delivery: "Entrega de prestamo",
+  loan_return: "Devolucion de prestamo",
+  damage_report: "Reporte de dano",
+  manual_adjustment: "Ajuste manual",
+  consumption: "Consumo",
+  discard: "Descarte",
+  loss: "Perdida",
 };
 
 function toDateStart(value: string): Date | null {
@@ -53,7 +56,7 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
   const [dateTo, setDateTo] = useState("");
 
   const [manualImplementUuid, setManualImplementUuid] = useState<string>("");
-  const [action, setAction] = useState<ManualMovementType>("STOCK_IN");
+  const [action, setAction] = useState<ManualMovementType>("stock_in");
   const [quantity, setQuantity] = useState("1");
   const [notes, setNotes] = useState("");
 
@@ -123,8 +126,8 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
   const moveStats = useMemo(() => {
     return {
       total: filteredMovements.length,
-      ingresos: filteredMovements.filter((m) => m.action === "STOCK_IN").length,
-      ajustes: filteredMovements.filter((m) => m.action === "MANUAL_ADJUSTMENT").length,
+      ingresos: filteredMovements.filter((m) => m.action === "stock_in").length,
+      ajustes: filteredMovements.filter((m) => m.action === "manual_adjustment").length,
       implements: new Set(filteredMovements.map((m) => m.implement_uuid).filter((uuid): uuid is string => Boolean(uuid))).size,
     };
   }, [filteredMovements]);
@@ -274,12 +277,15 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
               <div>
                 <label>Acción</label>
                 <Select value={action} onChange={(e) => setAction(e.target.value as ManualMovementType)}>
-                  <option value="STOCK_IN">Ingreso de stock</option>
-                  <option value="STOCK_OUT">Salida de stock</option>
-                  <option value="LOAN_DELIVERY">Entrega de prestamo</option>
-                  <option value="LOAN_RETURN">Devolucion de prestamo</option>
-                  <option value="DAMAGE_REPORT">Reporte de dano</option>
-                  <option value="MANUAL_ADJUSTMENT">Ajuste manual</option>
+                  <option value="stock_in">Ingreso de stock</option>
+                  <option value="stock_out">Salida de stock</option>
+                  <option value="loan_delivery">Entrega de prestamo</option>
+                  <option value="loan_return">Devolucion de prestamo</option>
+                  <option value="damage_report">Reporte de dano</option>
+                  <option value="manual_adjustment">Ajuste manual</option>
+                  <option value="consumption">Consumo</option>
+                  <option value="discard">Descarte</option>
+                  <option value="loss">Perdida</option>
                 </Select>
               </div>
               <div>
@@ -333,7 +339,7 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
                     <td>{implementInfo?.category?.name ?? "Sin categoría"}</td>
                     <td>{new Date(m.timestamp).toLocaleString()}</td>
                     <td>
-                      <Badge tone={m.action === "STOCK_IN" ? "active" : m.action === "MANUAL_ADJUSTMENT" ? "warn" : "inactive"}>
+                      <Badge tone={m.action === "stock_in" ? "active" : m.action === "manual_adjustment" ? "warn" : "inactive"}>
                         {ACTION_LABELS[m.action] ?? m.action}
                       </Badge>
                     </td>

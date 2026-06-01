@@ -19,8 +19,9 @@ export interface LoanSubjectSummary {
 export interface LoanSummary {
   uuid: string;
   requester_uuid: string;
-  status: string;
+  status: LoanStatus;
   scheduled_at: string;
+  expected_return_at: string;
   created_at: string;
   room: LoanRoomSummary | null;
   subject: LoanSubjectSummary | null;
@@ -57,4 +58,37 @@ export interface DeliverLoanItemPayload {
 
 export interface DeliverLoanPayload {
   items: DeliverLoanItemPayload[];
+}
+
+export type LoanStatus =
+  | "pending"
+  | "approved"
+  | "prepared"
+  | "delivered"
+  | "completed"
+  | "rejected"
+  | "cancelled"
+  | "expired"
+  | "overdue";
+
+export interface LoanStateDates {
+  approved_at: string | null;
+  prepared_at: string | null;
+  delivered_at: string | null;
+  completed_at: string | null;
+  rejected_at: string | null;
+  cancelled_at: string | null;
+  expired_at: string | null;
+  overdue_at: string | null;
+}
+
+export interface LoanStatusTimelineEntry {
+  history_id: number;
+  from_status: LoanStatus | null;
+  to_status: LoanStatus;
+  actor_user_id: number;
+  actor_name: string | null;
+  actor_email: string | null;
+  notes: string | null;
+  changed_at: string;
 }

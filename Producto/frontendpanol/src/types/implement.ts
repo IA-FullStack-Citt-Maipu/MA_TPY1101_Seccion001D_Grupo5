@@ -11,7 +11,7 @@ export interface InventoryMovementDetail {
 export interface ImplementCreatePayload {
   name: string;
   categoryUuid: string;
-  item_type: "fungible" | "no_fungible";
+  item_type: "consumable" | "reusable" | "individual";
   locationUuid: string;
   description: string | null;
   barcode: string | null;
@@ -24,7 +24,7 @@ export interface ImplementUpdatePayload {
   name: string;
   categoryUuid: string;
   locationUuid: string;
-  item_type: "fungible" | "no_fungible";
+  item_type: "consumable" | "reusable" | "individual";
   description: string | null;
   barcode: string | null;
   img_url: string | null;
@@ -38,6 +38,7 @@ export interface ImplementSummary {
   description?: string | null;
   barcode?: string | null;
   imgUrl?: string | null;
+  img_url?: string | null;
   active?: boolean;
   available?: boolean;
   category: {
@@ -86,7 +87,7 @@ export interface ImplementDetail {
   uuid: string;
   name: string;
   description: string | null;
-  item_type: "fungible" | "no_fungible" | null;
+  item_type: "consumable" | "reusable" | "individual" | null;
   display_location?: string | null;
   category: {
     uuid: string;

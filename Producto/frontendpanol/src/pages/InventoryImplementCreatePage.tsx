@@ -9,7 +9,7 @@ import { fetchLocations } from "../services/locationService";
 import type { ActiveCategoryOption } from "../types/categoryActive";
 import type { LocationOption } from "../types/location";
 
-type ItemType = "fungible" | "no_fungible";
+type ItemType = "consumable" | "reusable" | "individual";
 
 interface FieldErrors {
   name?: string;
@@ -25,8 +25,9 @@ interface FieldErrors {
 }
 
 const ITEM_TYPE_OPTIONS: Array<{ value: ItemType; label: string }> = [
-  { value: "fungible", label: "Fungible" },
-  { value: "no_fungible", label: "No fungible" },
+  { value: "consumable", label: "Consumible" },
+  { value: "reusable", label: "Reutilizable" },
+  { value: "individual", label: "Individual" },
 ];
 
 function mapApiErrorToFields(message: string): FieldErrors {
@@ -102,6 +103,7 @@ export function InventoryImplementCreatePage({ embedded = false }: { embedded?: 
   useEffect(() => {
     let cancelled = false;
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoadingCategories(true);
     setCategoriesError(null);
     fetchActiveCategories()
@@ -142,6 +144,7 @@ export function InventoryImplementCreatePage({ embedded = false }: { embedded?: 
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPreviewFailed(false);
   }, [normalizedImgUrl]);
 

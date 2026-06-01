@@ -17,7 +17,7 @@ export function getDeliveryWindowOpenAt(schedule: string): Date | null {
 }
 
 export function canStartDelivery(loan: Pick<LoanSummary, "status" | "scheduled_at">, now = Date.now()): boolean {
-  if (loan.status !== "approved") {
+  if (loan.status !== "approved" && loan.status !== "prepared") {
     return false;
   }
   const openAt = getDeliveryWindowOpenAt(loan.scheduled_at);

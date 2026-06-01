@@ -115,6 +115,7 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshImplements();
   }, [refreshImplements]);
 
@@ -140,6 +141,7 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUserRole(getUserRoleFromToken());
   }, []);
 
@@ -287,7 +289,7 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
   async function handleSubmit(payload: {
     name: string;
     categoryUuid: string;
-    itemType: "fungible" | "no_fungible";
+    itemType: "consumable" | "reusable" | "individual";
     locationUuid: string;
     description: string | null;
     barcode: string | null;
@@ -582,7 +584,7 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
                         <td>
                           <div className="inventory-item-cell">
                             <img
-                              src={(row.imgUrl ?? (row as any).img_url) ?? "https://placehold.co/56x56/e9edf5/4d6284?text=Sin+img"}
+                              src={(row.imgUrl ?? row.img_url) ?? "https://placehold.co/56x56/e9edf5/4d6284?text=Sin+img"}
                               alt={row.name}
                               className="implement-thumb"
                             />

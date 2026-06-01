@@ -1,8 +1,8 @@
 ﻿# 00 - Matriz Canonica Vigente
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-05-17
-- Fuente de verdad: `db/migration/v25/V25__schema_alignment_big_bang.sql`, controllers V2, `SecurityConfig`,
+- Ultima verificacion: 2026-05-31
+- Fuente de verdad: `db/migration/v25/V25..V31`, `docs/architecture/data-management/16-catalogo-bd-v31.md`, controllers V2, `SecurityConfig`,
   `application.yaml`, compose files, `ArchitectureTest`
 
 ## Rutas publicas vigentes

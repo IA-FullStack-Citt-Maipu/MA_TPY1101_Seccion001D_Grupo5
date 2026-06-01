@@ -1,10 +1,13 @@
 export type StockMovementType =
-  | "STOCK_IN"
-  | "STOCK_OUT"
-  | "LOAN_DELIVERY"
-  | "LOAN_RETURN"
-  | "DAMAGE_REPORT"
-  | "MANUAL_ADJUSTMENT";
+  | "stock_in"
+  | "stock_out"
+  | "loan_delivery"
+  | "loan_return"
+  | "damage_report"
+  | "manual_adjustment"
+  | "consumption"
+  | "discard"
+  | "loss";
 
 export interface StockCounters {
   total_stock: number;
@@ -18,8 +21,8 @@ export interface StockCounters {
 export interface IndividualItem {
   uuid: string;
   asset_code: string;
-  status: "available" | "loaned" | "maintenance" | "damaged";
-  condition: "good" | "fair" | "poor";
+  status: "available" | "loaned" | "maintenance" | "damaged" | "blocked" | "retired";
+  condition: "good" | "damaged_repairable" | "damaged_no_diagnosis" | "irreparable";
   notes: string | null;
   current_location_uuid: string | null;
   active: boolean;
@@ -27,7 +30,7 @@ export interface IndividualItem {
 
 export interface StockDetail {
   implement_uuid: string;
-  item_type: "fungible" | "no_fungible" | null;
+  item_type: "consumable" | "reusable" | "individual" | null;
   stock: StockCounters;
   individuals: IndividualItem[];
 }
