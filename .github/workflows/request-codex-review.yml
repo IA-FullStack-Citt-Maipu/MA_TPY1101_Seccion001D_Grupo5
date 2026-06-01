@@ -29,23 +29,16 @@ jobs:
     steps:
       - name: Request Codex review
         uses: actions/github-script@v7
-        env:
-          CODEX_REVIEW_TOKEN: ${{ secrets.CODEX_REVIEW_TOKEN }}
         with:
-          # Use GITHUB_TOKEN as baseline to guarantee repository-scoped permissions.
-          # If CODEX_REVIEW_TOKEN exists, script will try it first and fallback safely.
+          # Keep this on GITHUB_TOKEN for deterministic repository-scoped permissions.
           github-token: ${{ github.token }}
           script: |
-            const githubActions = require('@actions/github');
             const pr = context.payload.pull_request;
             const { owner, repo } = context.repo;
             const headSha = pr.head.sha;
             const marker = `<!-- codex-review-request:${headSha} -->`;
-            const codexToken = process.env.CODEX_REVIEW_TOKEN?.trim();
-            const codexClient = codexToken ? githubActions.getOctokit(codexToken) : null;
-            const readClient = codexClient ?? github;
 
-            const comments = await readClient.paginate(readClient.rest.issues.listComments, {
+            const comments = await github.paginate(github.rest.issues.listComments, {
               owner,
               repo,
               issue_number: pr.number,
@@ -78,22 +71,9 @@ jobs:
               `Commit revisado: ${headSha}`,
             ].join('\n');
 
-            async function postWith(client) {
-              await client.rest.issues.createComment({
-                owner,
-                repo,
-                issue_number: pr.number,
-                body,
-              });
-            }
-
-            if (codexClient) {
-              try {
-                await postWith(codexClient);
-                return;
-              } catch (error) {
-                core.warning(`CODEX_REVIEW_TOKEN failed (${error.status ?? "unknown"}). Falling back to GITHUB_TOKEN.`);
-              }
-            }
-
-            await postWith(github);
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: pr.number,
+              body,
+            });
