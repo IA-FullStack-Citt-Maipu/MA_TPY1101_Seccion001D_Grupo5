@@ -8,7 +8,7 @@ import type { ActiveCategoryOption } from "../../types/categoryActive";
 import type { LocationOption } from "../../types/location";
 import type { ImplementDetail } from "../../types/implement";
 
-type ItemType = "fungible" | "no_fungible";
+type ItemType = "consumable" | "reusable" | "individual";
 
 interface FieldErrors {
   name?: string;
@@ -24,8 +24,9 @@ interface FieldErrors {
 }
 
 const ITEM_TYPE_OPTIONS: Array<{ value: ItemType; label: string }> = [
-  { value: "fungible", label: "Fungible" },
-  { value: "no_fungible", label: "No fungible" },
+  { value: "consumable", label: "Consumible" },
+  { value: "reusable", label: "Reutilizable" },
+  { value: "individual", label: "Individual" },
 ];
 
 interface ImplementEditModalProps {
@@ -64,6 +65,7 @@ export function ImplementEditModal({ implementUuid, isOpen, onClose, onSaved }: 
       return;
     }
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setFieldErrors({});
     setSaving(false);
 
@@ -96,6 +98,7 @@ export function ImplementEditModal({ implementUuid, isOpen, onClose, onSaved }: 
       return;
     }
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCategories([]);
     setCategoriesError(null);
     setLoadingCategories(true);
@@ -135,12 +138,7 @@ export function ImplementEditModal({ implementUuid, isOpen, onClose, onSaved }: 
     [loadingLocations, locations.length, locationsError],
   );
 
-  const currentCategoryInactive = useMemo(() => {
-    if (!implement?.category) {
-      return false;
-    }
-    return !implement.category.active;
-  }, [implement?.category]);
+  const currentCategoryInactive = Boolean(implement?.category && !implement.category.active);
 
   const isUsingInactiveCategory = useMemo(() => {
     if (!currentCategoryInactive) {
@@ -163,15 +161,13 @@ export function ImplementEditModal({ implementUuid, isOpen, onClose, onSaved }: 
     return "La categoria actual esta inactiva. Debes seleccionar una categoria activa para guardar.";
   }, [currentCategoryInactive, isUsingInactiveCategory]);
 
-  const inactiveCategoryOption = useMemo(() => {
-    if (!currentCategoryInactive || !implement?.category) {
-      return null;
-    }
-    return {
-      uuid: implement.category.uuid,
-      name: implement.category.name,
-    };
-  }, [currentCategoryInactive, implement?.category]);
+  const inactiveCategoryOption =
+    currentCategoryInactive && implement?.category
+      ? {
+          uuid: implement.category.uuid,
+          name: implement.category.name,
+        }
+      : null;
 
   if (!isOpen) {
     return null;

@@ -1,8 +1,8 @@
 ﻿# Arquitectura Overview
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-05-17
-- Fuente de verdad: `ArchitectureTest`, estructura de paquetes en `src/main/java` y `db/migration/v25/V25__schema_alignment_big_bang.sql`
+- Ultima verificacion: 2026-05-31
+- Fuente de verdad: `ArchitectureTest`, estructura de paquetes en `src/main/java`, `db/migration/v25/V25..V31` y `docs/architecture/data-management/16-catalogo-bd-v31.md`
 
 Nota operativa: PostgreSQL es la base canónica y única del sistema en este tramo.
 

@@ -8,11 +8,13 @@ import {
 import { InventoryCategoriesPage } from "./pages/InventoryCategoriesPage";
 import { DirectorCreateUserPage } from "./pages/DirectorCreateUserPage";
 import { DirectorDashboardPage } from "./pages/DirectorDashboardPage";
+import { InventoryHealthDashboardPage } from "./pages/InventoryHealthDashboardPage";
 import { InventoryItemDetailPage } from "./pages/InventoryItemDetailPage";
 import { InventoryImplementCreatePage } from "./pages/InventoryImplementCreatePage";
 import { InventoryItemsPage } from "./pages/InventoryItemsPage";
 import { InventoryLocationsPage } from "./pages/InventoryLocationsPage";
 import { InventoryMovesPage } from "./pages/InventoryMovesPage";
+import { LoanCalendarPage } from "./pages/LoanCalendarPage";
 import { LoanCreatePage } from "./pages/LoanCreatePage";
 import { LoanCoordinatorPage } from "./pages/LoanCoordinatorPage";
 import { LoanDetailPage } from "./pages/LoanDetailPage";
@@ -20,6 +22,7 @@ import { LoanDeliveryPage } from "./pages/LoanDeliveryPage";
 import { LoanHistoryPage } from "./pages/LoanHistoryPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
+import { OutboxMonitoringPage } from "./pages/OutboxMonitoringPage";
 import { logout } from "./services/authService";
 import { clearSession, getUserRoleFromToken, isAuthenticated } from "./utils/auth";
 
@@ -117,6 +120,68 @@ function App() {
         activeSection: "director-users",
         breadcrumbs: [{ label: "Usuarios" }, { label: "Director de Carrera" }],
         content: <DirectorCreateUserPage embedded />,
+      };
+    }
+
+    if (currentHash.startsWith("#/inventory/dashboard")) {
+      return {
+        key: "inventory-dashboard",
+        navigationMode: "inventory",
+        activeSection: "dashboard",
+        breadcrumbs: [{ label: "Inventario" }, { label: "Dashboard" }],
+        content: <InventoryHealthDashboardPage embedded />,
+      };
+    }
+
+    if (currentHash.startsWith("#/inventory/monitoring/outbox")) {
+      if (role !== "COORDINADOR") {
+        return {
+          key: "outbox-forbidden",
+          navigationMode: "inventory",
+          activeSection: "reports",
+          breadcrumbs: [{ label: "Monitoreo" }, { label: "Acceso denegado" }],
+          content: (
+            <section className="panel">
+              <div className="content-header"><h1>Acceso denegado</h1></div>
+              <p className="text-muted">Solo el rol Coordinador puede acceder al monitoreo tecnico.</p>
+            </section>
+          ),
+        };
+      }
+      return {
+        key: "outbox-monitoring",
+        navigationMode: "inventory",
+        activeSection: "reports",
+        breadcrumbs: [{ label: "Inventario" }, { label: "Monitoreo" }, { label: "Eventos" }],
+        content: <OutboxMonitoringPage embedded />,
+      };
+    }
+
+    if (currentHash.startsWith("#/inventory/prestamos/calendario")) {
+      if (role !== "DOCENTE" && role !== "COORDINADOR") {
+        return {
+          key: "loan-calendar-forbidden",
+          navigationMode: "inventory",
+          activeSection: "history",
+          breadcrumbs: [{ label: "Prestamos" }, { label: "Acceso denegado" }],
+          content: (
+            <section className="panel">
+              <div className="content-header"><h1>Acceso denegado</h1></div>
+              <p className="text-muted">No tienes permisos para ver la agenda de prestamos.</p>
+            </section>
+          ),
+        };
+      }
+      return {
+        key: "loan-calendar",
+        navigationMode: "inventory",
+        activeSection: "history",
+        breadcrumbs: [
+          { label: "Inventario", href: "#/inventory/dashboard" },
+          { label: "Prestamos", href: "#/inventory/prestamos" },
+          { label: "Agenda" },
+        ],
+        content: <LoanCalendarPage embedded />,
       };
     }
 

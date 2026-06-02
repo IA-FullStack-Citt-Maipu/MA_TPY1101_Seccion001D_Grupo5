@@ -1,4 +1,5 @@
 import {
+  AlertCircle,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
@@ -12,7 +13,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getErrorMessage } from "../services/apiClient";
-import { fetchLoansPage } from "../services/loanService";
+import { cancelLoan, fetchLoansPage } from "../services/loanService";
 import type { LoanSummary } from "../types/loan";
 
 const CLIENT_PAGE_SIZE = 4;
@@ -22,11 +23,13 @@ type LoanStatusFilter =
   | "all"
   | "pending"
   | "approved"
+  | "prepared"
   | "delivered"
   | "completed"
   | "cancelled"
   | "rejected"
-  | "expired";
+  | "expired"
+  | "overdue";
 
 function pad(value: number): string {
   return value.toString().padStart(2, "0");
@@ -90,7 +93,9 @@ function normalizeStatusLabel(status: string): string {
   const labels: Record<string, string> = {
     pending: "Pendiente",
     approved: "Aprobado",
+    prepared: "Preparado",
     delivered: "En uso",
+    overdue: "Atrasado",
     completed: "Completado",
     cancelled: "Cancelado",
     rejected: "Rechazado",
@@ -106,8 +111,14 @@ function statusClassName(status: string): string {
   if (status === "approved") {
     return "teacher-loans-status teacher-loans-status--approved";
   }
+  if (status === "prepared") {
+    return "teacher-loans-status teacher-loans-status--approved";
+  }
   if (status === "delivered") {
     return "teacher-loans-status teacher-loans-status--delivered";
+  }
+  if (status === "overdue") {
+    return "teacher-loans-status teacher-loans-status--danger";
   }
   if (status === "completed") {
     return "teacher-loans-status teacher-loans-status--completed";
@@ -119,11 +130,21 @@ function statusClassName(status: string): string {
 }
 
 function isActiveLoanStatus(status: string): boolean {
-  return status === "pending" || status === "approved" || status === "delivered";
+  return (
+    status === "pending" ||
+    status === "approved" ||
+    status === "prepared" ||
+    status === "delivered" ||
+    status === "overdue"
+  );
 }
 
 function isPendingReturnStatus(status: string): boolean {
-  return status === "delivered";
+  return status === "delivered" || status === "overdue";
+}
+
+function canCancelLoan(status: string): boolean {
+  return status === "pending" || status === "approved" || status === "prepared";
 }
 
 function summarizeItems(items: LoanSummary["items"]): string {
@@ -142,14 +163,15 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
   const [allLoans, setAllLoans] = useState<LoanSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [processingLoanUuid, setProcessingLoanUuid] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<LoanStatusFilter>("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [page, setPage] = useState(1);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
-  const [removedLoanUuids, setRemovedLoanUuids] = useState<string[]>([]);
   const [loanToDelete, setLoanToDelete] = useState<LoanSummary | null>(null);
   const [deleteConfirmationInput, setDeleteConfirmationInput] = useState("");
 
@@ -200,15 +222,16 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
     };
   }, []);
 
-  const removedUuidsSet = useMemo(() => new Set(removedLoanUuids), [removedLoanUuids]);
-  const availableLoans = useMemo(
-    () => allLoans.filter((loan) => !removedUuidsSet.has(loan.uuid)),
-    [allLoans, removedUuidsSet],
-  );
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 30000);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   const filteredLoans = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
-    return availableLoans.filter((loan) => {
+    return allLoans.filter((loan) => {
       const scheduledDate = parseDate(loan.scheduled_at);
 
       if (statusFilter !== "all" && loan.status !== statusFilter) {
@@ -242,20 +265,18 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
         .toLowerCase();
       return searchableText.includes(normalizedSearch);
     });
-  }, [availableLoans, fromDate, searchTerm, statusFilter, toDate]);
+  }, [allLoans, fromDate, searchTerm, statusFilter, toDate]);
 
   const totalPages = Math.max(1, Math.ceil(filteredLoans.length / CLIENT_PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-
-  useEffect(() => {
-    if (page > totalPages) {
-      setPage(totalPages);
+  const safePage = useMemo(() => {
+    if (page < 1) {
+      return 1;
     }
+    if (page > totalPages) {
+      return totalPages;
+    }
+    return page;
   }, [page, totalPages]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [searchTerm, statusFilter, fromDate, toDate]);
 
   const pageStart = (safePage - 1) * CLIENT_PAGE_SIZE;
   const pagedLoans = filteredLoans.slice(pageStart, pageStart + CLIENT_PAGE_SIZE);
@@ -265,40 +286,39 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
   const pageNumbers = useMemo(() => {
     const windowSize = 3;
     let start = Math.max(1, safePage - 1);
-    let end = Math.min(totalPages, start + windowSize - 1);
+    const end = Math.min(totalPages, start + windowSize - 1);
     start = Math.max(1, end - windowSize + 1);
     return Array.from({ length: end - start + 1 }, (_, index) => start + index);
   }, [safePage, totalPages]);
 
   const activeRequestsCount = useMemo(
-    () => availableLoans.filter((loan) => isActiveLoanStatus(loan.status)).length,
-    [availableLoans],
+    () => allLoans.filter((loan) => isActiveLoanStatus(loan.status)).length,
+    [allLoans],
   );
 
   const pendingReturnsCount = useMemo(
-    () => availableLoans.filter((loan) => isPendingReturnStatus(loan.status)).length,
-    [availableLoans],
+    () => allLoans.filter((loan) => isPendingReturnStatus(loan.status)).length,
+    [allLoans],
   );
 
   const nextDeliveryDate = useMemo(() => {
-    const now = Date.now();
-    const activeDates = availableLoans
+    const activeDates = allLoans
       .filter((loan) => isActiveLoanStatus(loan.status))
       .map((loan) => parseDate(loan.scheduled_at))
-      .filter((date): date is Date => date !== null && date.getTime() >= now)
+      .filter((date): date is Date => date !== null && date.getTime() >= nowMs)
       .sort((a, b) => a.getTime() - b.getTime());
 
     return activeDates.length > 0 ? activeDates[0].toISOString() : null;
-  }, [availableLoans]);
+  }, [allLoans, nowMs]);
 
   const canConfirmDeletion = deleteConfirmationInput.trim().toLowerCase() === DELETE_CONFIRM_TEXT;
 
   function goToCreateLoan() {
-    window.location.hash = "#/inventory/prestamos/nuevo";
+    window.location.assign("#/inventory/prestamos/nuevo");
   }
 
   function goToLoanDetail(loanUuid: string) {
-    window.location.hash = `#/inventory/prestamos/${loanUuid}`;
+    window.location.assign(`#/inventory/prestamos/${loanUuid}`);
   }
 
   function requestDeletion(loan: LoanSummary) {
@@ -311,12 +331,25 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
     setDeleteConfirmationInput("");
   }
 
-  function confirmDeletion() {
+  async function confirmDeletion() {
     if (!loanToDelete || !canConfirmDeletion) {
       return;
     }
-    setRemovedLoanUuids((previous) => [...previous, loanToDelete.uuid]);
-    closeDeletionModal();
+    setProcessingLoanUuid(loanToDelete.uuid);
+    setError(null);
+    try {
+      const cancelled = await cancelLoan(loanToDelete.uuid, {
+        notes: "Cancelado por docente desde historial",
+      });
+      setAllLoans((previous) =>
+        previous.map((loan) => (loan.uuid === cancelled.uuid ? cancelled : loan)),
+      );
+      closeDeletionModal();
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, "No se pudo cancelar el prestamo."));
+    } finally {
+      setProcessingLoanUuid(null);
+    }
   }
 
   const content = (
@@ -370,7 +403,10 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
                 type="search"
                 placeholder="Buscar prestamos, implementos o salas..."
                 value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
+                onChange={(event) => {
+                  setSearchTerm(event.target.value);
+                  setPage(1);
+                }}
               />
             </label>
 
@@ -378,12 +414,17 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
               <span>Estado</span>
               <select
                 value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value as LoanStatusFilter)}
+                onChange={(event) => {
+                  setStatusFilter(event.target.value as LoanStatusFilter);
+                  setPage(1);
+                }}
               >
                 <option value="all">Todos</option>
                 <option value="pending">Pendiente</option>
                 <option value="approved">Aprobado</option>
+                <option value="prepared">Preparado</option>
                 <option value="delivered">En uso</option>
+                <option value="overdue">Atrasado</option>
                 <option value="completed">Completado</option>
                 <option value="cancelled">Cancelado</option>
                 <option value="rejected">Rechazado</option>
@@ -393,12 +434,26 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
 
             <label className="teacher-loans-toolbar__field">
               <span>Desde</span>
-              <input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
+              <input
+                type="date"
+                value={fromDate}
+                onChange={(event) => {
+                  setFromDate(event.target.value);
+                  setPage(1);
+                }}
+              />
             </label>
 
             <label className="teacher-loans-toolbar__field">
               <span>Hasta</span>
-              <input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} />
+              <input
+                type="date"
+                value={toDate}
+                onChange={(event) => {
+                  setToDate(event.target.value);
+                  setPage(1);
+                }}
+              />
             </label>
           </div>
 
@@ -470,15 +525,28 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
                         >
                           <Download size={16} />
                         </button>
-                        <button
-                          type="button"
-                          className="teacher-loans-icon-btn teacher-loans-icon-btn--danger"
-                          onClick={() => requestDeletion(loan)}
-                          aria-label="Eliminar prestamo"
-                          title="Eliminar prestamo"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                        {canCancelLoan(loan.status) ? (
+                          <button
+                            type="button"
+                            className="teacher-loans-icon-btn teacher-loans-icon-btn--danger"
+                            onClick={() => requestDeletion(loan)}
+                            aria-label="Cancelar prestamo"
+                            title="Cancelar prestamo"
+                            disabled={processingLoanUuid === loan.uuid}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="teacher-loans-icon-btn"
+                            disabled
+                            aria-label="Prestamo no cancelable"
+                            title="No se puede cancelar en este estado"
+                          >
+                            <AlertCircle size={16} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -548,10 +616,10 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
                 type="button"
                 className="button button--danger"
                 disabled={!canConfirmDeletion}
-                onClick={confirmDeletion}
+                onClick={() => void confirmDeletion()}
               >
                 <Trash2 size={16} />
-                Eliminar
+                {processingLoanUuid === loanToDelete.uuid ? "Cancelando..." : "Cancelar prestamo"}
               </button>
             </div>
           </div>

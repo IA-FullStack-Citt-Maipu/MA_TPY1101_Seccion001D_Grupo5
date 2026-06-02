@@ -26,24 +26,28 @@ import { getErrorMessage } from "../services/apiClient";
 import { fetchImplementById } from "../services/implementService";
 import { fetchLabelsPdfBlob, type LabelScope } from "../services/labelService";
 import { fetchLocations } from "../services/locationService";
-import { registerManualMovement, type ManualMovementType } from "../services/movementService";
+import { fetchInventoryMovements, registerManualMovement, type ManualMovementType } from "../services/movementService";
 import { addStockEntry, applyStockMovement, fetchImplementStock, updateIndividualState } from "../services/stockService";
-import type { ImplementDetail } from "../types/implement";
+import type { ImplementDetail, InventoryMovementDetail } from "../types/implement";
 import type { LocationOption } from "../types/location";
-import type { IndividualItem, StockMovementType } from "../types/stock";
+import type { IndividualItem, StockDetail, StockMovementPayload, StockMovementType } from "../types/stock";
 import { getUserRoleFromToken, type UserRole } from "../utils/auth";
 
-const ITEM_TYPE_LABELS: Record<"fungible" | "no_fungible", string> = {
-  fungible: "Fungible",
-  no_fungible: "No fungible",
+const ITEM_TYPE_LABELS: Record<"consumable" | "reusable" | "individual", string> = {
+  consumable: "Consumible",
+  reusable: "Reutilizable",
+  individual: "Individual",
 };
 
 const MOVEMENT_OPTIONS: { value: StockMovementType; label: string }[] = [
-  { value: "STOCK_OUT", label: "Salida de stock" },
-  { value: "LOAN_DELIVERY", label: "Entrega de prestamo" },
-  { value: "LOAN_RETURN", label: "Devolucion de prestamo" },
-  { value: "DAMAGE_REPORT", label: "Reporte de dano" },
-  { value: "MANUAL_ADJUSTMENT", label: "Ajuste manual" },
+  { value: "stock_out", label: "Salida de stock" },
+  { value: "loan_delivery", label: "Entrega de prestamo" },
+  { value: "loan_return", label: "Devolucion de prestamo" },
+  { value: "damage_report", label: "Reporte de dano" },
+  { value: "manual_adjustment", label: "Ajuste manual" },
+  { value: "consumption", label: "Consumo" },
+  { value: "discard", label: "Descarte" },
+  { value: "loss", label: "Perdida" },
 ];
 
 const INDIVIDUAL_STATUS_OPTIONS: Array<IndividualItem["status"]> = [
@@ -51,27 +55,56 @@ const INDIVIDUAL_STATUS_OPTIONS: Array<IndividualItem["status"]> = [
   "loaned",
   "maintenance",
   "damaged",
+  "blocked",
+  "retired",
 ];
 
 const INDIVIDUAL_CONDITION_OPTIONS: Array<IndividualItem["condition"]> = [
   "good",
-  "fair",
-  "poor",
+  "damaged_repairable",
+  "damaged_no_diagnosis",
+  "irreparable",
 ];
 
 function statusLabel(status: string) {
   if (status === "available") return "Disponible";
   if (status === "loaned") return "Prestado";
-  if (status === "maintenance") return "Mantención";
-  if (status === "damaged") return "Dañado";
+  if (status === "maintenance") return "Mantencion";
+  if (status === "damaged") return "Danado";
+  if (status === "blocked") return "Bloqueado";
+  if (status === "retired") return "Retirado";
   return status;
 }
 
 function conditionLabel(condition: string) {
   if (condition === "good") return "Bueno";
-  if (condition === "fair") return "Regular";
-  if (condition === "poor") return "Deficiente";
+  if (condition === "damaged_repairable") return "Danado reparable";
+  if (condition === "damaged_no_diagnosis") return "Danado sin diagnostico";
+  if (condition === "irreparable") return "Irreparable";
   return condition;
+}
+
+function movementActionLabel(action: string) {
+  const labels: Record<string, string> = {
+    stock_in: "Entrada",
+    stock_out: "Salida",
+    loan_delivery: "Entrega prestamo",
+    loan_return: "Devolucion prestamo",
+    damage_report: "Reporte dano",
+    manual_adjustment: "Ajuste manual",
+    consumption: "Consumo",
+    discard: "Descarte",
+    loss: "Perdida",
+  };
+  if (labels[action]) return labels[action];
+  return action.replaceAll("_", " ");
+}
+
+function movementRowKey(movement: InventoryMovementDetail, index: number) {
+  const maybeId = (movement as InventoryMovementDetail & { id?: string }).id;
+  if (movement.uuid) return movement.uuid;
+  if (maybeId) return maybeId;
+  return `${movement.timestamp}-${movement.action}-${index}`;
 }
 
 function buildPseudoBarcodeBars(value: string) {
@@ -143,7 +176,7 @@ export function InventoryItemDetailPage({
   embedded?: boolean;
 }) {
   const [implement, setImplement] = useState<ImplementDetail | null>(null);
-  const [stockDetail, setStockDetail] = useState<any>(null);
+  const [stockDetail, setStockDetail] = useState<StockDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [stockLoading, setStockLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -173,11 +206,13 @@ export function InventoryItemDetailPage({
   const [adjustReduceIndividualIds, setAdjustReduceIndividualIds] = useState<string[]>([]);
   const [adjustReduceQuantity, setAdjustReduceQuantity] = useState("1");
 
-  const [movementType, setMovementType] = useState<StockMovementType>("STOCK_OUT");
+  const [movementType, setMovementType] = useState<StockMovementType>("stock_out");
   const [movementQuantity, setMovementQuantity] = useState("1");
   const [movementSelectedIndividualIds, setMovementSelectedIndividualIds] = useState<string[]>([]);
   const [movementNotes, setMovementNotes] = useState("");
   const [stockBusy, setStockBusy] = useState(false);
+  const [latestMovements, setLatestMovements] = useState<InventoryMovementDetail[] | null>(null);
+  const [latestMovementsLoading, setLatestMovementsLoading] = useState(false);
   const [editingIndividual, setEditingIndividual] = useState<IndividualItem | null>(null);
   const [individualStatus, setIndividualStatus] = useState<IndividualItem["status"]>("available");
   const [individualCondition, setIndividualCondition] = useState<IndividualItem["condition"]>("good");
@@ -208,6 +243,7 @@ export function InventoryItemDetailPage({
   }, [isEditing, editingIndividual, isLabelModalOpen, isStockAdjustModalOpen, isMovementModalOpen]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     setError(null);
     setSuccess(null);
@@ -222,12 +258,17 @@ export function InventoryItemDetailPage({
   }, [implementUuid]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setStockLoading(true);
     setStockError(null);
     fetchImplementStock(implementUuid)
       .then(setStockDetail)
       .catch((requestError) => setStockError(getErrorMessage(requestError, "No se pudo cargar el stock.")))
       .finally(() => setStockLoading(false));
+  }, [implementUuid]);
+
+  useEffect(() => {
+    void refreshRecentMovements();
   }, [implementUuid]);
 
   useEffect(() => {
@@ -247,8 +288,25 @@ export function InventoryItemDetailPage({
     setImplement(detail);
   }
 
+  async function refreshRecentMovements() {
+    setLatestMovementsLoading(true);
+    try {
+      const rows = await fetchInventoryMovements();
+      const filtered = rows
+        .filter((movement) => movement.implement_uuid === implementUuid)
+        .sort((left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime())
+        .slice(0, 8);
+      setLatestMovements(filtered);
+    } catch {
+      // Fallback al embed de detalle si el endpoint de movimientos no responde.
+      setLatestMovements(null);
+    } finally {
+      setLatestMovementsLoading(false);
+    }
+  }
+
   async function refreshDetailData() {
-    await Promise.all([refreshImplement(), refreshStock()]);
+    await Promise.all([refreshImplement(), refreshStock(), refreshRecentMovements()]);
   }
 
   function resetAdjustStockState() {
@@ -277,7 +335,7 @@ export function InventoryItemDetailPage({
   }
 
   function openMovementModal() {
-    setMovementType("STOCK_OUT");
+    setMovementType("stock_out");
     setMovementQuantity("1");
     setMovementSelectedIndividualIds([]);
     setMovementNotes("");
@@ -329,7 +387,7 @@ export function InventoryItemDetailPage({
 
     try {
       if (adjustOperation === "increase") {
-        if (implement.item_type === "no_fungible") {
+        if (implement.item_type === "individual") {
           const quantity = adjustIncreaseMode === "single" ? 1 : Number(entryQuantity);
           if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isInteger(quantity)) {
             setStockError("La cantidad debe ser un entero positivo.");
@@ -366,7 +424,7 @@ export function InventoryItemDetailPage({
           }
 
           setStockDetail(nextDetail);
-          await registerInventoryTrace("STOCK_IN", quantity, adjustNotes);
+          await registerInventoryTrace("stock_in", quantity, adjustNotes);
         } else {
           const quantity = Number(entryQuantity);
           if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isInteger(quantity)) {
@@ -375,10 +433,10 @@ export function InventoryItemDetailPage({
             return;
           }
           setStockDetail(await addStockEntry(implementUuid, { quantity }));
-          await registerInventoryTrace("STOCK_IN", quantity, adjustNotes);
+          await registerInventoryTrace("stock_in", quantity, adjustNotes);
         }
       } else {
-        if (implement.item_type === "no_fungible") {
+        if (implement.item_type === "individual") {
           if (adjustReduceIndividualIds.length === 0) {
             setStockError("Selecciona al menos un implemento individual para reducir.");
             setStockBusy(false);
@@ -386,12 +444,12 @@ export function InventoryItemDetailPage({
           }
           setStockDetail(
             await applyStockMovement(implementUuid, {
-              movement_type: "STOCK_OUT",
+              movement_type: "stock_out",
               individual_uuids: adjustReduceIndividualIds,
               condition: adjustCondition,
             }),
           );
-          await registerInventoryTrace("STOCK_OUT", adjustReduceIndividualIds.length, adjustNotes);
+          await registerInventoryTrace("stock_out", adjustReduceIndividualIds.length, adjustNotes);
         } else {
           const quantity = Number(adjustReduceQuantity);
           if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isInteger(quantity)) {
@@ -401,11 +459,11 @@ export function InventoryItemDetailPage({
           }
           setStockDetail(
             await applyStockMovement(implementUuid, {
-              movement_type: "STOCK_OUT",
+              movement_type: "stock_out",
               quantity,
             }),
           );
-          await registerInventoryTrace("STOCK_OUT", quantity, adjustNotes);
+          await registerInventoryTrace("stock_out", quantity, adjustNotes);
         }
       }
 
@@ -421,11 +479,11 @@ export function InventoryItemDetailPage({
   }
 
   async function handleMovementSave() {
-    if (implement?.item_type === "no_fungible" && movementSelectedIndividualIds.length === 0) {
+    if (implement?.item_type === "individual" && movementSelectedIndividualIds.length === 0) {
       setStockError("Debes seleccionar al menos una unidad individual.");
       return;
     }
-    if (implement?.item_type !== "no_fungible") {
+    if (implement?.item_type !== "individual") {
       const quantity = Number(movementQuantity);
       if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isInteger(quantity)) {
         setStockError("La cantidad del movimiento debe ser un entero positivo.");
@@ -435,9 +493,9 @@ export function InventoryItemDetailPage({
     setStockBusy(true);
     setStockError(null);
     try {
-      const payload: any = { movement_type: movementType };
+      const payload: StockMovementPayload = { movement_type: movementType };
       let qtyForTrace = 0;
-      if (implement?.item_type === "no_fungible") {
+      if (implement?.item_type === "individual") {
         payload.individual_uuids = movementSelectedIndividualIds;
         qtyForTrace = movementSelectedIndividualIds.length;
       } else {
@@ -468,6 +526,7 @@ export function InventoryItemDetailPage({
     setStockBusy(true);
     try {
       setStockDetail(await updateIndividualState(implementUuid, individual.uuid, { status: "available", condition: "good" }));
+      await refreshRecentMovements();
       setSuccess(`Individual ${individual.asset_code} actualizado.`);
     } catch (requestError) {
       setStockError(getErrorMessage(requestError, "No se pudo actualizar el individual."));
@@ -503,6 +562,7 @@ export function InventoryItemDetailPage({
         active: individualActive,
       };
       setStockDetail(await updateIndividualState(implementUuid, editingIndividual.uuid, payload));
+      await refreshRecentMovements();
       setSuccess(`Unidad ${editingIndividual.asset_code} actualizada.`);
       closeIndividualEditor();
     } catch (requestError) {
@@ -553,6 +613,8 @@ export function InventoryItemDetailPage({
     popup.focus();
     window.setTimeout(() => popup.print(), 450);
   }
+
+  const latestMovementRows = latestMovements ?? implement?.recent_movements ?? [];
 
   const content = (
     <>
@@ -676,7 +738,7 @@ export function InventoryItemDetailPage({
                 </>
               )}
 
-              {!isDocente && implement.item_type === "no_fungible" ? (
+              {!isDocente && implement.item_type === "individual" ? (
                 <article className="detail-card units-card">
                   <h3>Unidades asociadas</h3>
                   <div className="table-wrapper">
@@ -720,7 +782,7 @@ export function InventoryItemDetailPage({
                 <p><strong>Observaciones:</strong> {implement.observations ?? "Sin observaciones"}</p>
                 <p><strong>Total stock:</strong> {stockDetail?.stock?.total_stock ?? 0}</p>
                 <p><strong>Última actualización:</strong> {implement.updatedAt ? new Date(implement.updatedAt).toLocaleString() : "-"}</p>
-                {implement.item_type !== "no_fungible" && !isDocente ? (
+                {implement.item_type !== "individual" && !isDocente ? (
                   <div style={{ marginTop: 10 }}>
                     <button type="button" className="button button--ghost button--sm" onClick={() => openLabelsModal("GENERAL")}><Barcode size={14} />Código de barras general</button>
                   </div>
@@ -734,15 +796,17 @@ export function InventoryItemDetailPage({
                     <table className="category-table category-table--compact movements-compact-table">
                       <thead><tr><th>Fecha</th><th>Acción</th><th>Cantidad</th><th>Usuario</th></tr></thead>
                       <tbody>
-                        {!implement.recent_movements || implement.recent_movements.length === 0 ? (
+                        {latestMovementsLoading ? (
+                          <tr><td colSpan={4} style={{ textAlign: "center" }}>Cargando movimientos...</td></tr>
+                        ) : latestMovementRows.length === 0 ? (
                           <tr><td colSpan={4} style={{ textAlign: "center" }}>No hay movimientos recientes registrados</td></tr>
                         ) : (
-                          implement.recent_movements.map((mov) => (
-                            <tr key={mov.uuid}>
+                          latestMovementRows.map((mov, index) => (
+                            <tr key={movementRowKey(mov, index)}>
                               <td>{new Date(mov.timestamp).toLocaleString()}</td>
-                              <td><span className="badge badge--inactive">{mov.action}</span></td>
+                              <td><span className="badge badge--inactive">{movementActionLabel(mov.action)}</span></td>
                               <td>{mov.quantity}</td>
-                              <td>{mov.performed_by}</td>
+                              <td>{mov.performed_by ?? "Usuario no identificado"}</td>
                             </tr>
                           ))
                         )}
@@ -815,7 +879,7 @@ export function InventoryItemDetailPage({
                   <option value="decrease">Reducir stock</option>
                 </select>
 
-                {implement.item_type === "no_fungible" && adjustOperation === "increase" ? (
+                {implement.item_type === "individual" && adjustOperation === "increase" ? (
                   <>
                     <label htmlFor="adjust-increase-mode">Tipo de ingreso</label>
                     <select
@@ -844,7 +908,7 @@ export function InventoryItemDetailPage({
                       disabled={adjustIncreaseMode === "single"}
                     />
 
-                    {implement.item_type === "no_fungible" && adjustIncreaseMode === "single" ? (
+                    {implement.item_type === "individual" && adjustIncreaseMode === "single" ? (
                       <>
                         <label htmlFor="single-asset-code">Código del individual</label>
                         <input
@@ -857,7 +921,7 @@ export function InventoryItemDetailPage({
                       </>
                     ) : null}
 
-                    {implement.item_type === "no_fungible" && adjustIncreaseMode === "batch" ? (
+                    {implement.item_type === "individual" && adjustIncreaseMode === "batch" ? (
                       <>
                         <label htmlFor="entry-asset-codes">Códigos individuales (opcional, uno por línea)</label>
                         <textarea
@@ -869,7 +933,7 @@ export function InventoryItemDetailPage({
                       </>
                     ) : null}
 
-                    {implement.item_type === "no_fungible" ? (
+                    {implement.item_type === "individual" ? (
                       <>
                         <label className="modal-checkbox">
                           <input
@@ -914,7 +978,7 @@ export function InventoryItemDetailPage({
                   </>
                 ) : (
                   <>
-                    {implement.item_type === "no_fungible" ? (
+                    {implement.item_type === "individual" ? (
                       <>
                         <label>Selecciona implementos a retirar (borrado lógico)</label>
                         <div className="table-wrapper wizard-table-select">
@@ -1040,7 +1104,7 @@ export function InventoryItemDetailPage({
               ))}
             </select>
 
-            {implement.item_type === "no_fungible" ? (
+            {implement.item_type === "individual" ? (
               <>
                 <label>Selecciona unidades</label>
                 <div className="table-wrapper" style={{ maxHeight: 260, border: "1px solid var(--line)", borderRadius: 10 }}>

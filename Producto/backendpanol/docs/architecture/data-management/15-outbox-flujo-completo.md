@@ -1,8 +1,8 @@
 ﻿# 15 - Outbox: Flujo Completo y Limites
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-05-17
-- Fuente de verdad: `OutboxService`, `OutboxWorker`, `OutboxJooqRepository`, `db/migration/v25/V25__schema_alignment_big_bang.sql`
+- Ultima verificacion: 2026-05-31
+- Fuente de verdad: `OutboxService`, `OutboxWorker`, `OutboxJooqRepository`, `db/migration/v25/V25..V31`, `16-catalogo-bd-v31.md`
 
 ## Objetivo
 

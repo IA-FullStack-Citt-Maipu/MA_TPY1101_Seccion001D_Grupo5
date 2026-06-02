@@ -20,7 +20,9 @@ type LoanStatusFilter =
   | "all"
   | "pending"
   | "approved"
+  | "prepared"
   | "delivered"
+  | "overdue"
   | "completed"
   | "cancelled"
   | "rejected"
@@ -76,7 +78,9 @@ function normalizeStatusLabel(status: string): string {
   const labels: Record<string, string> = {
     pending: "Pendiente",
     approved: "Aprobado",
+    prepared: "Preparado",
     delivered: "En uso",
+    overdue: "Atrasado",
     completed: "Completado",
     cancelled: "Cancelado",
     rejected: "Rechazado",
@@ -88,7 +92,9 @@ function normalizeStatusLabel(status: string): string {
 function statusClassName(status: string): string {
   if (status === "pending") return "teacher-loans-status teacher-loans-status--pending";
   if (status === "approved") return "teacher-loans-status teacher-loans-status--approved";
+  if (status === "prepared") return "teacher-loans-status teacher-loans-status--approved";
   if (status === "delivered") return "teacher-loans-status teacher-loans-status--delivered";
+  if (status === "overdue") return "teacher-loans-status teacher-loans-status--danger";
   if (status === "cancelled" || status === "rejected" || status === "expired")
     return "teacher-loans-status teacher-loans-status--danger";
   return "teacher-loans-status teacher-loans-status--completed";
@@ -206,17 +212,15 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
     });
   }, [allLoans, fromDate, roomFilter, searchTerm, statusFilter, toDate]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [searchTerm, statusFilter, fromDate, toDate, roomFilter]);
-
   const totalPages = Math.max(1, Math.ceil(filteredLoans.length / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-
-  useEffect(() => {
-    if (page > totalPages) {
-      setPage(totalPages);
+  const safePage = useMemo(() => {
+    if (page < 1) {
+      return 1;
     }
+    if (page > totalPages) {
+      return totalPages;
+    }
+    return page;
   }, [page, totalPages]);
 
   const pageStart = (safePage - 1) * PAGE_SIZE;
@@ -227,7 +231,7 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
   const pageNumbers = useMemo(() => {
     const windowSize = 5;
     let start = Math.max(1, safePage - 2);
-    let end = Math.min(totalPages, start + windowSize - 1);
+    const end = Math.min(totalPages, start + windowSize - 1);
     start = Math.max(1, end - windowSize + 1);
     return Array.from({ length: end - start + 1 }, (_, index) => start + index);
   }, [safePage, totalPages]);
@@ -237,7 +241,7 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
     [allLoans],
   );
   const inUseCount = useMemo(
-    () => allLoans.filter((loan) => loan.status === "delivered").length,
+    () => allLoans.filter((loan) => loan.status === "delivered" || loan.status === "overdue").length,
     [allLoans],
   );
   const completedToday = useMemo(() => {
@@ -251,18 +255,13 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
     }).length;
   }, [allLoans]);
 
-  const overdueCount = useMemo(() => {
-    const now = Date.now();
-    return allLoans.filter((loan) => {
-      const schedule = parseDate(loan.scheduled_at);
-      if (!schedule) return false;
-      if (!(loan.status === "pending" || loan.status === "approved")) return false;
-      return schedule.getTime() < now;
-    }).length;
-  }, [allLoans]);
+  const overdueCount = useMemo(
+    () => allLoans.filter((loan) => loan.status === "overdue").length,
+    [allLoans],
+  );
 
   function goToLoanDetail(loanUuid: string) {
-    window.location.hash = `#/inventory/prestamos/${loanUuid}`;
+    window.location.assign(`#/inventory/prestamos/${loanUuid}`);
   }
 
   function updateLoanInState(updated: LoanSummary) {
@@ -277,7 +276,7 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
     try {
       const updated = await reviewLoan(loan.uuid, {
         decision: "APPROVE",
-        review_notes: "Aprobado por coordinador",
+        notes: "Aprobado por coordinador",
       });
       updateLoanInState(updated);
     } catch (requestError) {
@@ -301,7 +300,7 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
   }
 
   function goToDelivery(loanUuid: string) {
-    window.location.hash = `#/inventory/prestamos/${loanUuid}/entrega`;
+    window.location.assign(`#/inventory/prestamos/${loanUuid}/entrega`);
   }
 
   function openRejectModal(loan: LoanSummary) {
@@ -323,8 +322,7 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
     try {
       const updated = await reviewLoan(rejectingLoan.uuid, {
         decision: "REJECT",
-        review_notes: "Rechazado por coordinador",
-        rejection_reason: rejectionReason.trim(),
+        notes: rejectionReason.trim(),
       });
       updateLoanInState(updated);
       closeRejectModal();
@@ -385,19 +383,27 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
               type="search"
               placeholder="Buscar por UUID, solicitante o implemento..."
               value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
+              onChange={(event) => {
+                setSearchTerm(event.target.value);
+                setPage(1);
+              }}
             />
           </label>
           <label>
             <span>Estado</span>
             <select
               value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value as LoanStatusFilter)}
+              onChange={(event) => {
+                setStatusFilter(event.target.value as LoanStatusFilter);
+                setPage(1);
+              }}
             >
               <option value="all">Todos</option>
               <option value="pending">Pendiente</option>
               <option value="approved">Aprobado</option>
+              <option value="prepared">Preparado</option>
               <option value="delivered">En uso</option>
+              <option value="overdue">Atrasado</option>
               <option value="completed">Completado</option>
               <option value="cancelled">Cancelado</option>
               <option value="rejected">Rechazado</option>
@@ -406,11 +412,25 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
           </label>
           <label>
             <span>Desde</span>
-            <input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(event) => {
+                setFromDate(event.target.value);
+                setPage(1);
+              }}
+            />
           </label>
           <label>
             <span>Hasta</span>
-            <input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} />
+            <input
+              type="date"
+              value={toDate}
+              onChange={(event) => {
+                setToDate(event.target.value);
+                setPage(1);
+              }}
+            />
           </label>
           <label>
             <span>Sala / materia</span>
@@ -418,7 +438,10 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
               type="text"
               placeholder="Ej: Sala 326"
               value={roomFilter}
-              onChange={(event) => setRoomFilter(event.target.value)}
+              onChange={(event) => {
+                setRoomFilter(event.target.value);
+                setPage(1);
+              }}
             />
           </label>
         </div>
@@ -503,7 +526,7 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
                                 Rechazar
                               </button>
                             </>
-                          ) : loan.status === "approved" ? (
+                          ) : loan.status === "approved" || loan.status === "prepared" ? (
                             <button
                               type="button"
                               className="coordinator-loans-action-btn coordinator-loans-action-btn--approve"
@@ -517,7 +540,7 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
                             >
                               {deliveryEnabled ? "Entregar" : `Desde ${formatTime(deliveryWindow)}`}
                             </button>
-                          ) : loan.status === "delivered" ? (
+                          ) : loan.status === "delivered" || loan.status === "overdue" ? (
                             <button
                               type="button"
                               className="coordinator-loans-action-btn coordinator-loans-action-btn--complete"

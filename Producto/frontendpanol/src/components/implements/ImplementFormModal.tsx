@@ -6,7 +6,7 @@ import { fetchLocations } from "../../services/locationService";
 import type { ActiveCategoryOption } from "../../types/categoryActive";
 import type { LocationOption } from "../../types/location";
 
-type ItemType = "fungible" | "no_fungible";
+type ItemType = "consumable" | "reusable" | "individual";
 
 interface CreateImplementFormPayload {
   name: string;
@@ -41,8 +41,9 @@ interface FieldErrors {
 }
 
 const ITEM_TYPE_OPTIONS: Array<{ value: ItemType; label: string }> = [
-  { value: "fungible", label: "Fungible" },
-  { value: "no_fungible", label: "No fungible" },
+  { value: "consumable", label: "Consumible" },
+  { value: "reusable", label: "Reutilizable" },
+  { value: "individual", label: "Individual" },
 ];
 
 export function ImplementFormModal({ isOpen, saving, onClose, onSubmit }: ImplementFormModalProps) {
@@ -70,6 +71,7 @@ export function ImplementFormModal({ isOpen, saving, onClose, onSubmit }: Implem
       return;
     }
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setName("");
     setCategoryUuidRaw("");
     setItemTypeRaw("");
