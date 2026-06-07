@@ -116,11 +116,14 @@ function summarizeItems(loan: LoanSummary): string {
 }
 
 export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
+  const currentRole = getUserRoleFromToken();
+  const canCreateLoan = currentRole === "DOCENTE";
+  const todayKey = useMemo(() => toDateKey(new Date()), []);
   const [monthAnchor, setMonthAnchor] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
-  const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
+  const [selectedDateKey, setSelectedDateKey] = useState<string | null>(todayKey);
   const [allLoans, setAllLoans] = useState<LoanSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -132,8 +135,7 @@ export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
       setLoading(true);
       setError(null);
       try {
-        const role = getUserRoleFromToken();
-        const mine = role === "DOCENTE";
+        const mine = currentRole === "DOCENTE";
         const firstPage = await fetchLoansPage({ page: 1, size: 50, mine });
         if (cancelled) return;
         const merged = [...firstPage.items];
@@ -155,7 +157,7 @@ export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [currentRole]);
 
   const monthGrid = useMemo(() => getMonthGrid(monthAnchor), [monthAnchor]);
   const monthKey = useMemo(() => `${monthAnchor.getFullYear()}-${monthAnchor.getMonth()}`, [monthAnchor]);
@@ -210,13 +212,19 @@ export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
       <section className="loan-calendar-header">
         <div>
           <h1>Agenda de Prestamos</h1>
-          <p>Vista operacional del calendario de solicitudes y entregas programadas.</p>
+          <p>
+            {canCreateLoan
+              ? "Calendario de tus solicitudes y devoluciones programadas."
+              : "Vista operacional del calendario de solicitudes y entregas programadas."}
+          </p>
         </div>
         <div className="loan-calendar-header__actions">
           <a href="#/inventory/prestamos" className="loan-calendar-link-btn">Ver listado</a>
-          <a href="#/inventory/prestamos/nuevo" className="loan-calendar-link-btn loan-calendar-link-btn--primary">
-            Nueva solicitud
-          </a>
+          {canCreateLoan ? (
+            <a href="#/inventory/prestamos/nuevo" className="loan-calendar-link-btn loan-calendar-link-btn--primary">
+              Nueva solicitud
+            </a>
+          ) : null}
         </div>
       </section>
 
@@ -252,11 +260,12 @@ export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
               const dayLoans = loansByDay.get(key) ?? [];
               const isCurrentMonth = `${day.getFullYear()}-${day.getMonth()}` === monthKey;
               const isSelected = key === selectedDateKey;
+              const isToday = key === todayKey;
               return (
                 <button
                   type="button"
                   key={key}
-                  className={`loan-calendar-day${isCurrentMonth ? "" : " is-faded"}${isSelected ? " is-selected" : ""}`}
+                  className={`loan-calendar-day${isCurrentMonth ? "" : " is-faded"}${isSelected ? " is-selected" : ""}${isToday ? " is-today" : ""}`}
                   onClick={() => setSelectedDateKey(key)}
                 >
                   <div className="loan-calendar-day__top">

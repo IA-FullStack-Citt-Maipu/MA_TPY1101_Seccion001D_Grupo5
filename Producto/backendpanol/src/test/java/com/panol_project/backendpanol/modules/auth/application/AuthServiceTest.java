@@ -54,6 +54,8 @@ class AuthServiceTest {
         AuthUser authUser = new AuthUser(
                 userUuid,
                 "12345678",
+                "Directora Prueba",
+                "directora@panol.test",
                 hash,
                 "DIRECTOR",
                 0,
@@ -85,6 +87,9 @@ class AuthServiceTest {
         assertEquals("token-123", result.accessToken());
         assertEquals("DIRECTOR", result.role());
         assertEquals(3600, result.expiresInSeconds());
+        assertEquals("Directora Prueba", result.user().name());
+        assertEquals("directora@panol.test", result.user().email());
+        assertEquals("DIRECTOR", result.user().role());
         verify(userAuthPort).resetLoginAttempts(eq(userUuid), any(OffsetDateTime.class));
         verify(auditLogPort).log("user_logged_in", userUuid, userUuid, Map.of("rut", "12345678", "role", "DIRECTOR"));
         verify(outboxService).enqueue("user", userUuid, "UserLoggedIn", userUuid, Map.of("rut", "12345678", "role", "DIRECTOR"));
@@ -97,6 +102,8 @@ class AuthServiceTest {
         AuthUser authUser = new AuthUser(
                 userUuid,
                 "12345678",
+                "Docente Prueba",
+                "docente@panol.test",
                 hash,
                 "DOCENTE",
                 0,

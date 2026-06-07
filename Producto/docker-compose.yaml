@@ -25,7 +25,6 @@ services:
       DB_SUPABASE_PORT: ${DB_SUPABASE_PORT:-5432}
       DB_SUPABASE_NAME: ${DB_SUPABASE_NAME:-postgres}
       DB_SUPABASE_USER: ${DB_SUPABASE_USER:-postgres.ekqbucfoygimzgxupdhm}
-      DB_SUPABASE_PASSWORD: ${DB_SUPABASE_PASSWORD}
       DB_SUPABASE_SSL_MODE: ${DB_SUPABASE_SSL_MODE:-require}
     ports:
       - "${BACKEND_PORT:-18080}:8080"

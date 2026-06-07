@@ -1,6 +1,7 @@
 package com.panol_project.backendpanol.modules.auth.application;
 
 import com.panol_project.backendpanol.modules.auth.application.dto.LoginCommand;
+import com.panol_project.backendpanol.modules.auth.application.dto.AuthenticatedUserSummary;
 import com.panol_project.backendpanol.modules.auth.application.dto.LoginResult;
 import com.panol_project.backendpanol.modules.auth.domain.AuthUser;
 import com.panol_project.backendpanol.modules.auth.domain.AuditLogPort;
@@ -83,6 +84,12 @@ public class AuthService {
 
         userAuthRepository.resetLoginAttempts(user.uuid(), OffsetDateTime.now());
         String normalizedRole = normalizeRole(user.roleName());
+        AuthenticatedUserSummary authenticatedUser = new AuthenticatedUserSummary(
+                user.uuid(),
+                user.name(),
+                user.email(),
+                normalizedRole
+        );
 
         Instant now = Instant.now();
         Instant exp = now.plusSeconds(tokenExpirationSeconds);
@@ -103,7 +110,7 @@ public class AuthService {
 
         auditLogPort.log("user_logged_in", user.uuid(), user.uuid(), Map.of("rut", rut, "role", normalizedRole));
         outboxService.enqueue("user", user.uuid(), "UserLoggedIn", user.uuid(), Map.of("rut", rut, "role", normalizedRole));
-        return new LoginResult(token, normalizedRole, tokenExpirationSeconds);
+        return new LoginResult(token, normalizedRole, tokenExpirationSeconds, authenticatedUser);
     }
 
     @Transactional

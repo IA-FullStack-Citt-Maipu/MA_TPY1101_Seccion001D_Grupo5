@@ -1,6 +1,5 @@
 ﻿import {
   Bell,
-  BookOpenText,
   Boxes,
   CircleHelp,
   ClipboardList,
@@ -12,8 +11,6 @@
   MapPin,
   Menu,
   Search,
-  Settings,
-  Siren,
   Users,
   X,
 } from "lucide-react";
@@ -22,48 +19,50 @@ import type { KeyboardEvent } from "react";
 import type { ReactNode } from "react";
 import { fetchImplements } from "../../services/implementService";
 import type { ImplementSummary } from "../../types/implement";
+import { normalizeUserRole, type UserRole } from "../../utils/auth";
 
-const menuInventory = [
-  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, href: "#/inventory/dashboard" },
-  { key: "items", label: "Implementos", icon: Boxes, href: "#/inventory/implementos" },
-  { key: "categories", label: "Categorias", icon: ClipboardList, href: "#/inventory/categories" },
-  { key: "locations", label: "Ubicaciones", icon: MapPin, href: "#/inventory/locations" },
-  { key: "users", label: "Usuarios", icon: Users, href: "#/director/users/create" },
-  { key: "moves", label: "Movimientos", icon: ClipboardList, href: "#/inventory/moves" },
-  { key: "loans", label: "Prestamos", icon: Handshake, href: "#/inventory/prestamos" },
-  { key: "reports", label: "Reportes", icon: FileBarChart2, href: "#/inventory/monitoring/outbox" },
-  { key: "history", label: "Historial", icon: History, href: "#/inventory/prestamos/calendario" },
-] as const;
+interface MenuItem {
+  label: string;
+  icon: typeof LayoutDashboard;
+  href: string;
+  activeSections: InventorySection[];
+}
 
-const menuDirector = [
-  { key: "director-dashboard", label: "Dashboard", icon: LayoutDashboard, href: "#/director/dashboard" },
-  { key: "director-inventory", label: "Inventario", icon: Boxes, href: "#/director/dashboard" },
-  { key: "director-requests", label: "Solicitudes", icon: ClipboardList, href: "#/director/dashboard" },
-  { key: "director-users", label: "Usuarios", icon: Users, href: "#/director/users/create" },
-  { key: "director-subjects", label: "Asignaturas", icon: BookOpenText, href: "#/director/dashboard" },
-  { key: "director-alerts", label: "Alertas", icon: Siren, href: "#/director/dashboard" },
-  { key: "director-reports", label: "Reportes", icon: FileBarChart2, href: "#/director/dashboard" },
-  { key: "director-history", label: "Historial", icon: History, href: "#/director/dashboard" },
-] as const;
+const coordinatorMenu: MenuItem[] = [
+  { label: "Dashboard", icon: LayoutDashboard, href: "#/inventory/dashboard", activeSections: ["dashboard"] },
+  { label: "Implementos", icon: Boxes, href: "#/inventory/implementos", activeSections: ["items"] },
+  { label: "Categorias", icon: ClipboardList, href: "#/inventory/categories", activeSections: ["categories"] },
+  { label: "Ubicaciones", icon: MapPin, href: "#/inventory/locations", activeSections: ["locations"] },
+  { label: "Movimientos", icon: ClipboardList, href: "#/inventory/moves", activeSections: ["moves"] },
+  { label: "Prestamos", icon: Handshake, href: "#/inventory/prestamos", activeSections: ["coordinator-loans"] },
+  { label: "Agenda", icon: History, href: "#/inventory/prestamos/calendario", activeSections: ["agenda"] },
+  { label: "Monitoreo", icon: FileBarChart2, href: "#/inventory/monitoring/outbox", activeSections: ["reports"] },
+];
+
+const teacherMenu: MenuItem[] = [
+  { label: "Mis prestamos", icon: Handshake, href: "#/inventory/prestamos", activeSections: ["teacher-loans"] },
+  { label: "Nueva solicitud", icon: ClipboardList, href: "#/inventory/prestamos/nuevo", activeSections: ["loan-create"] },
+  { label: "Agenda", icon: History, href: "#/inventory/prestamos/calendario", activeSections: ["agenda"] },
+];
+
+const directorMenu: MenuItem[] = [
+  { label: "Dashboard", icon: LayoutDashboard, href: "#/director/dashboard", activeSections: ["director-dashboard"] },
+  { label: "Usuarios", icon: Users, href: "#/director/users/create", activeSections: ["director-users"] },
+];
 
 export type InventorySection =
   | "dashboard"
   | "items"
   | "categories"
   | "locations"
-  | "users"
   | "moves"
-  | "loans"
+  | "teacher-loans"
+  | "coordinator-loans"
+  | "loan-create"
+  | "agenda"
   | "reports"
-  | "history"
   | "director-dashboard"
-  | "director-users"
-  | "director-inventory"
-  | "director-requests"
-  | "director-subjects"
-  | "director-alerts"
-  | "director-reports"
-  | "director-history";
+  | "director-users";
 
 export type NavigationMode = "inventory" | "director";
 
@@ -72,40 +71,66 @@ export interface BreadcrumbPart {
   href?: string;
 }
 
+
+function resolveMenu(navigationMode: NavigationMode, role: UserRole): MenuItem[] {
+  if (navigationMode === "director") {
+    return directorMenu;
+  }
+  return role === "DOCENTE" ? teacherMenu : coordinatorMenu;
+}
+
+function resolveSidebarTitle(navigationMode: NavigationMode, role: UserRole): string {
+  if (navigationMode === "director") {
+    return "Director de carrera";
+  }
+  return role === "DOCENTE" ? "Prestamos" : "Inventario";
+}
+
+function resolveModePill(role: UserRole): string | null {
+  if (role === "COORDINADOR") return "Modo coordinador";
+  if (role === "DOCENTE") return "Modo docente";
+  return null;
+}
+
 export function Sidebar({
   activeSection,
   navigationMode,
+  role = "COORDINADOR",
   onNavigate,
   onLogout = () => {},
 }: {
   activeSection: InventorySection;
   navigationMode: NavigationMode;
+  role?: string;
   onNavigate?: () => void;
   onLogout?: () => void;
 }) {
-  const menu = navigationMode === "director" ? menuDirector : menuInventory;
+  const normalizedRole = normalizeUserRole(role);
+  const menu = resolveMenu(navigationMode, normalizedRole);
+  const modePill = resolveModePill(normalizedRole);
+  const sidebarTitle = resolveSidebarTitle(navigationMode, normalizedRole);
 
   return (
     <aside className="sidebar">
       <div className="sidebar__brand">
         <strong>Panol Salud</strong>
         <p>Medical Inventory</p>
-        {navigationMode === "inventory" ? (
-          <div className="sidebar__mode-pill" aria-label="Modo coordinador">
+        {navigationMode === "inventory" && modePill ? (
+          <div className="sidebar__mode-pill" aria-label={modePill}>
             <span />
-            <small>Modo coordinador</small>
+            <small>{modePill}</small>
           </div>
         ) : null}
       </div>
 
       <section className="sidebar__menu">
-        <h3 className="sidebar__title">{navigationMode === "director" ? "Director de carrera" : "Inventario"}</h3>
+        <h3 className="sidebar__title">{sidebarTitle}</h3>
         <ul className="sidebar__list">
           {menu.map((item) => {
             const Icon = item.icon;
-            const isActive = item.key === activeSection;
+            const isActive = item.activeSections.includes(activeSection);
             return (
-              <li key={item.label}>
+              <li key={item.href}>
                 <a
                   href={item.href}
                   onClick={onNavigate}
@@ -127,25 +152,19 @@ export function Sidebar({
         </section>
       ) : null}
 
-      {navigationMode === "inventory" ? (
-        <div className="sidebar__footer">
-          <a href="#/inventory/implementos" onClick={onNavigate} className="sidebar__item">
-            <Settings size={18} />
-            <span>Configuracion</span>
-          </a>
-          <button
-            type="button"
-            onClick={() => {
-              onNavigate?.();
-              onLogout();
-            }}
-            className="sidebar__item sidebar__item--logout"
-          >
-            <LogOut size={18} />
-            <span>Cerrar sesion</span>
-          </button>
-        </div>
-      ) : null}
+      <div className="sidebar__footer">
+        <button
+          type="button"
+          onClick={() => {
+            onNavigate?.();
+            onLogout();
+          }}
+          className="sidebar__item sidebar__item--logout"
+        >
+          <LogOut size={18} />
+          <span>Cerrar sesion</span>
+        </button>
+      </div>
     </aside>
   );
 }
@@ -155,6 +174,7 @@ export function TopBar({
   onToggleSidebar,
   breadcrumbs,
   searchPlaceholder = "Buscar implementos...",
+  showSearch = true,
   notificationCount = 0,
   userName = "Usuario",
   userRole = "COORDINADOR",
@@ -163,6 +183,7 @@ export function TopBar({
   onToggleSidebar: () => void;
   breadcrumbs: BreadcrumbPart[];
   searchPlaceholder?: string;
+  showSearch?: boolean;
   notificationCount?: number;
   userName?: string;
   userRole?: string;
@@ -189,7 +210,7 @@ export function TopBar({
   }, [search]);
 
   useEffect(() => {
-    if (debouncedSearch.length < 2) {
+    if (!showSearch || debouncedSearch.length < 2) {
       setSuggestions([]);
       setLoadingSuggestions(false);
       setHoverIndex(-1);
@@ -215,7 +236,7 @@ export function TopBar({
     return () => {
       cancelled = true;
     };
-  }, [debouncedSearch]);
+  }, [debouncedSearch, showSearch]);
 
   useEffect(() => {
     function onClickOutside(event: MouseEvent) {
@@ -230,8 +251,8 @@ export function TopBar({
   }, []);
 
   const shouldShowSuggestions = useMemo(
-    () => suggestionsOpen && search.trim().length >= 2,
-    [search, suggestionsOpen],
+    () => showSearch && suggestionsOpen && search.trim().length >= 2,
+    [search, showSearch, suggestionsOpen],
   );
 
   function goToImplement(row: ImplementSummary) {
@@ -283,20 +304,24 @@ export function TopBar({
         })}
       </nav>
 
-      <div className="topbar__search" ref={searchRef}>
-        <Search size={16} />
-        <input type="search" placeholder={searchPlaceholder} value={search} onChange={(event) => { setSearch(event.target.value); setSuggestionsOpen(true); setHoverIndex(-1); }} onFocus={() => setSuggestionsOpen(true)} onKeyDown={handleSearchKeyDown} />
-        {shouldShowSuggestions ? (
-          <div className="topbar-search-suggest">
-            {loadingSuggestions ? <div className="topbar-search-suggest__hint">Buscando implementos...</div> : suggestions.length === 0 ? <div className="topbar-search-suggest__hint">Sin coincidencias</div> : suggestions.map((row, index) => (
-              <button key={row.uuid} type="button" className={`topbar-search-item ${index === hoverIndex ? "is-hover" : ""}`} onMouseEnter={() => setHoverIndex(index)} onClick={() => goToImplement(row)}>
-                <img src={(row.imgUrl ?? (row as any).img_url) ?? "https://placehold.co/48x48/e9edf5/4d6284?text=Sin+img"} alt={row.name} className="topbar-search-item__thumb" />
-                <span className="topbar-search-item__name">{row.name}</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </div>
+      {showSearch ? (
+        <div className="topbar__search" ref={searchRef}>
+          <Search size={16} />
+          <input type="search" placeholder={searchPlaceholder} value={search} onChange={(event) => { setSearch(event.target.value); setSuggestionsOpen(true); setHoverIndex(-1); }} onFocus={() => setSuggestionsOpen(true)} onKeyDown={handleSearchKeyDown} />
+          {shouldShowSuggestions ? (
+            <div className="topbar-search-suggest">
+              {loadingSuggestions ? <div className="topbar-search-suggest__hint">Buscando implementos...</div> : suggestions.length === 0 ? <div className="topbar-search-suggest__hint">Sin coincidencias</div> : suggestions.map((row, index) => (
+                <button key={row.uuid} type="button" className={`topbar-search-item ${index === hoverIndex ? "is-hover" : ""}`} onMouseEnter={() => setHoverIndex(index)} onClick={() => goToImplement(row)}>
+                  <img src={row.imgUrl ?? "https://placehold.co/48x48/e9edf5/4d6284?text=Sin+img"} alt={row.name} className="topbar-search-item__thumb" />
+                  <span className="topbar-search-item__name">{row.name}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <div aria-hidden="true" />
+      )}
 
       <div className="topbar__user">
         <button type="button" className="topbar__icon topbar__icon--notify" aria-label="Notificaciones">
@@ -323,9 +348,11 @@ export function InventoryLayout({
   breadcrumbs = [{ label: "Inventario", href: "#/inventory/implementos" }],
   onLogout = () => {},
   searchPlaceholder = "Buscar implementos...",
+  showSearch = true,
   notificationCount = 0,
   userName = "Usuario",
-  userRole = "COORDINADOR",
+  role = "COORDINADOR",
+  userRoleLabel = "COORDINADOR",
 }: {
   children: ReactNode;
   activeSection?: InventorySection;
@@ -333,9 +360,11 @@ export function InventoryLayout({
   breadcrumbs?: BreadcrumbPart[];
   onLogout?: () => void;
   searchPlaceholder?: string;
+  showSearch?: boolean;
   notificationCount?: number;
   userName?: string;
-  userRole?: string;
+  role?: string;
+  userRoleLabel?: string;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -361,6 +390,7 @@ export function InventoryLayout({
       <Sidebar
         activeSection={activeSection}
         navigationMode={navigationMode}
+        role={role}
         onNavigate={closeSidebarOnNavigate}
         onLogout={onLogout}
       />
@@ -370,9 +400,10 @@ export function InventoryLayout({
           onToggleSidebar={() => setSidebarOpen((value) => !value)}
           breadcrumbs={breadcrumbs}
           searchPlaceholder={searchPlaceholder}
+          showSearch={showSearch}
           notificationCount={notificationCount}
           userName={userName}
-          userRole={userRole}
+          userRole={userRoleLabel}
         />
         <main className="app-shell__main">{children}</main>
       </div>
@@ -380,3 +411,5 @@ export function InventoryLayout({
     </div>
   );
 }
+
+

@@ -451,7 +451,7 @@ export function LoanCreatePage({
   const content = (
     <div className="loan-create-page">
       <section className="loan-create-hero">
-        <p className="loan-create-hero__eyebrow">Inventario / Prestamos</p>
+        <p className="loan-create-hero__eyebrow">Prestamos / Solicitudes</p>
         <h1>{isEditMode ? "Modificar Prestamo" : "Nueva Solicitud de Prestamo"}</h1>
         <p>
           {isEditMode

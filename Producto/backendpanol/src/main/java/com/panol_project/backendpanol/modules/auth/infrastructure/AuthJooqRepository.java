@@ -24,12 +24,14 @@ public class AuthJooqRepository implements UserAuthPort, TokenRevocationPort {
     @Override
     public Optional<AuthUser> findAuthUserByRut(String rut) {
         return dsl.resultQuery("""
-                        select user_uuid, rut, password_hash, role_name, failed_login_attempts, blocked_until
-                        from public.fn_auth_find_user_by_rut(?)
+                        select *
+                        from public.fn_auth_find_user_by_rut(cast(? as text))
                         """, rut)
                 .fetchOptional(record -> new AuthUser(
                         record.get("user_uuid", UUID.class),
                         record.get("rut", String.class),
+                        record.get("user_name", String.class),
+                        record.get("email", String.class),
                         record.get("password_hash", String.class),
                         record.get("role_name", String.class),
                         record.get("failed_login_attempts", Integer.class) == null ? 0 : record.get("failed_login_attempts", Integer.class),

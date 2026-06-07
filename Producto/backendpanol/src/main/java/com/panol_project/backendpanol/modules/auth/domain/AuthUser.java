@@ -6,6 +6,8 @@ import java.util.UUID;
 public record AuthUser(
         UUID uuid,
         String rut,
+        String name,
+        String email,
         String passwordHash,
         String roleName,
         Integer failedLoginAttempts,
