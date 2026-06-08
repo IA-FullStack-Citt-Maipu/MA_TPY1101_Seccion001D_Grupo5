@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = Field(default="gemini-2.5-flash-lite")
     LLM_TIMEOUT_SECONDS: float = Field(default=20.0, gt=0, le=120)
     BACKEND_BASE_URL: str = Field(default="http://backend:8080")
+    BACKEND_CLIENT_SECRET: str = Field(default="")
     BACKEND_TIMEOUT_SECONDS: float = Field(default=10.0, gt=0, le=120)
     BACKEND_RETRY_COUNT: int = Field(default=0, ge=0, le=3)
     BOT_SECRET_KEY: str = Field(default="")

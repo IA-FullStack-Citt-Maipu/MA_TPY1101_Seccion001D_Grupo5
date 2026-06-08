@@ -25,6 +25,8 @@ class BackendClient:
             headers["X-Request-ID"] = request_id
         if token:
             headers["Authorization"] = f"Bearer {token}"
+        if settings.BACKEND_CLIENT_SECRET:
+            headers["X-Client-Secret"] = settings.BACKEND_CLIENT_SECRET
         return headers
 
     def _full_url(self, path: str) -> str:

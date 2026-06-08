@@ -21,7 +21,7 @@ def _build_model(*, with_tools: bool) -> object:
 
     llm = ChatGoogleGenerativeAI(
         model=settings.GEMINI_MODEL,
-        api_key=settings.GOOGLE_API_KEY,
+        google_api_key=settings.GOOGLE_API_KEY,
         temperature=0.1,
         timeout=settings.LLM_TIMEOUT_SECONDS,
     )

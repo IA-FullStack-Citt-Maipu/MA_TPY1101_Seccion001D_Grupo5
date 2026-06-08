@@ -25,11 +25,12 @@ def integration_config() -> dict[str, str]:
         "backend_url": os.getenv("BOT_INT_BACKEND_URL", "").strip(),
         "rut": os.getenv("BOT_INT_RUT", "").strip(),
         "password": os.getenv("BOT_INT_PASSWORD", "").strip(),
+        "client_secret": os.getenv("BOT_INT_BACKEND_CLIENT_SECRET", "").strip(),
     }
     missing = [name for name, value in config.items() if not value]
     if missing:
         pytest.skip(
-            "Missing integration env vars: BOT_INT_BACKEND_URL, BOT_INT_RUT, BOT_INT_PASSWORD",
+            "Missing integration env vars: BOT_INT_BACKEND_URL, BOT_INT_RUT, BOT_INT_PASSWORD, BOT_INT_BACKEND_CLIENT_SECRET",
             allow_module_level=True,
         )
     return config
@@ -55,9 +56,11 @@ def backend_token(integration_config: dict[str, str]) -> str:
 def tool_context(integration_config: dict[str, str], backend_token: str) -> None:
     set_token(backend_token)
     set_request_id(str(uuid4()))
+    from app.config import settings
     from app.client.backend import backend_client
 
     backend_client.base_url = integration_config["backend_url"].rstrip("/")
+    settings.BACKEND_CLIENT_SECRET = integration_config["client_secret"]
 
 
 def test_integration_login_token_is_usable(integration_config: dict[str, str], backend_token: str) -> None:

@@ -22,6 +22,8 @@
 app:
   security:
     enabled: ${APP_SECURITY_ENABLED:true}
+    ai-agent:
+      secret: ${APP_SECURITY_AI_AGENT_SECRET}
   outbox:
     system-user-uuid: ${APP_OUTBOX_SYSTEM_USER_UUID:99999999-9999-9999-9999-999999999999}
   auth:

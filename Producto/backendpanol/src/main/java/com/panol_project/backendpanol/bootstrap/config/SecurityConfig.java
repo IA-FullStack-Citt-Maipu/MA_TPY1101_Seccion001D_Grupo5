@@ -1,9 +1,11 @@
 package com.panol_project.backendpanol.bootstrap.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import com.panol_project.backendpanol.modules.auth.infrastructure.TokenRevocationValidator;
 import com.panol_project.backendpanol.shared.error.security.RestAccessDeniedHandler;
 import com.panol_project.backendpanol.shared.error.security.RestAuthenticationEntryPoint;
+import com.panol_project.backendpanol.shared.security.AiAgentRequestFilter;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.LinkedHashSet;
@@ -26,6 +28,7 @@ import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
@@ -36,6 +39,7 @@ public class SecurityConfig {
     @Bean
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
+            AiAgentRequestFilter aiAgentRequestFilter,
             RestAuthenticationEntryPoint authenticationEntryPoint,
             RestAccessDeniedHandler accessDeniedHandler
     ) throws Exception {
@@ -43,6 +47,7 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .addFilterBefore(aiAgentRequestFilter, BearerTokenAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers("/api/v2/auth/login").permitAll()
@@ -55,6 +60,14 @@ public class SecurityConfig {
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(
                                 token -> new JwtAuthenticationToken(token, extractAuthorities(token)))))
                 .build();
+    }
+
+    @Bean
+    AiAgentRequestFilter aiAgentRequestFilter(
+            ObjectMapper objectMapper,
+            @Value("${app.security.ai-agent.secret}") String aiAgentSecret
+    ) {
+        return new AiAgentRequestFilter(objectMapper, aiAgentSecret);
     }
 
     @Bean

@@ -34,6 +34,7 @@ def test_request_safe_adds_auth_and_request_id_headers(monkeypatch) -> None:
 
     monkeypatch.setattr("app.client.backend.httpx.Client", FakeClient)
     monkeypatch.setattr(settings, "BACKEND_BASE_URL", "http://backend:8080")
+    monkeypatch.setattr(settings, "BACKEND_CLIENT_SECRET", "shared-secret")
     monkeypatch.setattr(settings, "BACKEND_TIMEOUT_SECONDS", 3.0)
 
     set_token("abc")
@@ -49,6 +50,7 @@ def test_request_safe_adds_auth_and_request_id_headers(monkeypatch) -> None:
     assert isinstance(headers, dict)
     assert headers["Authorization"] == "Bearer abc"
     assert headers["X-Request-ID"] == "req-123"
+    assert headers["X-Client-Secret"] == "shared-secret"
 
 
 def test_request_safe_timeout_returns_structured_error(monkeypatch) -> None:
