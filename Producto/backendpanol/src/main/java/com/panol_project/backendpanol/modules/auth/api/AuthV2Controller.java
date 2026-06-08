@@ -2,6 +2,7 @@ package com.panol_project.backendpanol.modules.auth.api;
 
 import com.panol_project.backendpanol.modules.auth.api.dto.LoginRequest;
 import com.panol_project.backendpanol.modules.auth.api.dto.LoginResponse;
+import com.panol_project.backendpanol.modules.auth.api.dto.LoginUserResponse;
 import com.panol_project.backendpanol.modules.auth.application.AuthService;
 import com.panol_project.backendpanol.modules.auth.application.dto.LoginCommand;
 import jakarta.validation.Valid;
@@ -26,7 +27,17 @@ public class AuthV2Controller {
     @PostMapping("/login")
     LoginResponse login(@Valid @RequestBody LoginRequest request) {
         var result = authService.login(new LoginCommand(request.rut(), request.password()));
-        return new LoginResponse(result.accessToken(), result.role(), result.expiresInSeconds());
+        return new LoginResponse(
+                result.accessToken(),
+                result.role(),
+                result.expiresInSeconds(),
+                new LoginUserResponse(
+                        result.user().id(),
+                        result.user().name(),
+                        result.user().email(),
+                        result.user().role()
+                )
+        );
     }
 
     @PostMapping("/logout")

@@ -5,6 +5,7 @@ on:
     branches: ["dev"]
     paths:
       - "infra/terraform/**"
+      - "Producto/databasepanol/**"
       - "Producto/backendpanol/**"
       - "Producto/frontendpanol/**"
       - ".github/workflows/deploy-gcp.yml"
@@ -119,11 +120,12 @@ jobs:
       - name: Build backend image
         run: |
           docker build \
+            -f ./Producto/backendpanol/Dockerfile \
             --build-arg JOOQ_DB_URL="jdbc:postgresql://${{ vars.SUPABASE_DB_HOST_DEV }}:${{ vars.SUPABASE_DB_PORT_DEV }}/${{ vars.SUPABASE_DB_NAME_DEV }}?sslmode=require" \
             --build-arg JOOQ_DB_USER="${{ vars.SUPABASE_DB_USER_DEV }}" \
             --build-arg JOOQ_DB_PASSWORD="${{ secrets.DB_SUPABASE_PASSWORD_DEV }}" \
             -t "${{ steps.meta.outputs.repo }}/backend:${{ steps.meta.outputs.tag }}" \
-            ./Producto/backendpanol
+            ./Producto
 
       - name: Build frontend image
         run: |

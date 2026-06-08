@@ -42,12 +42,12 @@ jobs:
             exit 1
           fi
 
-      - name: Initialize schema for jOOQ codegen (V25-V32)
+      - name: Initialize schema for jOOQ codegen (V25-V35)
         env:
           PGPASSWORD: panol_ci
         run: |
           set -euo pipefail
-          base_dir="Producto/backendpanol/src/main/resources/db/migration/v25"
+          base_dir="Producto/databasepanol/migrations/v25"
           psql -v ON_ERROR_STOP=1 \
             -h 127.0.0.1 -U panol_ci -d panol_ci \
             -f "${base_dir}/beforeMigrate.sql"
@@ -71,12 +71,13 @@ jobs:
       - name: Build backend image
         run: |
           docker build \
+            -f ./Producto/backendpanol/Dockerfile \
             --add-host=host.docker.internal:host-gateway \
             --build-arg JOOQ_DB_URL=jdbc:postgresql://host.docker.internal:5432/panol_ci \
             --build-arg JOOQ_DB_USER=panol_ci \
             --build-arg JOOQ_DB_PASSWORD=panol_ci \
             -t backendpanol:ci \
-            ./Producto/backendpanol
+            ./Producto
 
       - name: Build frontend image
         run: |

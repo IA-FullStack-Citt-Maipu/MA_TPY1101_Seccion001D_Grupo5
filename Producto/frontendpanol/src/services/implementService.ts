@@ -13,6 +13,9 @@ export async function fetchImplements(filters?: ImplementFilters): Promise<Imple
     params: {
       name: filters?.name || undefined,
       categoryUuid: filters?.categoryUuid ?? undefined,
+      scheduledAt: filters?.scheduledAt ?? undefined,
+      expectedReturnAt: filters?.expectedReturnAt ?? undefined,
+      excludeLoanUuid: filters?.excludeLoanUuid ?? undefined,
       // Enviar stockStatus solo si no es "all"; el backend devuelve todos por defecto sin el param
       stockStatus: stockStatus && stockStatus !== "all" ? stockStatus : undefined,
     },

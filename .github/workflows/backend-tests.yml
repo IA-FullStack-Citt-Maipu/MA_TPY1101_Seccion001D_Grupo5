@@ -48,12 +48,12 @@ jobs:
             exit 1
           fi
 
-      - name: Initialize schema for jOOQ codegen (V25-V32)
+      - name: Initialize schema for jOOQ codegen (V25-V35)
         env:
           PGPASSWORD: panol_ci
         run: |
           set -euo pipefail
-          base_dir="Producto/backendpanol/src/main/resources/db/migration/v25"
+          base_dir="Producto/databasepanol/migrations/v25"
           psql -v ON_ERROR_STOP=1 \
             -h 127.0.0.1 -U panol_ci -d panol_ci \
             -f "${base_dir}/beforeMigrate.sql"
@@ -86,7 +86,7 @@ jobs:
             -c "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;"
           psql -v ON_ERROR_STOP=1 \
             -h 127.0.0.1 -U panol_ci -d panol_ci \
-            -f Producto/backendpanol/src/main/resources/db/migration/v25/V25__schema_alignment_big_bang.sql
+            -f Producto/databasepanol/migrations/v25/V25__schema_alignment_big_bang.sql
 
       - name: Run backend tests
         env:

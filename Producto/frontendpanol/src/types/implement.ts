@@ -81,6 +81,9 @@ export interface ImplementFilters {
   name?: string;
   categoryUuid?: string | null;
   stockStatus?: ImplementStockFilterStatus;
+  scheduledAt?: string | null;
+  expectedReturnAt?: string | null;
+  excludeLoanUuid?: string | null;
 }
 
 export interface ImplementDetail {
