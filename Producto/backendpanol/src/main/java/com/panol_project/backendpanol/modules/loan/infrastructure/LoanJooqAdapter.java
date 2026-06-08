@@ -29,6 +29,7 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanDetailItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanImplementAvailability;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRepositoryPort;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRequestedItem;
+import com.panol_project.backendpanol.modules.loan.domain.LoanRequestedItemAvailability;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReturnCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReturnConsumableItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReturnIndividual;
@@ -124,6 +125,57 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                                 record.get(IMPLEMENT.UUID),
                                 Boolean.TRUE.equals(record.get(IMPLEMENT.ACTIVE))
                         ));
+    }
+
+    @Override
+    public List<LoanRequestedItemAvailability> findRequestedItemAvailabilities(
+            List<UUID> implementUuids,
+            OffsetDateTime scheduledAt,
+            OffsetDateTime expectedReturnAt,
+            UUID excludeLoanUuid
+    ) {
+        if (implementUuids == null || implementUuids.isEmpty() || scheduledAt == null) {
+            return List.of();
+        }
+
+        List<UUID> filteredImplementUuids = implementUuids.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (filteredImplementUuids.isEmpty()) {
+            return List.of();
+        }
+
+        Long excludeLoanId = findLoanIdByUuid(excludeLoanUuid);
+        OffsetDateTime effectiveExpectedReturnAt = resolveExpectedReturnAt(scheduledAt, expectedReturnAt);
+
+        return dsl.select(IMPLEMENT.ID, IMPLEMENT.UUID, IMPLEMENT.NAME, IMPLEMENT.ACTIVE)
+                .from(IMPLEMENT)
+                .where(IMPLEMENT.UUID.in(filteredImplementUuids))
+                .fetch(record -> {
+                    Record availabilityRecord = dsl.fetchOne(
+                            "select * from public.fn_get_implement_availability(?::bigint, ?::timestamptz, ?::timestamptz, false, ?::bigint)",
+                            record.get(IMPLEMENT.ID),
+                            scheduledAt,
+                            effectiveExpectedReturnAt,
+                            excludeLoanId
+                    );
+
+                    int availableQuantity = 0;
+                    if (availabilityRecord != null) {
+                        Integer rawAvailable = availabilityRecord.get("available_quantity", Integer.class);
+                        if (rawAvailable != null) {
+                            availableQuantity = rawAvailable;
+                        }
+                    }
+
+                    return new LoanRequestedItemAvailability(
+                            record.get(IMPLEMENT.UUID),
+                            record.get(IMPLEMENT.NAME),
+                            Boolean.TRUE.equals(record.get(IMPLEMENT.ACTIVE)),
+                            availableQuantity
+                    );
+                });
     }
 
     @Override
@@ -1433,7 +1485,10 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 || normalized.contains("reserved stock is insufficient")
                 || normalized.contains("stock update failed")
                 || normalized.contains("stock release failed")) {
-            return new ConflictException("LOAN_STOCK_CONFLICT", rawMessage);
+            return new ConflictException(
+                    "LOAN_STOCK_CONFLICT",
+                    "Esta solicitud excede el stock disponible de uno o mas implementos."
+            );
         }
         if (normalized.contains("invalid")
                 || normalized.contains("cannot be completed")
@@ -1479,6 +1534,16 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 .from(USER)
                 .where(USER.UUID.eq(userUuid).and(USER.ACTIVE.isTrue()))
                 .fetchOne(USER.ID);
+    }
+
+    private Long findLoanIdByUuid(UUID loanUuid) {
+        if (loanUuid == null) {
+            return null;
+        }
+        return dsl.select(LOAN.ID)
+                .from(LOAN)
+                .where(LOAN.UUID.eq(loanUuid))
+                .fetchOne(LOAN.ID);
     }
 
     private Long findRoomIdByUuid(UUID roomUuid) {

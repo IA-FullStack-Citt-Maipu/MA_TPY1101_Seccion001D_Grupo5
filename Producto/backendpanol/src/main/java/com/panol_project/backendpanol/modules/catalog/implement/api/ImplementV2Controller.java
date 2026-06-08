@@ -16,6 +16,7 @@ import com.panol_project.backendpanol.modules.catalog.implement.domain.Implement
 import com.panol_project.backendpanol.modules.catalog.implement.domain.StockStatusFilter;
 import com.panol_project.backendpanol.shared.error.ApiException;
 import jakarta.validation.Valid;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -90,8 +91,15 @@ public class ImplementV2Controller {
     }
 
     @GetMapping
-    List<ImplementSummaryV2Response> listar(@RequestParam(required = false) String name, @RequestParam(required = false) UUID categoryUuid,
-            @RequestParam(required = false) String stockStatus, Authentication authentication) {
+    List<ImplementSummaryV2Response> listar(
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) UUID categoryUuid,
+            @RequestParam(required = false) String stockStatus,
+            @RequestParam(required = false) OffsetDateTime scheduledAt,
+            @RequestParam(required = false) OffsetDateTime expectedReturnAt,
+            @RequestParam(required = false) UUID excludeLoanUuid,
+            Authentication authentication
+    ) {
         boolean isCoordinador = hasRole(authentication, "ROLE_COORDINADOR");
         StockStatusFilter resolvedFilter = null;
         if (stockStatus != null) {
@@ -102,7 +110,14 @@ public class ImplementV2Controller {
                     .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "INVALID_STOCK_STATUS",
                             "Valor invalido para stockStatus: " + stockStatus));
         }
-        List<ImplementSummary> rows = service.listar(name, categoryUuid, resolvedFilter);
+        List<ImplementSummary> rows = service.listar(
+                name,
+                categoryUuid,
+                resolvedFilter,
+                scheduledAt,
+                expectedReturnAt,
+                excludeLoanUuid
+        );
         return rows.stream().map(row -> new ImplementSummaryV2Response(
                 row.uuid(),
                 row.name(),

@@ -15,6 +15,13 @@ public interface LoanRepositoryPort {
 
     Optional<LoanImplementAvailability> findImplementAvailabilityByUuid(UUID implementUuid);
 
+    List<LoanRequestedItemAvailability> findRequestedItemAvailabilities(
+            List<UUID> implementUuids,
+            OffsetDateTime scheduledAt,
+            OffsetDateTime expectedReturnAt,
+            UUID excludeLoanUuid
+    );
+
     boolean existsPendingLoanConflict(UUID requesterUuid, List<UUID> implementUuids);
 
     boolean existsPendingLoanConflict(UUID requesterUuid, UUID excludeLoanUuid, List<UUID> implementUuids);

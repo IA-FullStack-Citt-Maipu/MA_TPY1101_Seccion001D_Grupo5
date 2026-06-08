@@ -10,6 +10,7 @@ import com.panol_project.backendpanol.modules.catalog.implement.domain.StockStat
 import com.panol_project.backendpanol.modules.catalog.location.application.contract.LocationValidationContract;
 import com.panol_project.backendpanol.shared.error.BadRequestException;
 import com.panol_project.backendpanol.shared.error.NotFoundException;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.sql.SQLException;
@@ -180,10 +181,25 @@ public class ImplementService implements ImplementLookupContract {
 
     @Transactional(readOnly = true)
     public List<ImplementSummary> listar(String name, UUID categoryUuid, StockStatusFilter stockStatusFilter) {
+        return listar(name, categoryUuid, stockStatusFilter, null, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ImplementSummary> listar(
+            String name,
+            UUID categoryUuid,
+            StockStatusFilter stockStatusFilter,
+            OffsetDateTime scheduledAt,
+            OffsetDateTime expectedReturnAt,
+            UUID excludeLoanUuid
+    ) {
         return repository.findAllSummaries(
                 normalizeFiltroNombre(name),
                 categoryUuid,
-                stockStatusFilter
+                stockStatusFilter,
+                scheduledAt,
+                expectedReturnAt,
+                excludeLoanUuid
         );
     }
 

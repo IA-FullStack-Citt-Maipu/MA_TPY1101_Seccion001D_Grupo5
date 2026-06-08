@@ -1,7 +1,8 @@
 package com.panol_project.backendpanol.modules.catalog.implement.domain;
 
-import java.util.Optional;
 import java.util.List;
+import java.time.OffsetDateTime;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface ImplementRepository {
@@ -10,7 +11,14 @@ public interface ImplementRepository {
 
     Optional<ImplementSummary> findSummaryByUuid(UUID uuid);
 
-    List<ImplementSummary> findAllSummaries(String name, UUID categoryUuid, StockStatusFilter stockStatusFilter);
+    List<ImplementSummary> findAllSummaries(
+            String name,
+            UUID categoryUuid,
+            StockStatusFilter stockStatusFilter,
+            OffsetDateTime scheduledAt,
+            OffsetDateTime expectedReturnAt,
+            UUID excludeLoanUuid
+    );
 
     boolean existsActiveByNameIgnoreCase(String nombre, UUID categoriaUuid);
 

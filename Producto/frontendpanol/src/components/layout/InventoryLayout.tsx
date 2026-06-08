@@ -3,7 +3,7 @@
   Boxes,
   CircleHelp,
   ClipboardList,
-  FileBarChart2,
+  Headset,
   Handshake,
   History,
   LayoutDashboard,
@@ -36,7 +36,6 @@ const coordinatorMenu: MenuItem[] = [
   { label: "Movimientos", icon: ClipboardList, href: "#/inventory/moves", activeSections: ["moves"] },
   { label: "Prestamos", icon: Handshake, href: "#/inventory/prestamos", activeSections: ["coordinator-loans"] },
   { label: "Agenda", icon: History, href: "#/inventory/prestamos/calendario", activeSections: ["agenda"] },
-  { label: "Monitoreo", icon: FileBarChart2, href: "#/inventory/monitoring/outbox", activeSections: ["reports"] },
 ];
 
 const teacherMenu: MenuItem[] = [
@@ -61,6 +60,7 @@ export type InventorySection =
   | "loan-create"
   | "agenda"
   | "reports"
+  | "support"
   | "director-dashboard"
   | "director-users";
 
@@ -153,6 +153,14 @@ export function Sidebar({
       ) : null}
 
       <div className="sidebar__footer">
+        <a
+          href="#/support"
+          onClick={onNavigate}
+          className={activeSection === "support" ? "sidebar__item sidebar__item--support sidebar__item--active" : "sidebar__item sidebar__item--support"}
+        >
+          <Headset size={18} />
+          <span>Support</span>
+        </a>
         <button
           type="button"
           onClick={() => {
@@ -173,6 +181,7 @@ export function TopBar({
   sidebarOpen,
   onToggleSidebar,
   breadcrumbs,
+  onOpenSupport = () => {},
   searchPlaceholder = "Buscar implementos...",
   showSearch = true,
   notificationCount = 0,
@@ -182,6 +191,7 @@ export function TopBar({
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
   breadcrumbs: BreadcrumbPart[];
+  onOpenSupport?: () => void;
   searchPlaceholder?: string;
   showSearch?: boolean;
   notificationCount?: number;
@@ -324,15 +334,17 @@ export function TopBar({
       )}
 
       <div className="topbar__user">
-        <button type="button" className="topbar__icon topbar__icon--notify" aria-label="Notificaciones">
-          <Bell size={18} />
-          {notificationCount > 0 ? <span className="topbar__notify-badge">{notificationCount}</span> : null}
-        </button>
-        <button type="button" className="topbar__icon" aria-label="Ayuda">
-          <CircleHelp size={18} />
-        </button>
+        <div className="topbar__actions">
+          <button type="button" className="topbar__icon topbar__icon--notify" aria-label="Notificaciones">
+            <Bell size={18} />
+            {notificationCount > 0 ? <span className="topbar__notify-badge">{notificationCount}</span> : null}
+          </button>
+          <button type="button" className="topbar__icon" aria-label="Soporte" onClick={onOpenSupport}>
+            <CircleHelp size={18} />
+          </button>
+        </div>
         <div className="topbar__avatar">{userInitials || "US"}</div>
-        <div>
+        <div className="topbar__user-meta">
           <strong>{safeUserName}</strong>
           <p>{userRole}</p>
         </div>
@@ -347,6 +359,7 @@ export function InventoryLayout({
   navigationMode = "inventory",
   breadcrumbs = [{ label: "Inventario", href: "#/inventory/implementos" }],
   onLogout = () => {},
+  onOpenSupport = () => {},
   searchPlaceholder = "Buscar implementos...",
   showSearch = true,
   notificationCount = 0,
@@ -359,6 +372,7 @@ export function InventoryLayout({
   navigationMode?: NavigationMode;
   breadcrumbs?: BreadcrumbPart[];
   onLogout?: () => void;
+  onOpenSupport?: () => void;
   searchPlaceholder?: string;
   showSearch?: boolean;
   notificationCount?: number;
@@ -399,6 +413,7 @@ export function InventoryLayout({
           sidebarOpen={sidebarOpen}
           onToggleSidebar={() => setSidebarOpen((value) => !value)}
           breadcrumbs={breadcrumbs}
+          onOpenSupport={onOpenSupport}
           searchPlaceholder={searchPlaceholder}
           showSearch={showSearch}
           notificationCount={notificationCount}

@@ -9,7 +9,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { getErrorMessage } from "../services/apiClient";
+import { getApiErrorPayload, getErrorMessage } from "../services/apiClient";
 import { completeLoan, fetchLoansPage, reviewLoan } from "../services/loanService";
 import type { LoanSummary } from "../types/loan";
 import { canStartDelivery } from "../utils/loanSchedule";
@@ -269,7 +269,12 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
       });
       updateLoanInState(updated);
     } catch (requestError) {
-      setError(getErrorMessage(requestError, "No se pudo aprobar el prestamo."));
+      const payloadError = getApiErrorPayload(requestError);
+      if (payloadError?.code === "LOAN_STOCK_CONFLICT") {
+        setError("Esta solicitud excede el stock de algun implemento; no se puede aprobar.");
+      } else {
+        setError(getErrorMessage(requestError, "No se pudo aprobar el prestamo."));
+      }
     } finally {
       setProcessingLoanUuid(null);
     }

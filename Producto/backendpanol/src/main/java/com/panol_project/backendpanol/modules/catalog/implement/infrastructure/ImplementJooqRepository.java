@@ -93,7 +93,14 @@ public class ImplementJooqRepository implements ImplementRepository {
     }
 
     @Override
-    public List<ImplementSummary> findAllSummaries(String name, UUID categoryUuid, StockStatusFilter stockStatusFilter) {
+    public List<ImplementSummary> findAllSummaries(
+            String name,
+            UUID categoryUuid,
+            StockStatusFilter stockStatusFilter,
+            OffsetDateTime scheduledAt,
+            OffsetDateTime expectedReturnAt,
+            UUID excludeLoanUuid
+    ) {
         Condition condition = IMPLEMENT.ACTIVE.isTrue();
 
         if (name != null) {
@@ -104,11 +111,12 @@ public class ImplementJooqRepository implements ImplementRepository {
             condition = condition.and(CATEGORY_UUID.eq(categoryUuid));
         }
 
-        if (stockStatusFilter != null) {
+        if (stockStatusFilter != null && scheduledAt == null) {
             condition = condition.and(resolveStockField(stockStatusFilter).gt(0));
         }
 
-        return dsl.select(
+        if (scheduledAt == null) {
+            return dsl.select(
                         IMPLEMENT.UUID,
                         IMPLEMENT.NAME,
                         IMPLEMENT.DESCRIPTION,
@@ -135,6 +143,59 @@ public class ImplementJooqRepository implements ImplementRepository {
                 .where(condition)
                 .orderBy(IMPLEMENT.NAME.asc())
                 .fetch(this::toSummary);
+        }
+
+        OffsetDateTime effectiveExpectedReturnAt = expectedReturnAt != null ? expectedReturnAt : scheduledAt.plusHours(2);
+        Long excludeLoanId = findLoanIdByUuid(excludeLoanUuid);
+        Field<Integer> availableInRange = DSL.field(
+                        "coalesce((select availability.available_quantity " +
+                                "from public.fn_get_implement_availability({0}, {1}, {2}, false, {3}) as availability), 0)",
+                        Integer.class,
+                        IMPLEMENT.ID,
+                        DSL.val(scheduledAt),
+                        DSL.val(effectiveExpectedReturnAt),
+                        DSL.val(excludeLoanId, Long.class)
+                )
+                .as("available_in_range");
+
+        if (stockStatusFilter == StockStatusFilter.AVAILABLE) {
+            condition = condition.and(availableInRange.gt(0));
+        }
+
+        List<ImplementSummary> rangedSummaries = dsl.select(
+                        IMPLEMENT.UUID,
+                        IMPLEMENT.NAME,
+                        IMPLEMENT.DESCRIPTION,
+                        IMPLEMENT.BARCODE,
+                        IMPLEMENT.IMG_URL,
+                        IMPLEMENT.ACTIVE,
+                        CATEGORY_UUID,
+                        CATEGORY.NAME,
+                        CATEGORY.ACTIVE,
+                        LOCATION_UUID,
+                        LOCATION.NAME,
+                        LOCATION.DESCRIPTION,
+                        STOCK.TOTAL_STOCK,
+                        STOCK.MIN_STOCK,
+                        STOCK.AVAILABLE,
+                        STOCK.RESERVED,
+                        STOCK.LOANED,
+                        STOCK.DAMAGED,
+                        availableInRange
+                )
+                .from(IMPLEMENT)
+                .leftJoin(CATEGORY).on(CATEGORY.ID.eq(IMPLEMENT.CATEGORY_ID))
+                .leftJoin(LOCATION).on(LOCATION.ID.eq(IMPLEMENT.LOCATION_ID))
+                .leftJoin(STOCK).on(STOCK.IMPLEMENT_ID.eq(IMPLEMENT.ID))
+                .where(condition)
+                .orderBy(IMPLEMENT.NAME.asc())
+                .fetch(record -> toSummary(record, availableInRange));
+
+        if (stockStatusFilter == StockStatusFilter.AVAILABLE) {
+            return rangedSummaries;
+        }
+
+        return rangedSummaries;
     }
 
     @Override
@@ -270,6 +331,10 @@ public class ImplementJooqRepository implements ImplementRepository {
     }
 
     private ImplementSummary toSummary(Record record) {
+        return toSummary(record, null);
+    }
+
+    private ImplementSummary toSummary(Record record, Field<Integer> availableOverride) {
         UUID categoryUuid = record.get(CATEGORY_UUID);
         ImplementCategorySummary category = categoryUuid == null
                 ? null
@@ -288,6 +353,10 @@ public class ImplementJooqRepository implements ImplementRepository {
                         record.get(LOCATION.DESCRIPTION)
                 );
 
+        Integer available = availableOverride == null
+                ? record.get(STOCK.AVAILABLE)
+                : record.get(availableOverride);
+
         return new ImplementSummary(
                 record.get(IMPLEMENT.UUID),
                 record.get(IMPLEMENT.NAME),
@@ -300,7 +369,7 @@ public class ImplementJooqRepository implements ImplementRepository {
                 new ImplementStockSummary(
                         record.get(STOCK.TOTAL_STOCK),
                         record.get(STOCK.MIN_STOCK),
-                        record.get(STOCK.AVAILABLE),
+                        available,
                         record.get(STOCK.RESERVED),
                         record.get(STOCK.LOANED),
                         record.get(STOCK.DAMAGED)
@@ -364,6 +433,14 @@ public class ImplementJooqRepository implements ImplementRepository {
                 .from(LOCATION)
                 .where(LOCATION.UUID.eq(locationUuid))
                 .fetchOne(LOCATION.ID);
+    }
+
+    private Long findLoanIdByUuid(UUID loanUuid) {
+        if (loanUuid == null) {
+            return null;
+        }
+        Record record = dsl.fetchOne("select id from public.loan where uuid = ?::uuid", loanUuid);
+        return record == null ? null : record.get("id", Long.class);
     }
 
     private ImplementItemType toDomainItemType(ItemTypeEnum itemType) {

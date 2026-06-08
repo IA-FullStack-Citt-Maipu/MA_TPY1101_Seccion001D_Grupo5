@@ -1,4 +1,12 @@
-﻿import { CalendarDays, ChevronLeft, ChevronRight, Clock3, Eye, Package2 } from "lucide-react";
+import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  Eye,
+  Package2,
+  Plus,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getErrorMessage } from "../services/apiClient";
 import { fetchLoansPage } from "../services/loanService";
@@ -22,11 +30,20 @@ function toDateKey(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+function capitalizeLabel(value: string): string {
+  if (!value) {
+    return value;
+  }
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
 function formatMonthLabel(date: Date): string {
-  return new Intl.DateTimeFormat("es-CL", {
-    month: "long",
-    year: "numeric",
-  }).format(date);
+  return capitalizeLabel(
+    new Intl.DateTimeFormat("es-CL", {
+      month: "long",
+      year: "numeric",
+    }).format(date),
+  );
 }
 
 function formatTime(value: string): string {
@@ -162,6 +179,14 @@ export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
   const monthGrid = useMemo(() => getMonthGrid(monthAnchor), [monthAnchor]);
   const monthKey = useMemo(() => `${monthAnchor.getFullYear()}-${monthAnchor.getMonth()}`, [monthAnchor]);
 
+  const visibleMonthLoans = useMemo(() => {
+    return allLoans.filter((loan) => {
+      const schedule = parseDate(loan.scheduled_at);
+      if (!schedule) return false;
+      return schedule.getFullYear() === monthAnchor.getFullYear() && schedule.getMonth() === monthAnchor.getMonth();
+    });
+  }, [allLoans, monthAnchor]);
+
   const loansByDay = useMemo(() => {
     const map = new Map<string, LoanSummary[]>();
     allLoans.forEach((loan) => {
@@ -191,13 +216,54 @@ export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
     if (!selectedDateKey) return "Selecciona un dia";
     const parsed = parseDate(`${selectedDateKey}T00:00:00`);
     if (!parsed) return selectedDateKey;
-    return new Intl.DateTimeFormat("es-CL", {
-      weekday: "long",
-      day: "2-digit",
-      month: "long",
-      year: "numeric",
-    }).format(parsed);
+    return capitalizeLabel(
+      new Intl.DateTimeFormat("es-CL", {
+        weekday: "long",
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      }).format(parsed),
+    );
   }, [selectedDateKey]);
+
+  const summaryMetrics = useMemo(() => {
+    const counts = {
+      approved: 0,
+      completed: 0,
+      cancelled: 0,
+      rejected: 0,
+    };
+
+    visibleMonthLoans.forEach((loan) => {
+      if (loan.status === "approved" || loan.status === "prepared" || loan.status === "delivered" || loan.status === "overdue") {
+        counts.approved += 1;
+        return;
+      }
+      if (loan.status === "completed") {
+        counts.completed += 1;
+        return;
+      }
+      if (loan.status === "cancelled" || loan.status === "expired") {
+        counts.cancelled += 1;
+        return;
+      }
+      if (loan.status === "rejected") {
+        counts.rejected += 1;
+      }
+    });
+
+    return [
+      { key: "approved", label: "Aprobadas", value: counts.approved },
+      { key: "completed", label: "Completadas", value: counts.completed },
+      { key: "cancelled", label: "Canceladas", value: counts.cancelled },
+      { key: "rejected", label: "Rechazadas", value: counts.rejected },
+    ] as const;
+  }, [visibleMonthLoans]);
+
+  const newLoanHref = useMemo(() => {
+    const selectedDate = selectedDateKey ?? todayKey;
+    return `#/inventory/prestamos/nuevo?date=${selectedDate}`;
+  }, [selectedDateKey, todayKey]);
 
   function goToPreviousMonth() {
     setMonthAnchor((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1));
@@ -208,9 +274,10 @@ export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
   }
 
   const content = (
-    <div className="loan-calendar-page">
-      <section className="loan-calendar-header">
-        <div>
+    <div className="loan-calendar-stage">
+      <div className="loan-calendar-page">
+        <section className="loan-calendar-header">
+        <div className="loan-calendar-header__copy">
           <h1>Agenda de Prestamos</h1>
           <p>
             {canCreateLoan
@@ -219,33 +286,38 @@ export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
           </p>
         </div>
         <div className="loan-calendar-header__actions">
-          <a href="#/inventory/prestamos" className="loan-calendar-link-btn">Ver listado</a>
           {canCreateLoan ? (
-            <a href="#/inventory/prestamos/nuevo" className="loan-calendar-link-btn loan-calendar-link-btn--primary">
+            <a href={newLoanHref} className="loan-calendar-link-btn loan-calendar-link-btn--primary">
+              <Plus size={16} />
               Nueva solicitud
             </a>
           ) : null}
         </div>
       </section>
 
-      {error ? <div className="error-banner">{error}</div> : null}
+        {error ? <div className="error-banner">{error}</div> : null}
 
-      <section className="loan-calendar-layout">
+        <section className="loan-calendar-layout">
         <article className="loan-calendar-card">
           <header className="loan-calendar-card__header">
             <div className="loan-calendar-nav">
               <button type="button" onClick={goToPreviousMonth} aria-label="Mes anterior">
                 <ChevronLeft size={16} />
               </button>
-              <strong>{formatMonthLabel(monthAnchor)}</strong>
+              <div className="loan-calendar-nav__pill">
+                <strong>{formatMonthLabel(monthAnchor)}</strong>
+                <CalendarDays size={15} />
+              </div>
               <button type="button" onClick={goToNextMonth} aria-label="Mes siguiente">
                 <ChevronRight size={16} />
               </button>
             </div>
-            <span>
-              <CalendarDays size={15} />
-              {allLoans.length} solicitudes
-            </span>
+            <div className="loan-calendar-card__controls">
+              <span className="loan-calendar-counter-pill">
+                <CalendarDays size={15} />
+                {visibleMonthLoans.length} solicitudes
+              </span>
+            </div>
           </header>
 
           <div className="loan-calendar-grid loan-calendar-grid--weekday">
@@ -278,7 +350,7 @@ export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
                         {formatTime(loan.scheduled_at)} {normalizeStatus(loan.status)}
                       </span>
                     ))}
-                    {dayLoans.length > 3 ? <span className="loan-calendar-chip">+{dayLoans.length - 3} mas</span> : null}
+                    {dayLoans.length > 3 ? <span className="loan-calendar-chip loan-calendar-chip--more">+{dayLoans.length - 3} mas</span> : null}
                   </div>
                 </button>
               );
@@ -289,9 +361,14 @@ export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
         </article>
 
         <aside className="loan-calendar-drawer">
-          <header>
-            <h2>Detalle del dia</h2>
-            <p>{selectedDateLabel}</p>
+          <header className="loan-calendar-drawer__header">
+            <div>
+              <h2>Detalle del dia</h2>
+              <p>{selectedDateLabel}</p>
+            </div>
+            <button type="button" className="loan-calendar-drawer__icon-btn" aria-label="Dia seleccionado">
+              <CalendarDays size={16} />
+            </button>
           </header>
 
           {selectedDateKey == null ? (
@@ -327,7 +404,26 @@ export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
             </div>
           )}
         </aside>
-      </section>
+        </section>
+
+        <section className="loan-calendar-summary">
+          <div className="loan-calendar-summary__metrics">
+            {summaryMetrics.map((metric) => (
+              <article key={metric.key} className={`loan-calendar-summary__metric loan-calendar-summary__metric--${metric.key}`}>
+                <span className="loan-calendar-summary__dot" />
+                <div>
+                  <strong>{metric.value}</strong>
+                  <small>{metric.label}</small>
+                </div>
+              </article>
+            ))}
+          </div>
+          <div className="loan-calendar-summary__total">
+            <strong>{visibleMonthLoans.length}</strong>
+            <small>Total solicitudes</small>
+          </div>
+        </section>
+      </div>
     </div>
   );
 
@@ -337,4 +433,3 @@ export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
 
   return content;
 }
-

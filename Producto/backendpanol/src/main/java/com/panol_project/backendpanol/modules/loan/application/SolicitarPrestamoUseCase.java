@@ -7,14 +7,20 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanCreateCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanImplementAvailability;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRepositoryPort;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRequestedItem;
+import com.panol_project.backendpanol.modules.loan.domain.LoanRequestedItemAvailability;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
 import com.panol_project.backendpanol.modules.loan.domain.LoanUpdateCommand;
 import com.panol_project.backendpanol.shared.error.ApiException;
 import com.panol_project.backendpanol.shared.error.BadRequestException;
+import com.panol_project.backendpanol.shared.error.ConflictException;
 import com.panol_project.backendpanol.shared.error.NotFoundException;
+import java.time.DayOfWeek;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -63,6 +69,8 @@ public class SolicitarPrestamoUseCase {
         List<UUID> implementUuids = requestedItems.stream()
                 .map(LoanRequestedItem::implementUuid)
                 .toList();
+
+        validateStockAvailability(requestedItems, command.scheduledAt(), command.expectedReturnAt(), null);
 
         if (loanRepositoryPort.existsPendingLoanConflict(requesterUuid, implementUuids)) {
             throw new ApiException(
@@ -123,6 +131,8 @@ public class SolicitarPrestamoUseCase {
         List<UUID> implementUuids = requestedItems.stream()
                 .map(LoanRequestedItem::implementUuid)
                 .toList();
+
+        validateStockAvailability(requestedItems, command.scheduledAt(), command.expectedReturnAt(), loanUuid);
 
         if (loanRepositoryPort.existsPendingLoanConflict(requesterUuid, loanUuid, implementUuids)) {
             throw new ApiException(
@@ -190,6 +200,12 @@ public class SolicitarPrestamoUseCase {
                     "scheduled_at no puede estar en una fecha u hora pasada"
             );
         }
+        validateScheduleWindow(
+                scheduledAt,
+                "LOAN_SCHEDULE_DAY_NOT_ALLOWED",
+                "LOAN_SCHEDULE_TIME_NOT_ALLOWED",
+                "scheduled_at"
+        );
     }
 
     private void validateExpectedReturnAt(OffsetDateTime scheduledAt, OffsetDateTime expectedReturnAt) {
@@ -207,6 +223,70 @@ public class SolicitarPrestamoUseCase {
                     "LOAN_EXPECTED_RETURN_INVALID",
                     "expected_return_at debe ser posterior a scheduled_at"
             );
+        }
+        validateScheduleWindow(
+                expectedReturnAt,
+                "LOAN_EXPECTED_RETURN_DAY_NOT_ALLOWED",
+                "LOAN_EXPECTED_RETURN_TIME_NOT_ALLOWED",
+                "expected_return_at"
+        );
+    }
+
+    private void validateScheduleWindow(
+            OffsetDateTime value,
+            String dayErrorCode,
+            String timeErrorCode,
+            String fieldName
+    ) {
+        if (value.getDayOfWeek() == DayOfWeek.SUNDAY) {
+            throw new BadRequestException(
+                    dayErrorCode,
+                    fieldName + " solo permite prestamos de lunes a sabado"
+            );
+        }
+
+        LocalTime minTime = LocalTime.of(8, 0);
+        LocalTime maxTime = LocalTime.of(22, 0);
+        LocalTime selectedTime = value.toLocalTime();
+        if (selectedTime.isBefore(minTime) || selectedTime.isAfter(maxTime)) {
+            throw new BadRequestException(
+                    timeErrorCode,
+                    fieldName + " debe estar entre las 08:00 y las 22:00"
+            );
+        }
+    }
+
+    private void validateStockAvailability(
+            List<LoanRequestedItem> requestedItems,
+            OffsetDateTime scheduledAt,
+            OffsetDateTime expectedReturnAt,
+            UUID excludeLoanUuid
+    ) {
+        Map<UUID, LoanRequestedItemAvailability> availabilityByImplement = new HashMap<>();
+        for (LoanRequestedItemAvailability availability : loanRepositoryPort.findRequestedItemAvailabilities(
+                requestedItems.stream().map(LoanRequestedItem::implementUuid).toList(),
+                scheduledAt,
+                expectedReturnAt,
+                excludeLoanUuid
+        )) {
+            availabilityByImplement.put(availability.implementUuid(), availability);
+        }
+
+        for (LoanRequestedItem item : requestedItems) {
+            LoanRequestedItemAvailability availability = availabilityByImplement.get(item.implementUuid());
+            if (availability == null) {
+                continue;
+            }
+            if (item.requestedQuantity() > availability.availableQuantity()) {
+                throw new ConflictException(
+                        "LOAN_STOCK_CONFLICT",
+                        String.format(
+                                "Solo puedes solicitar dentro del stock disponible. %s tiene %d unidad(es) disponibles para la fecha y hora seleccionadas.",
+                                availability.implementName(),
+                                availability.availableQuantity()
+                        )
+                );
+            }
         }
     }
 }

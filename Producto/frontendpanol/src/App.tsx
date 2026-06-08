@@ -22,7 +22,7 @@ import { LoanDeliveryPage } from "./pages/LoanDeliveryPage";
 import { LoanHistoryPage } from "./pages/LoanHistoryPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
-import { OutboxMonitoringPage } from "./pages/OutboxMonitoringPage";
+import { SupportPage } from "./pages/SupportPage";
 import { logout } from "./services/authService";
 import {
   clearSession,
@@ -40,6 +40,8 @@ interface RouteView {
   navigationMode: NavigationMode;
   breadcrumbs: BreadcrumbPart[];
   content: ReactNode;
+  searchPlaceholder?: string;
+  showSearch?: boolean;
   notFound?: boolean;
 }
 
@@ -161,16 +163,29 @@ function App() {
       };
     }
 
-    if (currentHash.startsWith("#/inventory/monitoring/outbox")) {
-      if (!coordinatorRole) {
-        return inventoryDenied("reports", "Monitoreo", "Solo el rol Coordinador puede acceder al monitoreo tecnico.");
-      }
+    if (currentHash.startsWith("#/support")) {
       return {
-        key: "outbox-monitoring",
+        key: "support",
+        navigationMode: directorRole ? "director" : "inventory",
+        activeSection: "support",
+        breadcrumbs: directorRole
+          ? [{ label: "Director", href: "#/director/dashboard" }, { label: "Support" }]
+          : teacherRole
+            ? [{ label: "Prestamos", href: "#/inventory/prestamos" }, { label: "Support" }]
+            : [{ label: "Inventario", href: "#/inventory/dashboard" }, { label: "Support" }],
+        searchPlaceholder: "Buscar en el inventario o guias...",
+        showSearch: true,
+        content: <SupportPage embedded />,
+      };
+    }
+
+    if (currentHash.startsWith("#/inventory/monitoring/outbox")) {
+      return {
+        key: "outbox-monitoring-disabled",
         navigationMode: "inventory",
-        activeSection: "reports",
-        breadcrumbs: [{ label: "Inventario", href: "#/inventory/dashboard" }, { label: "Monitoreo" }],
-        content: <OutboxMonitoringPage embedded />,
+        activeSection: coordinatorRole ? "dashboard" : "teacher-loans",
+        breadcrumbs: [{ label: coordinatorRole ? "Inventario" : "Prestamos" }, { label: "Vista deshabilitada" }],
+        content: renderAccessDenied("La vista de monitoreo esta temporalmente deshabilitada."),
       };
     }
 
@@ -398,8 +413,11 @@ function App() {
       navigationMode={routeView.navigationMode}
       breadcrumbs={routeView.breadcrumbs}
       onLogout={handleLogout}
-      searchPlaceholder="Buscar implementos..."
-      showSearch={isCoordinator(role)}
+      onOpenSupport={() => {
+        window.location.hash = "#/support";
+      }}
+      searchPlaceholder={routeView.searchPlaceholder ?? "Buscar implementos..."}
+      showSearch={routeView.showSearch ?? isCoordinator(role)}
       notificationCount={isDirector(role) ? 3 : 0}
       userName={sessionUser?.name?.trim() || "Usuario"}
       role={role}

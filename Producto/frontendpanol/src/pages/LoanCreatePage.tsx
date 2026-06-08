@@ -32,6 +32,8 @@ interface LoanCartItem {
 }
 
 const RESULTS_PAGE_SIZE = 6;
+const LOAN_MIN_TIME = "08:00";
+const LOAN_MAX_TIME = "22:00";
 
 function pad(value: number): string {
   return value.toString().padStart(2, "0");
@@ -52,6 +54,119 @@ function getEarliestSelectableMoment(): Date {
   }
   next.setSeconds(0, 0);
   return next;
+}
+
+function parseDateOnly(value: string): Date | null {
+  if (!value) {
+    return null;
+  }
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) {
+    return null;
+  }
+  const parsed = new Date(year, month - 1, day, 0, 0, 0, 0);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed;
+}
+
+function isSundayDateValue(value: string): boolean {
+  const parsed = parseDateOnly(value);
+  return parsed?.getDay() === 0;
+}
+
+function parseTimeValue(value: string): { hours: number; minutes: number } | null {
+  if (!/^\d{2}:\d{2}$/.test(value)) {
+    return null;
+  }
+  const [hours, minutes] = value.split(":").map(Number);
+  if (
+    Number.isNaN(hours) ||
+    Number.isNaN(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
+    return null;
+  }
+  return { hours, minutes };
+}
+
+function isAllowedLoanTimeValue(value: string): boolean {
+  const parsed = parseTimeValue(value);
+  if (!parsed) {
+    return false;
+  }
+  const totalMinutes = parsed.hours * 60 + parsed.minutes;
+  return totalMinutes >= 8 * 60 && totalMinutes <= 22 * 60;
+}
+
+function nextAllowedLoanMoment(anchor = new Date()): Date {
+  const next = new Date(anchor);
+  if (next.getSeconds() > 0 || next.getMilliseconds() > 0) {
+    next.setMinutes(next.getMinutes() + 1);
+  }
+  next.setSeconds(0, 0);
+
+  while (true) {
+    if (next.getDay() === 0) {
+      next.setDate(next.getDate() + 1);
+      next.setHours(8, 0, 0, 0);
+      continue;
+    }
+
+    const minutes = next.getHours() * 60 + next.getMinutes();
+    if (minutes < 8 * 60) {
+      next.setHours(8, 0, 0, 0);
+      continue;
+    }
+    if (minutes > 22 * 60) {
+      next.setDate(next.getDate() + 1);
+      next.setHours(8, 0, 0, 0);
+      continue;
+    }
+    return next;
+  }
+}
+
+function getRequestedDateFromHash(): string | null {
+  const hash = window.location.hash || "";
+  const queryIndex = hash.indexOf("?");
+  if (queryIndex < 0) {
+    return null;
+  }
+  const params = new URLSearchParams(hash.slice(queryIndex + 1));
+  const selectedDate = params.get("date")?.trim() ?? "";
+  return /^\d{4}-\d{2}-\d{2}$/.test(selectedDate) ? selectedDate : null;
+}
+
+function getDefaultLoanMoment(selectedDateValue?: string | null): Date {
+  const earliest = nextAllowedLoanMoment(getEarliestSelectableMoment());
+  if (!selectedDateValue) {
+    return earliest;
+  }
+
+  const selectedDate = parseDateOnly(selectedDateValue);
+  if (!selectedDate) {
+    return earliest;
+  }
+
+  const todayKey = formatDateForInput(new Date());
+  if (selectedDateValue < todayKey) {
+    return earliest;
+  }
+
+  if (selectedDate.getDay() === 0) {
+    return nextAllowedLoanMoment(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 8, 0, 0, 0));
+  }
+
+  if (selectedDateValue === todayKey) {
+    return earliest;
+  }
+
+  return new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 8, 0, 0, 0);
 }
 
 function formatScheduledDateForInput(value: string): string {
@@ -103,6 +218,14 @@ function isIsoInPast(value: string): boolean {
     return false;
   }
   return date.getTime() < Date.now();
+}
+
+function addHoursToIso(value: string, hours: number): string | null {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return new Date(date.getTime() + hours * 60 * 60 * 1000).toISOString();
 }
 
 function safePositiveInt(rawValue: string | number, fallback = 1): number {
@@ -165,6 +288,7 @@ export function LoanCreatePage({
   const [saving, setSaving] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [roomInlineError, setRoomInlineError] = useState<string | null>(null);
+  const [scheduleInlineError, setScheduleInlineError] = useState<string | null>(null);
   const [searchInlineError, setSearchInlineError] = useState<string | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
 
@@ -182,6 +306,12 @@ export function LoanCreatePage({
   const [resultsPage, setResultsPage] = useState(1);
   const [cart, setCart] = useState<LoanCartItem[]>([]);
   const [editingLoan, setEditingLoan] = useState<LoanSummary | null>(null);
+  const scheduledAt = buildScheduledAtIso(dateValue, timeValue);
+  const hasCustomExpectedReturn = Boolean(returnDateValue && returnTimeValue);
+  const expectedReturnAt = hasCustomExpectedReturn
+    ? buildScheduledAtIso(returnDateValue, returnTimeValue)
+    : null;
+  const effectiveExpectedReturnAt = expectedReturnAt ?? (scheduledAt ? addHoursToIso(scheduledAt, 2) : null);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -189,27 +319,27 @@ export function LoanCreatePage({
   }, [search]);
 
   useEffect(() => {
-    const nextAvailable = getEarliestSelectableMoment();
-    setDateValue((current) => current || formatDateForInput(nextAvailable));
-    setTimeValue((current) => current || formatTimeForInput(nextAvailable));
-  }, []);
+    if (isEditMode) {
+      return;
+    }
+    const defaultMoment = getDefaultLoanMoment(getRequestedDateFromHash());
+    setDateValue((current) => current || formatDateForInput(defaultMoment));
+    setTimeValue((current) => current || formatTimeForInput(defaultMoment));
+  }, [isEditMode]);
 
   useEffect(() => {
     async function bootstrap() {
       setLoadingOptions(true);
       setLoadingEditLoan(Boolean(editLoanUuid));
-      setCatalogLoading(true);
       setGlobalError(null);
       try {
-        const [roomsResponse, subjectsResponse, implementsResponse, editingLoanResponse] = await Promise.all([
+        const [roomsResponse, subjectsResponse, editingLoanResponse] = await Promise.all([
           fetchRooms(),
           fetchSubjects(),
-          fetchImplements(),
           editLoanUuid ? fetchLoanByUuid(editLoanUuid) : Promise.resolve(null),
         ]);
         setRooms(roomsResponse);
         setSubjects(subjectsResponse);
-        setAllImplements(implementsResponse);
 
         if (editLoanUuid) {
           if (!editingLoanResponse) {
@@ -224,13 +354,10 @@ export function LoanCreatePage({
             setReturnTimeValue(formatScheduledTimeForInput(editingLoanResponse.expected_return_at));
             setCart(
               editingLoanResponse.items.map((item) => {
-                const relatedImplement = implementsResponse.find(
-                  (implement) => implement.uuid === item.implement_uuid,
-                );
                 return {
                   implement_uuid: item.implement_uuid,
                   implement_name: item.implement_name,
-                  implement_img_url: relatedImplement?.imgUrl?.trim() ?? null,
+                  implement_img_url: null,
                   requested_quantity: safePositiveInt(item.requested_quantity, 1),
                 };
               }),
@@ -244,12 +371,48 @@ export function LoanCreatePage({
       } finally {
         setLoadingOptions(false);
         setLoadingEditLoan(false);
-        setCatalogLoading(false);
       }
     }
 
     void bootstrap();
   }, [editLoanUuid]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCatalog() {
+      setCatalogLoading(true);
+      try {
+        const rows = await fetchImplements({
+          scheduledAt: scheduledAt ?? undefined,
+          expectedReturnAt: effectiveExpectedReturnAt ?? undefined,
+          excludeLoanUuid: editLoanUuid ?? undefined,
+        });
+
+        if (cancelled) {
+          return;
+        }
+
+        setAllImplements(rows);
+      } catch (requestError) {
+        if (cancelled) {
+          return;
+        }
+        setGlobalError((current) => current ?? getErrorMessage(requestError, "No se pudo consultar la disponibilidad de implementos."));
+        setAllImplements([]);
+      } finally {
+        if (!cancelled) {
+          setCatalogLoading(false);
+        }
+      }
+    }
+
+    void loadCatalog();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [editLoanUuid, effectiveExpectedReturnAt, scheduledAt]);
 
   const filteredResults = useMemo(() => {
     const normalizedTerm = debouncedSearch.trim().toLowerCase();
@@ -298,21 +461,16 @@ export function LoanCreatePage({
     }
   }, [resultsPage, totalResultPages]);
 
-  const scheduledAt = buildScheduledAtIso(dateValue, timeValue);
-  const expectedReturnAt = returnDateValue && returnTimeValue
-    ? buildScheduledAtIso(returnDateValue, returnTimeValue)
-    : null;
-  const hasPartialExpectedReturn = Boolean(returnDateValue || returnTimeValue) && !(returnDateValue && returnTimeValue);
-  const earliestSelectableMoment = getEarliestSelectableMoment();
+  const earliestSelectableMoment = nextAllowedLoanMoment(getEarliestSelectableMoment());
   const earliestSelectableDate = formatDateForInput(earliestSelectableMoment);
   const earliestSelectableTime = formatTimeForInput(earliestSelectableMoment);
-  const scheduledMinTime = dateValue === earliestSelectableDate ? earliestSelectableTime : undefined;
-  const expectedReturnMinTime = returnDateValue === earliestSelectableDate ? earliestSelectableTime : undefined;
+  const scheduledMinTime = dateValue === earliestSelectableDate ? earliestSelectableTime : LOAN_MIN_TIME;
+  const expectedReturnMinTime = returnDateValue === earliestSelectableDate ? earliestSelectableTime : LOAN_MIN_TIME;
   const hasValidQuantities = cart.every(
     (item) => Number.isInteger(item.requested_quantity) && item.requested_quantity > 0,
   );
   const canSubmit = Boolean(
-    roomUuid && scheduledAt && cart.length > 0 && hasValidQuantities && !saving && !loadingEditLoan,
+    roomUuid && scheduledAt && cart.length > 0 && hasValidQuantities && !scheduleInlineError && !saving && !loadingEditLoan,
   );
 
   const resultCategoryChips = useMemo(() => {
@@ -335,23 +493,171 @@ export function LoanCreatePage({
     return chips;
   }, [filteredResults]);
 
+  const implementByUuid = useMemo(
+    () =>
+      new Map(
+        allImplements.map((implement) => [implement.uuid, implement] as const),
+      ),
+    [allImplements],
+  );
+
+  useEffect(() => {
+    if (allImplements.length === 0) {
+      return;
+    }
+    setCart((previous) =>
+      previous.map((item) => {
+        if (item.implement_img_url) {
+          return item;
+        }
+        const relatedImplement = implementByUuid.get(item.implement_uuid);
+        if (!relatedImplement?.imgUrl?.trim()) {
+          return item;
+        }
+        return {
+          ...item,
+          implement_img_url: relatedImplement.imgUrl.trim(),
+        };
+      }),
+    );
+  }, [allImplements, implementByUuid]);
+
+  useEffect(() => {
+    if (cart.length === 0) {
+      if (searchInlineError?.startsWith("Solo puedes solicitar dentro del stock disponible.")) {
+        setSearchInlineError(null);
+      }
+      return;
+    }
+
+    const stockConflict = cart.find((item) => {
+      const implement = implementByUuid.get(item.implement_uuid);
+      const availableStock = implement ? getAvailableStock(implement) : null;
+      return availableStock !== null && item.requested_quantity > availableStock;
+    });
+
+    if (!stockConflict) {
+      if (searchInlineError?.startsWith("Solo puedes solicitar dentro del stock disponible.")) {
+        setSearchInlineError(null);
+      }
+      return;
+    }
+
+    const implement = implementByUuid.get(stockConflict.implement_uuid);
+    const availableStock = implement ? getAvailableStock(implement) : null;
+    setSearchInlineError(
+      `Solo puedes solicitar dentro del stock disponible. ${stockConflict.implement_name} tiene ${availableStock ?? 0} unidad(es) disponibles para la fecha y hora seleccionadas.`,
+    );
+  }, [cart, implementByUuid, searchInlineError]);
+
+  function getCurrentCartQuantity(implementUuid: string): number {
+    return cart.find((item) => item.implement_uuid === implementUuid)?.requested_quantity ?? 0;
+  }
+
+  function getRemainingStockCapacity(implement: ImplementSummary): number | null {
+    const availableStock = getAvailableStock(implement);
+    if (availableStock === null) {
+      return null;
+    }
+    return Math.max(availableStock - getCurrentCartQuantity(implement.uuid), 0);
+  }
+
   function getPendingQuantity(implementUuid: string): number {
     return pendingQuantities[implementUuid] ?? 1;
   }
 
-  function increasePendingQuantity(implementUuid: string, delta: number) {
+  function increasePendingQuantity(implementUuid: string, delta: number, maxAllowed?: number | null) {
     setPendingQuantities((previous) => {
       const current = previous[implementUuid] ?? 1;
+      const nextValue = safePositiveInt(current + delta, 1);
       return {
         ...previous,
-        [implementUuid]: safePositiveInt(current + delta, 1),
+        [implementUuid]:
+          typeof maxAllowed === "number" ? Math.min(nextValue, Math.max(maxAllowed, 1)) : nextValue,
       };
     });
+  }
+
+  function handleScheduleDateChange(nextDateValue: string) {
+    if (!nextDateValue) {
+      setDateValue(nextDateValue);
+      setScheduleInlineError(null);
+      return;
+    }
+    if (isSundayDateValue(nextDateValue)) {
+      setScheduleInlineError("Las solicitudes solo se pueden programar de lunes a sabado.");
+      return;
+    }
+    setDateValue(nextDateValue);
+    const nextMinTime = nextDateValue === earliestSelectableDate ? earliestSelectableTime : LOAN_MIN_TIME;
+    if (!timeValue || timeValue < nextMinTime) {
+      setTimeValue(nextMinTime);
+    }
+    setScheduleInlineError(null);
+  }
+
+  function handleScheduleTimeChange(nextTimeValue: string) {
+    if (!isAllowedLoanTimeValue(nextTimeValue)) {
+      setScheduleInlineError("Las solicitudes solo se pueden programar entre las 08:00 y las 22:00.");
+      return;
+    }
+    const nextScheduledAt = buildScheduledAtIso(dateValue, nextTimeValue);
+    if (nextScheduledAt && isIsoInPast(nextScheduledAt)) {
+      setScheduleInlineError("La fecha y hora de solicitud no puede estar en el pasado.");
+      return;
+    }
+    setTimeValue(nextTimeValue);
+    setScheduleInlineError(null);
+  }
+
+  function handleReturnDateChange(nextDateValue: string) {
+    if (!nextDateValue) {
+      setReturnDateValue("");
+      setReturnTimeValue("");
+      setScheduleInlineError(null);
+      return;
+    }
+    if (isSundayDateValue(nextDateValue)) {
+      setScheduleInlineError("La devolucion solo se puede programar de lunes a sabado.");
+      return;
+    }
+    setReturnDateValue(nextDateValue);
+    const nextMinTime = nextDateValue === earliestSelectableDate ? earliestSelectableTime : LOAN_MIN_TIME;
+    if (returnTimeValue && returnTimeValue < nextMinTime) {
+      setReturnTimeValue(nextMinTime);
+    }
+    setScheduleInlineError(null);
+  }
+
+  function handleReturnTimeChange(nextTimeValue: string) {
+    if (!nextTimeValue) {
+      setReturnDateValue("");
+      setReturnTimeValue("");
+      setScheduleInlineError(null);
+      return;
+    }
+    if (!isAllowedLoanTimeValue(nextTimeValue)) {
+      setScheduleInlineError("La devolucion solo se puede programar entre las 08:00 y las 22:00.");
+      return;
+    }
+    if (!returnDateValue) {
+      setReturnDateValue(dateValue);
+    }
+    setReturnTimeValue(nextTimeValue);
+    setScheduleInlineError(null);
   }
 
   function addImplement(implement: ImplementSummary, quantity: number) {
     const normalizedQuantity = safePositiveInt(quantity, 1);
     setSearchInlineError(null);
+
+    const availableStock = getAvailableStock(implement);
+    const existingQuantity = getCurrentCartQuantity(implement.uuid);
+    if (availableStock !== null && existingQuantity + normalizedQuantity > availableStock) {
+      setDuplicateWarning(null);
+      setSearchInlineError("Solo puedes solicitar dentro del stock disponible.");
+      return;
+    }
 
     setCart((previous) => {
       const existing = previous.find((item) => item.implement_uuid === implement.uuid);
@@ -386,12 +692,23 @@ export function LoanCreatePage({
   }
 
   function adjustCartQuantity(implementUuid: string, delta: number) {
+    setSearchInlineError(null);
     setCart((previous) =>
-      previous.map((item) =>
-        item.implement_uuid === implementUuid
-          ? { ...item, requested_quantity: safePositiveInt(item.requested_quantity + delta, 1) }
-          : item,
-      ),
+      previous.map((item) => {
+        if (item.implement_uuid !== implementUuid) {
+          return item;
+        }
+
+        const implement = implementByUuid.get(implementUuid);
+        const nextQuantity = safePositiveInt(item.requested_quantity + delta, 1);
+        const availableStock = implement ? getAvailableStock(implement) : null;
+        if (availableStock !== null && nextQuantity > availableStock) {
+          setSearchInlineError("Solo puedes solicitar dentro del stock disponible.");
+          return item;
+        }
+
+        return { ...item, requested_quantity: nextQuantity };
+      }),
     );
   }
 
@@ -417,6 +734,7 @@ export function LoanCreatePage({
   async function submitLoan() {
     setGlobalError(null);
     setRoomInlineError(null);
+    setScheduleInlineError(null);
     setSearchInlineError(null);
     setDuplicateWarning(null);
 
@@ -432,15 +750,27 @@ export function LoanCreatePage({
       setGlobalError("La fecha y hora de solicitud no puede estar en el pasado.");
       return;
     }
-    if (hasPartialExpectedReturn) {
-      setGlobalError("Si ingresas una fecha de devolucion, tambien debes ingresar su hora.");
+    if (isSundayDateValue(dateValue)) {
+      setScheduleInlineError("Las solicitudes solo se pueden programar de lunes a sabado.");
       return;
     }
-    if (expectedReturnAt && isIsoInPast(expectedReturnAt)) {
+    if (!isAllowedLoanTimeValue(timeValue)) {
+      setScheduleInlineError("Las solicitudes solo se pueden programar entre las 08:00 y las 22:00.");
+      return;
+    }
+    if (hasCustomExpectedReturn && returnDateValue && isSundayDateValue(returnDateValue)) {
+      setScheduleInlineError("La devolucion solo se puede programar de lunes a sabado.");
+      return;
+    }
+    if (hasCustomExpectedReturn && returnTimeValue && !isAllowedLoanTimeValue(returnTimeValue)) {
+      setScheduleInlineError("La devolucion solo se puede programar entre las 08:00 y las 22:00.");
+      return;
+    }
+    if (hasCustomExpectedReturn && expectedReturnAt && isIsoInPast(expectedReturnAt)) {
       setGlobalError("La fecha y hora de devolucion no puede estar en el pasado.");
       return;
     }
-    if (expectedReturnAt && new Date(expectedReturnAt).getTime() <= new Date(scheduledAt).getTime()) {
+    if (hasCustomExpectedReturn && expectedReturnAt && new Date(expectedReturnAt).getTime() <= new Date(scheduledAt).getTime()) {
       setGlobalError("La fecha y hora de devolucion debe ser posterior a la fecha y hora de solicitud.");
       return;
     }
@@ -453,11 +783,25 @@ export function LoanCreatePage({
       return;
     }
 
+    const stockConflict = cart.find((item) => {
+      const implement = implementByUuid.get(item.implement_uuid);
+      const availableStock = implement ? getAvailableStock(implement) : null;
+      return availableStock !== null && item.requested_quantity > availableStock;
+    });
+    if (stockConflict) {
+      const implement = implementByUuid.get(stockConflict.implement_uuid);
+      const availableStock = implement ? getAvailableStock(implement) : null;
+      setSearchInlineError(
+        `Solo puedes solicitar dentro del stock disponible. ${stockConflict.implement_name} tiene ${availableStock ?? 0} unidad(es) disponibles para la fecha y hora seleccionadas.`,
+      );
+      return;
+    }
+
     const payload: CreateLoanPayload = {
       room_uuid: roomUuid,
       subject_uuid: subjectUuid || null,
       scheduled_at: scheduledAt,
-      expected_return_at: expectedReturnAt,
+      expected_return_at: hasCustomExpectedReturn ? expectedReturnAt : null,
       items: cart.map((item) => ({
         implement_uuid: item.implement_uuid,
         requested_quantity: item.requested_quantity,
@@ -477,6 +821,15 @@ export function LoanCreatePage({
     } catch (requestError) {
       const payloadError = getApiErrorPayload(requestError);
       if (payloadError?.code === "LOAN_DUPLICATE_REQUEST") {
+        setSearchInlineError(payloadError.message);
+      } else if (
+        payloadError?.code === "LOAN_SCHEDULE_DAY_NOT_ALLOWED" ||
+        payloadError?.code === "LOAN_SCHEDULE_TIME_NOT_ALLOWED" ||
+        payloadError?.code === "LOAN_EXPECTED_RETURN_DAY_NOT_ALLOWED" ||
+        payloadError?.code === "LOAN_EXPECTED_RETURN_TIME_NOT_ALLOWED"
+      ) {
+        setScheduleInlineError(payloadError.message);
+      } else if (payloadError?.code === "LOAN_STOCK_CONFLICT") {
         setSearchInlineError(payloadError.message);
       } else if (
         payloadError?.code === "LOAN_ROOM_NOT_FOUND" ||
@@ -579,7 +932,7 @@ export function LoanCreatePage({
                   value={dateValue}
                   min={earliestSelectableDate}
                   disabled={saving}
-                  onChange={(event) => setDateValue(event.target.value)}
+                  onChange={(event) => handleScheduleDateChange(event.target.value)}
                 />
               </div>
 
@@ -592,8 +945,9 @@ export function LoanCreatePage({
                   type="time"
                   value={timeValue}
                   min={scheduledMinTime}
+                  max={LOAN_MAX_TIME}
                   disabled={saving}
-                  onChange={(event) => setTimeValue(event.target.value)}
+                  onChange={(event) => handleScheduleTimeChange(event.target.value)}
                 />
               </div>
 
@@ -607,7 +961,7 @@ export function LoanCreatePage({
                   value={returnDateValue}
                   min={earliestSelectableDate}
                   disabled={saving}
-                  onChange={(event) => setReturnDateValue(event.target.value)}
+                  onChange={(event) => handleReturnDateChange(event.target.value)}
                 />
               </div>
 
@@ -620,14 +974,19 @@ export function LoanCreatePage({
                   type="time"
                   value={returnTimeValue}
                   min={expectedReturnMinTime}
+                  max={LOAN_MAX_TIME}
                   disabled={saving}
-                  onChange={(event) => setReturnTimeValue(event.target.value)}
+                  onChange={(event) => handleReturnTimeChange(event.target.value)}
                 />
               </div>
 
               <div className="loan-create-note loan-create-note--warning">
-                en caso de que no se ingrese una fecha y hora de devolucion se dara un plazo de 2 horas despues de la entrega de los implementos
+                en caso de que no se ingrese una fecha y hora de devolucion, se usara la misma fecha y hora de solicitud con un incremento de 2 horas
               </div>
+              <div className="loan-create-note loan-create-note--warning">
+                la cantidad disponible de los implementos cambiara segun el rango de fecha y hora en la que los solicite. Si solo marcas la fecha y hora de solicitud, el sistema considerara como devolucion esa misma fecha con un incremento de 2 horas para validar la disponibilidad.
+              </div>
+              {scheduleInlineError ? <p className="field-error loan-create-form-grid__error">{scheduleInlineError}</p> : null}
             </div>
           </article>
 
@@ -671,6 +1030,8 @@ export function LoanCreatePage({
                   const pendingQuantity = getPendingQuantity(result.uuid);
                   const lowStock = isLowStock(result);
                   const imageUrl = result.imgUrl?.trim();
+                  const remainingCapacity = getRemainingStockCapacity(result);
+                  const addDisabled = saving || remainingCapacity === 0;
 
                   return (
                     <article key={result.uuid} className="loan-create-result-item">
@@ -694,7 +1055,7 @@ export function LoanCreatePage({
                         <div className="loan-stepper" role="group" aria-label={`Cantidad para ${result.name}`}>
                           <button
                             type="button"
-                            onClick={() => increasePendingQuantity(result.uuid, -1)}
+                            onClick={() => increasePendingQuantity(result.uuid, -1, remainingCapacity)}
                             disabled={saving}
                             aria-label="Disminuir cantidad"
                           >
@@ -705,8 +1066,8 @@ export function LoanCreatePage({
                           </span>
                           <button
                             type="button"
-                            onClick={() => increasePendingQuantity(result.uuid, 1)}
-                            disabled={saving}
+                            onClick={() => increasePendingQuantity(result.uuid, 1, remainingCapacity)}
+                            disabled={saving || (typeof remainingCapacity === "number" && pendingQuantity >= Math.max(remainingCapacity, 1))}
                             aria-label="Aumentar cantidad"
                           >
                             <Plus size={14} />
@@ -716,11 +1077,11 @@ export function LoanCreatePage({
                         <button
                           type="button"
                           className="loan-add-item-btn"
-                          disabled={saving}
+                          disabled={addDisabled}
                           onClick={() => addImplement(result, pendingQuantity)}
                         >
                           <Plus size={14} />
-                          Agregar
+                          {remainingCapacity === 0 ? "Sin stock" : "Agregar"}
                         </button>
                       </div>
                     </article>
@@ -798,56 +1159,64 @@ export function LoanCreatePage({
                     </tr>
                   ) : (
                     cart.map((item) => (
-                      <tr key={item.implement_uuid}>
-                        <td>
-                          <div className="loan-summary-item-cell">
-                            <div className="loan-summary-item-cell__thumb" aria-hidden="true">
-                              {item.implement_img_url ? (
-                                <img src={item.implement_img_url} alt={`Imagen de ${item.implement_name}`} />
-                              ) : (
-                                <PackageSearch size={16} />
-                              )}
-                            </div>
-                            <div className="loan-summary-item-cell__copy">
-                              <p>{item.implement_name}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td>
-                          <div className="loan-stepper loan-stepper--compact">
-                            <button
-                              type="button"
-                              onClick={() => adjustCartQuantity(item.implement_uuid, -1)}
-                              disabled={saving}
-                              aria-label="Disminuir cantidad"
-                            >
-                              <Minus size={12} />
-                            </button>
-                            <span className="loan-stepper__value" aria-live="polite">
-                              {item.requested_quantity}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => adjustCartQuantity(item.implement_uuid, 1)}
-                              disabled={saving}
-                              aria-label="Aumentar cantidad"
-                            >
-                              <Plus size={12} />
-                            </button>
-                          </div>
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            className="loan-remove-item-btn"
-                            disabled={saving}
-                            onClick={() => removeImplement(item.implement_uuid)}
-                            aria-label="Eliminar implemento"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </td>
-                      </tr>
+                      (() => {
+                        const implement = implementByUuid.get(item.implement_uuid);
+                        const availableStock = implement ? getAvailableStock(implement) : null;
+                        const canIncrease = availableStock === null || item.requested_quantity < availableStock;
+
+                        return (
+                          <tr key={item.implement_uuid}>
+                            <td>
+                              <div className="loan-summary-item-cell">
+                                <div className="loan-summary-item-cell__thumb" aria-hidden="true">
+                                  {item.implement_img_url ? (
+                                    <img src={item.implement_img_url} alt={`Imagen de ${item.implement_name}`} />
+                                  ) : (
+                                    <PackageSearch size={16} />
+                                  )}
+                                </div>
+                                <div className="loan-summary-item-cell__copy">
+                                  <p>{item.implement_name}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <div className="loan-stepper loan-stepper--compact">
+                                <button
+                                  type="button"
+                                  onClick={() => adjustCartQuantity(item.implement_uuid, -1)}
+                                  disabled={saving}
+                                  aria-label="Disminuir cantidad"
+                                >
+                                  <Minus size={12} />
+                                </button>
+                                <span className="loan-stepper__value" aria-live="polite">
+                                  {item.requested_quantity}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => adjustCartQuantity(item.implement_uuid, 1)}
+                                  disabled={saving || !canIncrease}
+                                  aria-label="Aumentar cantidad"
+                                >
+                                  <Plus size={12} />
+                                </button>
+                              </div>
+                            </td>
+                            <td>
+                              <button
+                                type="button"
+                                className="loan-remove-item-btn"
+                                disabled={saving}
+                                onClick={() => removeImplement(item.implement_uuid)}
+                                aria-label="Eliminar implemento"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })()
                     ))
                   )}
                 </tbody>

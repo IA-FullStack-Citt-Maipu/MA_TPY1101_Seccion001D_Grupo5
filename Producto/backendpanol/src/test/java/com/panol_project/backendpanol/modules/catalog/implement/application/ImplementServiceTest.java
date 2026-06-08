@@ -195,19 +195,19 @@ class ImplementServiceTest {
     @Test
     void listarDebeAplicarFiltrosCombinados() {
         UUID categoryUuid = UUID.randomUUID();
-        when(repository.findAllSummaries("Guante", categoryUuid, null)).thenReturn(java.util.List.of());
+        when(repository.findAllSummaries("Guante", categoryUuid, null, null, null, null)).thenReturn(java.util.List.of());
 
         service.listar("  Guante ", categoryUuid, null);
 
-        verify(repository).findAllSummaries("Guante", categoryUuid, null);
+        verify(repository).findAllSummaries("Guante", categoryUuid, null, null, null, null);
     }
 
     @Test
     void listarConFiltroDamagedDebePropagarsAlRepositorio() {
-        when(repository.findAllSummaries(null, null, StockStatusFilter.DAMAGED)).thenReturn(java.util.List.of());
+        when(repository.findAllSummaries(null, null, StockStatusFilter.DAMAGED, null, null, null)).thenReturn(java.util.List.of());
 
         service.listar(null, null, StockStatusFilter.DAMAGED);
 
-        verify(repository).findAllSummaries(null, null, StockStatusFilter.DAMAGED);
+        verify(repository).findAllSummaries(null, null, StockStatusFilter.DAMAGED, null, null, null);
     }
 }

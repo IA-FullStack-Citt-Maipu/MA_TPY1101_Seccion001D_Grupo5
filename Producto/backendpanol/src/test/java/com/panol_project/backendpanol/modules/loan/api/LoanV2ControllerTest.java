@@ -17,6 +17,7 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanCreateCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanDetailItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanImplementAvailability;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRepositoryPort;
+import com.panol_project.backendpanol.modules.loan.domain.LoanRequestedItemAvailability;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStatus;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
 import com.panol_project.backendpanol.shared.error.security.RestAccessDeniedHandler;
@@ -110,6 +111,8 @@ class LoanV2ControllerTest {
         when(loanRepositoryPort.existsActiveSubjectByUuid(subjectUuid)).thenReturn(true);
         when(loanRepositoryPort.findImplementAvailabilityByUuid(implementUuid))
                 .thenReturn(Optional.of(new LoanImplementAvailability(implementUuid, true)));
+        when(loanRepositoryPort.findRequestedItemAvailabilities(List.of(implementUuid), scheduledAt, expectedReturnAt, null))
+                .thenReturn(List.of(new LoanRequestedItemAvailability(implementUuid, "Fonendoscopio", true, 5)));
         when(loanRepositoryPort.existsPendingLoanConflict(authenticatedUserUuid, List.of(implementUuid))).thenReturn(false);
         when(loanRepositoryPort.createPendingLoan(any(LoanCreateCommand.class))).thenReturn(createdLoan);
         when(loanRepositoryPort.findVisibleLoanSummaryByUuid(loanUuid)).thenReturn(Optional.of(response));
@@ -218,6 +221,12 @@ class LoanV2ControllerTest {
         when(loanRepositoryPort.existsActiveRoomByUuid(roomUuid)).thenReturn(true);
         when(loanRepositoryPort.findImplementAvailabilityByUuid(implementUuid))
                 .thenReturn(Optional.of(new LoanImplementAvailability(implementUuid, true)));
+        when(loanRepositoryPort.findRequestedItemAvailabilities(
+                List.of(implementUuid),
+                OffsetDateTime.parse("2026-06-12T10:30:00-04:00"),
+                null,
+                null
+        )).thenReturn(List.of(new LoanRequestedItemAvailability(implementUuid, "Implemento prueba", true, 5)));
         when(loanRepositoryPort.existsPendingLoanConflict(authenticatedUserUuid, List.of(implementUuid))).thenReturn(true);
 
         mockMvc.perform(post("/api/v2/loans")
