@@ -1,8 +1,8 @@
-﻿# Entorno y Secrets del Backend
+# Entorno y Secrets del Backend
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-05-15
-- Fuente de verdad: application.yaml, .env.local.example, docker compose vigentes
+- Ultima verificacion: 2026-06-07
+- Fuente de verdad: `application.yaml`, `Producto/databasepanol/.env.example`, `.env.local.example`, compose vigentes
 
 ## Selector de entorno de BD
 
@@ -22,10 +22,14 @@ En `Producto/backendpanol`:
 - `.env.local` (local no versionado)
 - `.env.local.example` (plantilla versionada)
 - `secrets/application-secrets.properties` (secretos runtime)
-- `secrets/db_password.txt` (solo si usas postgres local fuera del compose de Producto)
+
+En `Producto/databasepanol`:
+- `.env` (local no versionado para PostgreSQL)
+- `.env.example` (plantilla versionada)
+- `secrets/README.md` (guia de secretos locales)
 
 En `Producto`:
-- `.env` (variables para `Producto/docker-compose.yaml`)
+- `.env` (variables de compose cuando aplique)
 
 ## Variables clave
 
@@ -62,8 +66,65 @@ jOOQ (build-time):
 
 ## Compose y entorno
 
-- `Producto/docker-compose.yaml` levanta `frontend + backend` (sin postgres local).
-- `Producto/backendpanol/docker-compose.yaml` levanta backend only.
+- `Producto/databasepanol/docker-compose.yaml` levanta PostgreSQL local.
+- `Producto/docker-compose.yaml` levanta `frontend + backend`.
+- `Producto/backendpanol/docker-compose.yaml` levanta `backend only`.
 
 `APP_DB_ENV` define a que base conecta la app, no que servicios crea Docker Compose.
 
+### Modo Supabase
+
+- usa cualquiera de los compose de aplicacion;
+- deja `APP_DB_ENV=supabase`;
+- configura `DB_SUPABASE_*`;
+- no necesitas levantar `Producto/databasepanol/docker-compose.yaml`.
+
+### Modo PostgreSQL local
+
+- levanta primero `Producto/databasepanol/docker-compose.yaml`;
+- deja `APP_DB_ENV=docker`;
+- configura `DB_DOCKER_*`;
+- cuando el backend corre dentro de Docker Compose, los compose inyectan `DB_DOCKER_HOST=panol-postgres`;
+- cuando el backend corre desde IDE o Maven en tu host, usa `DB_DOCKER_HOST=localhost`.
+
+### jOOQ en build
+
+`JOOQ_DB_URL`, `JOOQ_DB_USER` y `JOOQ_DB_PASSWORD` se usan solo para code generation / introspeccion en build.
+
+No dependen automaticamente de `APP_DB_ENV`. Eso significa:
+
+- puedes correr la app contra PostgreSQL local (`APP_DB_ENV=docker`) y seguir generando jOOQ desde Supabase;
+- o puedes apuntar `JOOQ_DB_*` tambien a tu base local si quieres un ciclo completamente offline.
+
+## Flujo recomendado para base local
+
+1. Levantar `Producto/databasepanol/docker-compose.yaml`.
+2. Configurar en `Producto/backendpanol/.env.local` el modo `APP_DB_ENV=docker` y una `DB_DOCKER_PASSWORD` que coincida con `POSTGRES_PASSWORD`.
+3. Arrancar el backend; Flyway aplicara el esquema desde `Producto/databasepanol/migrations/v25` empaquetado en el jar.
+
+## Flujos rapidos
+
+Supabase:
+
+```bash
+cd Producto
+docker compose up --build
+```
+
+con `APP_DB_ENV=supabase`.
+
+Base local:
+
+```bash
+cd Producto/databasepanol
+docker compose up -d
+```
+
+despues:
+
+```bash
+cd Producto
+docker compose up --build
+```
+
+con `APP_DB_ENV=docker`.

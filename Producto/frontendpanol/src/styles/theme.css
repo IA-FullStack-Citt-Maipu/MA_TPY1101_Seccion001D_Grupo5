@@ -2916,6 +2916,20 @@ body.modal-open .app-shell__main {
   box-shadow: 0 0 0 3px rgba(12, 47, 117, 0.14);
 }
 
+.loan-create-note {
+  grid-column: 1 / -1;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.loan-create-note--warning {
+  border: 1px solid #f3d27c;
+  background: #fff7d6;
+  color: #7a5400;
+}
+
 .loan-create-chip-list {
   display: flex;
   flex-wrap: wrap;
@@ -6604,6 +6618,20 @@ a:focus-visible {
   font-weight: 700;
 }
 
+.loan-delivery-individuals__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  color: #53627b;
+  font-size: 12px;
+}
+
+.loan-delivery-individuals__legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .loan-delivery-individuals__list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
@@ -6613,9 +6641,56 @@ a:focus-visible {
 .loan-delivery-individuals__option {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 9px;
   color: #2f3b52;
   font-size: 12px;
+  border: 1px solid #dce2ee;
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: #fbfcff;
+}
+
+.loan-delivery-individuals__option input {
+  margin: 0;
+}
+
+.loan-delivery-individuals__option-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.loan-delivery-individuals__option-copy strong {
+  font-size: 12px;
+  color: #21344f;
+}
+
+.loan-delivery-individuals__option-copy small {
+  font-size: 11px;
+  color: #62718a;
+}
+
+.loan-delivery-individuals__option--reserved {
+  background: #fff7df;
+  border-color: #f0d086;
+}
+
+.loan-delivery-individuals__option--reserved .loan-delivery-individuals__option-copy strong,
+.loan-delivery-individuals__option--reserved .loan-delivery-individuals__option-copy small {
+  color: #8a5c07;
+}
+
+.loan-delivery-individuals__option--unavailable {
+  background: #fff0f2;
+  border-color: #efb8c0;
+}
+
+.loan-delivery-individuals__option--unavailable .loan-delivery-individuals__option-copy strong,
+.loan-delivery-individuals__option--unavailable .loan-delivery-individuals__option-copy small {
+  color: #a3384b;
+}
+
+.loan-delivery-individuals__option.is-selected {
+  box-shadow: 0 0 0 2px rgba(12, 47, 117, 0.14);
 }
 
 .loan-delivery-side {

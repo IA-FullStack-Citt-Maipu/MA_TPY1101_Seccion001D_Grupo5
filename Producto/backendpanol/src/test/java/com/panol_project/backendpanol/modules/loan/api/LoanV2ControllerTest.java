@@ -80,6 +80,7 @@ class LoanV2ControllerTest {
         UUID ignoredRequesterUuid = UUID.randomUUID();
         UUID loanUuid = UUID.randomUUID();
         OffsetDateTime scheduledAt = OffsetDateTime.parse("2026-06-12T10:30:00-04:00");
+        OffsetDateTime expectedReturnAt = OffsetDateTime.parse("2026-06-12T13:45:00-04:00");
 
         LoanAggregate createdLoan = new LoanAggregate(
                 loanUuid,
@@ -122,6 +123,7 @@ class LoanV2ControllerTest {
                                   "room_uuid": "%s",
                                   "subject_uuid": "%s",
                                   "scheduled_at": "2026-06-12T10:30:00-04:00",
+                                  "expected_return_at": "2026-06-12T13:45:00-04:00",
                                   "items": [
                                     {
                                       "implement_uuid": "%s",
@@ -152,10 +154,7 @@ class LoanV2ControllerTest {
         org.junit.jupiter.api.Assertions.assertEquals(authenticatedUserUuid, command.requesterUuid());
         org.junit.jupiter.api.Assertions.assertEquals(roomUuid, command.roomUuid());
         org.junit.jupiter.api.Assertions.assertEquals(subjectUuid, command.subjectUuid());
-        org.junit.jupiter.api.Assertions.assertEquals(
-                scheduledAt.plusHours(2).toInstant(),
-                command.expectedReturnAt().toInstant()
-        );
+        org.junit.jupiter.api.Assertions.assertEquals(expectedReturnAt.toInstant(), command.expectedReturnAt().toInstant());
         org.junit.jupiter.api.Assertions.assertEquals(1, command.requestedItems().size());
         org.junit.jupiter.api.Assertions.assertEquals(implementUuid, command.requestedItems().getFirst().implementUuid());
         org.junit.jupiter.api.Assertions.assertEquals(2, command.requestedItems().getFirst().requestedQuantity());

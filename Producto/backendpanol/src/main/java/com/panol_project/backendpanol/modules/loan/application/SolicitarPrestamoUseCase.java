@@ -159,6 +159,7 @@ public class SolicitarPrestamoUseCase {
             throw new BadRequestException("LOAN_ROOM_REQUIRED", "room_uuid es obligatorio");
         }
         validateScheduledAt(command.scheduledAt());
+        validateExpectedReturnAt(command.scheduledAt(), command.expectedReturnAt());
 
         List<SolicitarPrestamoItemCommand> items = command.requestedItems();
         if (items == null || items.isEmpty()) {
@@ -183,7 +184,29 @@ public class SolicitarPrestamoUseCase {
         if (scheduledAt == null) {
             throw new BadRequestException("LOAN_SCHEDULE_REQUIRED", "scheduled_at es obligatorio");
         }
+        if (scheduledAt.isBefore(OffsetDateTime.now())) {
+            throw new BadRequestException(
+                    "LOAN_SCHEDULE_PAST_NOT_ALLOWED",
+                    "scheduled_at no puede estar en una fecha u hora pasada"
+            );
+        }
+    }
 
-        // TODO: Confirmar con cliente si se debe rechazar scheduled_at cuando quede en el pasado.
+    private void validateExpectedReturnAt(OffsetDateTime scheduledAt, OffsetDateTime expectedReturnAt) {
+        if (expectedReturnAt == null) {
+            return;
+        }
+        if (expectedReturnAt.isBefore(OffsetDateTime.now())) {
+            throw new BadRequestException(
+                    "LOAN_EXPECTED_RETURN_PAST_NOT_ALLOWED",
+                    "expected_return_at no puede estar en una fecha u hora pasada"
+            );
+        }
+        if (!expectedReturnAt.isAfter(scheduledAt)) {
+            throw new BadRequestException(
+                    "LOAN_EXPECTED_RETURN_INVALID",
+                    "expected_return_at debe ser posterior a scheduled_at"
+            );
+        }
     }
 }

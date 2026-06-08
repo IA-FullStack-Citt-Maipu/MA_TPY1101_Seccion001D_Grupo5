@@ -2,7 +2,7 @@
 
 - Estado del documento: vigente
 - Ultima verificacion: 2026-05-31
-- Fuente de verdad: esquema public introspectado en Supabase + Flyway V25..V31
+- Fuente de verdad: esquema public introspectado historicamente en Supabase + Flyway hasta V31
 - Rama de referencia: feature/db-loan-flow-refinement
 
 ## 1. Resumen Ejecutivo
@@ -22,7 +22,7 @@
 | 25 | V25__schema_alignment_big_bang.sql | 2026-05-17 06:22:03.694386 | t |
 | 26 | V26__loan_request_notification_function.sql | 2026-05-22 02:07:57.052416 | t |
 | 27 | V27__loan_status_enum_add_expired.sql | 2026-05-22 04:21:24.067135 | t |
-| 28 | V28__seed_health_school_rooms_subjects.sql | 2026-05-24 04:29:10.174546 | t |
+| 28 | V28__seed_health_school_rooms_subjects.sql *(historico, sin archivo versionado vigente en el repo actual)* | 2026-05-24 04:29:10.174546 | t |
 | 29 | V29__loan_flow_data_refinement.sql | 2026-05-31 05:21:20.159917 | t |
 | 30 | V30__loan_flow_operational_refinement.sql | 2026-05-31 06:58:41.451196 | t |
 | 31 | V31__fix_loan_function_column_aliases.sql | 2026-05-31 18:45:55.491277 | t |

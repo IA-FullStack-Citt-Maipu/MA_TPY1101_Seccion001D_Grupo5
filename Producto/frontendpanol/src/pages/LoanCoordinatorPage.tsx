@@ -12,7 +12,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getErrorMessage } from "../services/apiClient";
 import { completeLoan, fetchLoansPage, reviewLoan } from "../services/loanService";
 import type { LoanSummary } from "../types/loan";
-import { canStartDelivery, getDeliveryWindowOpenAt } from "../utils/loanSchedule";
+import { canStartDelivery } from "../utils/loanSchedule";
 
 const PAGE_SIZE = 10;
 
@@ -61,17 +61,6 @@ function formatSchedule(value: string): string {
     minute: "2-digit",
     hour12: false,
   }).format(date);
-}
-
-function formatTime(value: Date | null): string {
-  if (!value) {
-    return "--:--";
-  }
-  return new Intl.DateTimeFormat("es-CL", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(value);
 }
 
 function normalizeStatusLabel(status: string): string {
@@ -477,7 +466,6 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
                 pagedLoans.map((loan) => {
                   const isProcessing = processingLoanUuid === loan.uuid;
                   const deliveryEnabled = canStartDelivery(loan);
-                  const deliveryWindow = getDeliveryWindowOpenAt(loan.scheduled_at);
                   return (
                     <tr key={loan.uuid}>
                       <td>
@@ -532,13 +520,9 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
                               className="coordinator-loans-action-btn coordinator-loans-action-btn--approve"
                               disabled={isProcessing || !deliveryEnabled}
                               onClick={() => goToDelivery(loan.uuid)}
-                              title={
-                                deliveryEnabled
-                                  ? "Registrar entrega"
-                                  : `Se habilita 10 minutos antes (${formatTime(deliveryWindow)})`
-                              }
+                              title="Registrar entrega"
                             >
-                              {deliveryEnabled ? "Entregar" : `Desde ${formatTime(deliveryWindow)}`}
+                              Entregar
                             </button>
                           ) : loan.status === "delivered" || loan.status === "overdue" ? (
                             <button

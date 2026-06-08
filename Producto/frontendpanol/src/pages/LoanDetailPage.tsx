@@ -33,7 +33,7 @@ import {
 } from "../services/loanSessionService";
 import type { LoanStateDates, LoanStatusTimelineEntry, LoanSummary } from "../types/loan";
 import { getUserRoleFromToken } from "../utils/auth";
-import { canStartDelivery, getDeliveryWindowOpenAt } from "../utils/loanSchedule";
+import { canStartDelivery } from "../utils/loanSchedule";
 
 const DELETE_CONFIRM_TEXT = "eliminar";
 
@@ -60,17 +60,6 @@ function formatDateTime(value: string): string {
   })
     .format(date)
     .replace(".", "");
-}
-
-function formatTime(value: Date | null): string {
-  if (!value) {
-    return "--:--";
-  }
-  return new Intl.DateTimeFormat("es-CL", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(value);
 }
 
 function normalizeStatusLabel(status: string): string {
@@ -272,10 +261,6 @@ export function LoanDetailPage({
 
   const canDeliverNow = useMemo(
     () => (loan ? canStartDelivery(loan) : false),
-    [loan],
-  );
-  const deliveryWindowOpenAt = useMemo(
-    () => (loan ? getDeliveryWindowOpenAt(loan.scheduled_at) : null),
     [loan],
   );
 
@@ -482,14 +467,10 @@ export function LoanDetailPage({
                     className="teacher-loan-detail-action-btn"
                     onClick={goToLoanDelivery}
                     disabled={!canDeliverNow}
-                    title={
-                      canDeliverNow
-                        ? "Registrar entrega de implementos"
-                        : `Se habilita 10 minutos antes (${formatTime(deliveryWindowOpenAt)})`
-                    }
+                    title="Registrar entrega de implementos"
                   >
                     <SendHorizontal size={16} />
-                    {canDeliverNow ? "Entregar solicitud" : `Desde ${formatTime(deliveryWindowOpenAt)}`}
+                    Entregar solicitud
                   </button>
                 ) : null}
                 {isCoordinator && (loan.status === "delivered" || loan.status === "overdue") ? (

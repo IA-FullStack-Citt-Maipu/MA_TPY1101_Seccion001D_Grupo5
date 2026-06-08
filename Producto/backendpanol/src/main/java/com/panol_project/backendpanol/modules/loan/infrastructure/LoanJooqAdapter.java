@@ -366,16 +366,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
         }
 
         OffsetDateTime now = OffsetDateTime.now();
-        if (current.scheduledAt() == null) {
-            throw new BadRequestException("LOAN_DELIVERY_SCHEDULE_MISSING", "El prestamo no tiene fecha/hora programada");
-        }
-        OffsetDateTime deliveryWindowOpensAt = current.scheduledAt().minusMinutes(10);
-        if (now.isBefore(deliveryWindowOpensAt)) {
-            throw new BadRequestException(
-                    "LOAN_DELIVERY_WINDOW_NOT_OPEN",
-                    "La entrega se habilita 10 minutos antes de la hora de inicio programada"
-            );
-        }
+        alignDefaultExpectedReturnAtAfterDelivery(current, now);
 
         Long actorUserId = requireUserIdByUuid(command.actorUuid());
         Map<UUID, LoanDetailContext> detailByImplementUuid = fetchLoanDetailContextByImplementUuid(current.loanId());
@@ -431,6 +422,27 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
         callCompleteLoanFunction(current.loanId(), actorUserId, "Prestamo completado por coordinador", payloadItems);
 
         return new LoanReturnResult(loadLoanAggregateById(current.loanId()));
+    }
+
+    private void alignDefaultExpectedReturnAtAfterDelivery(LoanRow current, OffsetDateTime deliveredAt) {
+        if (current.scheduledAt() == null || current.expectedReturnAt() == null) {
+            return;
+        }
+
+        OffsetDateTime defaultExpectedReturnAt = current.scheduledAt().plusHours(2);
+        if (!current.expectedReturnAt().toInstant().equals(defaultExpectedReturnAt.toInstant())) {
+            return;
+        }
+
+        OffsetDateTime recalculatedExpectedReturnAt = deliveredAt.plusHours(2);
+        if (!recalculatedExpectedReturnAt.isAfter(current.scheduledAt())) {
+            recalculatedExpectedReturnAt = current.scheduledAt().plusMinutes(1);
+        }
+
+        dsl.update(LOAN)
+                .set(LOAN.EXPECTED_RETURN_AT, recalculatedExpectedReturnAt)
+                .where(LOAN.ID.eq(current.loanId()))
+                .execute();
     }
 
     @Override

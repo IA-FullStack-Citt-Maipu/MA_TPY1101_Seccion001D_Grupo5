@@ -24,7 +24,7 @@
 - `catalog/implement`: consulta de movimientos via contrato explicito (`InventoryMovementQueryContract`).
 - `domain` de movimientos desacoplado de framework.
 - Outbox operativo base:
-  - migracion `db/migration/v25/V25__schema_alignment_big_bang.sql` (`outbox_event` como tabla base + vista `outbox_events` compatibilidad),
+  - migracion `Producto/databasepanol/migrations/v25/V25__schema_alignment_big_bang.sql` (`outbox_event` como tabla base + vista `outbox_events` compatibilidad),
   - escritura de eventos desde casos críticos (`auth`, `users`, inventario/movimientos),
   - worker con reintentos e idempotencia por `event_id`.
 - ArchUnit endurecido para bloquear regresiones por capas y por frontera de módulo.

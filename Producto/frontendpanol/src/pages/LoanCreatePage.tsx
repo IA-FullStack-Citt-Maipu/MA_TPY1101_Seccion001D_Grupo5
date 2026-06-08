@@ -41,6 +41,19 @@ function formatDateForInput(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+function formatTimeForInput(date: Date): string {
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function getEarliestSelectableMoment(): Date {
+  const next = new Date();
+  if (next.getSeconds() > 0 || next.getMilliseconds() > 0) {
+    next.setMinutes(next.getMinutes() + 1);
+  }
+  next.setSeconds(0, 0);
+  return next;
+}
+
 function formatScheduledDateForInput(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -82,6 +95,14 @@ function buildScheduledAtIso(dateValue: string, timeValue: string): string | nul
   const offsetMinutesPart = pad(absoluteOffsetMinutes % 60);
 
   return `${year}-${pad(month)}-${pad(day)}T${pad(hours)}:${pad(minutes)}:00${sign}${offsetHoursPart}:${offsetMinutesPart}`;
+}
+
+function isIsoInPast(value: string): boolean {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return false;
+  }
+  return date.getTime() < Date.now();
 }
 
 function safePositiveInt(rawValue: string | number, fallback = 1): number {
@@ -151,6 +172,8 @@ export function LoanCreatePage({
   const [subjectUuid, setSubjectUuid] = useState("");
   const [dateValue, setDateValue] = useState("");
   const [timeValue, setTimeValue] = useState("");
+  const [returnDateValue, setReturnDateValue] = useState("");
+  const [returnTimeValue, setReturnTimeValue] = useState("");
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -166,11 +189,9 @@ export function LoanCreatePage({
   }, [search]);
 
   useEffect(() => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    setDateValue((current) => current || formatDateForInput(tomorrow));
-    setTimeValue((current) => current || "08:00");
+    const nextAvailable = getEarliestSelectableMoment();
+    setDateValue((current) => current || formatDateForInput(nextAvailable));
+    setTimeValue((current) => current || formatTimeForInput(nextAvailable));
   }, []);
 
   useEffect(() => {
@@ -199,6 +220,8 @@ export function LoanCreatePage({
             setSubjectUuid(editingLoanResponse.subject?.uuid ?? "");
             setDateValue(formatScheduledDateForInput(editingLoanResponse.scheduled_at));
             setTimeValue(formatScheduledTimeForInput(editingLoanResponse.scheduled_at));
+            setReturnDateValue(formatScheduledDateForInput(editingLoanResponse.expected_return_at));
+            setReturnTimeValue(formatScheduledTimeForInput(editingLoanResponse.expected_return_at));
             setCart(
               editingLoanResponse.items.map((item) => {
                 const relatedImplement = implementsResponse.find(
@@ -276,6 +299,15 @@ export function LoanCreatePage({
   }, [resultsPage, totalResultPages]);
 
   const scheduledAt = buildScheduledAtIso(dateValue, timeValue);
+  const expectedReturnAt = returnDateValue && returnTimeValue
+    ? buildScheduledAtIso(returnDateValue, returnTimeValue)
+    : null;
+  const hasPartialExpectedReturn = Boolean(returnDateValue || returnTimeValue) && !(returnDateValue && returnTimeValue);
+  const earliestSelectableMoment = getEarliestSelectableMoment();
+  const earliestSelectableDate = formatDateForInput(earliestSelectableMoment);
+  const earliestSelectableTime = formatTimeForInput(earliestSelectableMoment);
+  const scheduledMinTime = dateValue === earliestSelectableDate ? earliestSelectableTime : undefined;
+  const expectedReturnMinTime = returnDateValue === earliestSelectableDate ? earliestSelectableTime : undefined;
   const hasValidQuantities = cart.every(
     (item) => Number.isInteger(item.requested_quantity) && item.requested_quantity > 0,
   );
@@ -396,6 +428,22 @@ export function LoanCreatePage({
       setGlobalError("Debes completar fecha y hora validas.");
       return;
     }
+    if (isIsoInPast(scheduledAt)) {
+      setGlobalError("La fecha y hora de solicitud no puede estar en el pasado.");
+      return;
+    }
+    if (hasPartialExpectedReturn) {
+      setGlobalError("Si ingresas una fecha de devolucion, tambien debes ingresar su hora.");
+      return;
+    }
+    if (expectedReturnAt && isIsoInPast(expectedReturnAt)) {
+      setGlobalError("La fecha y hora de devolucion no puede estar en el pasado.");
+      return;
+    }
+    if (expectedReturnAt && new Date(expectedReturnAt).getTime() <= new Date(scheduledAt).getTime()) {
+      setGlobalError("La fecha y hora de devolucion debe ser posterior a la fecha y hora de solicitud.");
+      return;
+    }
     if (cart.length === 0) {
       setSearchInlineError("Debes agregar al menos un implemento a la solicitud.");
       return;
@@ -409,6 +457,7 @@ export function LoanCreatePage({
       room_uuid: roomUuid,
       subject_uuid: subjectUuid || null,
       scheduled_at: scheduledAt,
+      expected_return_at: expectedReturnAt,
       items: cart.map((item) => ({
         implement_uuid: item.implement_uuid,
         requested_quantity: item.requested_quantity,
@@ -528,6 +577,7 @@ export function LoanCreatePage({
                   id="loan-date"
                   type="date"
                   value={dateValue}
+                  min={earliestSelectableDate}
                   disabled={saving}
                   onChange={(event) => setDateValue(event.target.value)}
                 />
@@ -541,9 +591,42 @@ export function LoanCreatePage({
                   id="loan-time"
                   type="time"
                   value={timeValue}
+                  min={scheduledMinTime}
                   disabled={saving}
                   onChange={(event) => setTimeValue(event.target.value)}
                 />
+              </div>
+
+              <div className="loan-create-field">
+                <label htmlFor="loan-return-date">
+                  <CalendarDays size={14} /> Fecha de devolucion (opcional)
+                </label>
+                <input
+                  id="loan-return-date"
+                  type="date"
+                  value={returnDateValue}
+                  min={earliestSelectableDate}
+                  disabled={saving}
+                  onChange={(event) => setReturnDateValue(event.target.value)}
+                />
+              </div>
+
+              <div className="loan-create-field">
+                <label htmlFor="loan-return-time">
+                  <Clock3 size={14} /> Hora de devolucion (opcional)
+                </label>
+                <input
+                  id="loan-return-time"
+                  type="time"
+                  value={returnTimeValue}
+                  min={expectedReturnMinTime}
+                  disabled={saving}
+                  onChange={(event) => setReturnTimeValue(event.target.value)}
+                />
+              </div>
+
+              <div className="loan-create-note loan-create-note--warning">
+                en caso de que no se ingrese una fecha y hora de devolucion se dara un plazo de 2 horas despues de la entrega de los implementos
               </div>
             </div>
           </article>

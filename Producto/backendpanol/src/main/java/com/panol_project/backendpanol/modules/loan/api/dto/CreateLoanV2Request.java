@@ -20,6 +20,9 @@ public record CreateLoanV2Request(
         @NotNull(message = "scheduled_at es obligatorio")
         OffsetDateTime scheduledAt,
 
+        @JsonProperty("expected_return_at")
+        OffsetDateTime expectedReturnAt,
+
         @NotEmpty(message = "Debes incluir al menos un item solicitado")
         @Valid
         List<CreateLoanItemV2Request> items
