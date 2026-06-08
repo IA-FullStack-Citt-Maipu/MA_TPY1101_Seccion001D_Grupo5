@@ -124,6 +124,64 @@ def test_graph_chained_tool_calls(monkeypatch) -> None:
     assert result["messages"][-1].content == "hay stock disponible"
 
 
+def test_graph_busqueda_y_detalle_tool_calls(monkeypatch) -> None:
+    @tool
+    def buscar_implementos(nombre: str) -> str:
+        """Test helper tool: buscar implementos."""
+        return f"uuid:{nombre}"
+
+    @tool
+    def detalle_implemento(implement_uuid: str) -> str:
+        """Test helper tool: detalle implemento."""
+        return f"detalle:{implement_uuid}"
+
+    counter = {"n": 0}
+
+    def fake_call_model(state):
+        counter["n"] += 1
+        if counter["n"] == 1:
+            return {
+                "messages": [
+                    AIMessage(
+                        content="",
+                        tool_calls=[
+                            {
+                                "name": "buscar_implementos",
+                                "args": {"nombre": "microscopio"},
+                                "id": "call-1",
+                                "type": "tool_call",
+                            }
+                        ],
+                    )
+                ]
+            }
+        if counter["n"] == 2:
+            return {
+                "messages": [
+                    AIMessage(
+                        content="",
+                        tool_calls=[
+                            {
+                                "name": "detalle_implemento",
+                                "args": {"implement_uuid": "uuid-microscopio"},
+                                "id": "call-2",
+                                "type": "tool_call",
+                            }
+                        ],
+                    )
+                ]
+            }
+        return {"messages": [AIMessage(content="detalle entregado")]}
+
+    monkeypatch.setattr(graph_module, "call_model", fake_call_model)
+    graph = graph_module.build_graph(tools=[buscar_implementos, detalle_implemento])
+    result = graph.invoke(_initial_state(), config={"recursion_limit": 10})
+
+    tool_messages = [m for m in result["messages"] if isinstance(m, ToolMessage)]
+    assert [m.name for m in tool_messages] == ["buscar_implementos", "detalle_implemento"]
+    assert result["messages"][-1].content == "detalle entregado"
+
+
 def test_graph_propagates_llm_unavailable_error(monkeypatch) -> None:
     def failing_call_model(state):
         raise LLMServiceUnavailableError("provider down")
