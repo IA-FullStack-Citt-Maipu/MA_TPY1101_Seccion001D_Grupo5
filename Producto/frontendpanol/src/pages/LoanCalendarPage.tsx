@@ -7,7 +7,9 @@ import {
   Package2,
   Plus,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { PresencePollingModal } from "../components/ui/PresencePollingModal";
+import { useInactivityPollingGate } from "../hooks/useInactivityPollingGate";
 import { getErrorMessage } from "../services/apiClient";
 import { fetchLoansPage } from "../services/loanService";
 import type { LoanSummary } from "../types/loan";
@@ -145,36 +147,62 @@ export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const loadLoans = useCallback(async (showLoading = true) => {
+    if (showLoading) {
+      setLoading(true);
+    }
+    setError(null);
+    try {
+      const mine = currentRole === "DOCENTE";
+      const firstPage = await fetchLoansPage({ page: 1, size: 50, mine });
+      const merged = [...firstPage.items];
+      for (let page = 2; page <= firstPage.total_pages; page += 1) {
+        const nextPage = await fetchLoansPage({ page, size: firstPage.size, mine });
+        merged.push(...nextPage.items);
+      }
+      setAllLoans(merged);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, "No se pudo cargar la agenda de prestamos."));
+    } finally {
+      if (showLoading) {
+        setLoading(false);
+      }
+    }
+  }, [currentRole]);
+
+  const { promptVisible, pollingPaused, countdownSeconds, resumePolling } = useInactivityPollingGate({
+    onContinue: async () => {
+      await loadLoans(false);
+    },
+  });
+
   useEffect(() => {
     let cancelled = false;
 
-    async function loadLoans() {
-      setLoading(true);
-      setError(null);
-      try {
-        const mine = currentRole === "DOCENTE";
-        const firstPage = await fetchLoansPage({ page: 1, size: 50, mine });
-        if (cancelled) return;
-        const merged = [...firstPage.items];
-        for (let page = 2; page <= firstPage.total_pages; page += 1) {
-          const nextPage = await fetchLoansPage({ page, size: firstPage.size, mine });
-          if (cancelled) return;
-          merged.push(...nextPage.items);
-        }
-        setAllLoans(merged);
-      } catch (requestError) {
-        if (cancelled) return;
-        setError(getErrorMessage(requestError, "No se pudo cargar la agenda de prestamos."));
-      } finally {
-        if (!cancelled) setLoading(false);
+    async function bootstrap() {
+      await loadLoans(true);
+      if (cancelled) {
+        return;
       }
     }
 
-    void loadLoans();
+    void bootstrap();
     return () => {
       cancelled = true;
     };
-  }, [currentRole]);
+  }, [loadLoans]);
+
+  useEffect(() => {
+    if (pollingPaused) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void loadLoans(false);
+    }, 180000);
+
+    return () => window.clearInterval(intervalId);
+  }, [loadLoans, pollingPaused]);
 
   const monthGrid = useMemo(() => getMonthGrid(monthAnchor), [monthAnchor]);
   const monthKey = useMemo(() => `${monthAnchor.getFullYear()}-${monthAnchor.getMonth()}`, [monthAnchor]);
@@ -423,6 +451,14 @@ export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
             <small>Total solicitudes</small>
           </div>
         </section>
+        <PresencePollingModal
+          visible={promptVisible}
+          pollingPaused={pollingPaused}
+          countdownSeconds={countdownSeconds}
+          onContinue={() => {
+            void resumePolling();
+          }}
+        />
       </div>
     </div>
   );

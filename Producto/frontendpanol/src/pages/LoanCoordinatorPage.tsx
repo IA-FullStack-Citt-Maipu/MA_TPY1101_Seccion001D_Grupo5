@@ -8,7 +8,9 @@ import {
   Search,
   XCircle,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { PresencePollingModal } from "../components/ui/PresencePollingModal";
+import { useInactivityPollingGate } from "../hooks/useInactivityPollingGate";
 import { getApiErrorPayload, getErrorMessage } from "../services/apiClient";
 import { completeLoan, fetchLoansPage, reviewLoan } from "../services/loanService";
 import type { LoanSummary } from "../types/loan";
@@ -116,43 +118,68 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
   const [rejectingLoan, setRejectingLoan] = useState<LoanSummary | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
 
+  const loadLoans = useCallback(async (showLoading = true) => {
+    if (showLoading) {
+      setLoading(true);
+    }
+    setError(null);
+    try {
+      const firstPage = await fetchLoansPage({ page: 1, size: 50, mine: false });
+      const merged: LoanSummary[] = [...firstPage.items];
+      for (let next = 2; next <= firstPage.total_pages; next += 1) {
+        const pageResult = await fetchLoansPage({ page: next, size: firstPage.size, mine: false });
+        merged.push(...pageResult.items);
+      }
+
+      merged.sort((a, b) => {
+        const left = parseDate(a.scheduled_at)?.getTime() ?? 0;
+        const right = parseDate(b.scheduled_at)?.getTime() ?? 0;
+        return right - left;
+      });
+
+      setAllLoans(merged);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, "No se pudo cargar el listado de prestamos."));
+    } finally {
+      if (showLoading) {
+        setLoading(false);
+      }
+    }
+  }, []);
+
+  const { promptVisible, pollingPaused, countdownSeconds, resumePolling } = useInactivityPollingGate({
+    onContinue: async () => {
+      await loadLoans(false);
+    },
+  });
+
   useEffect(() => {
     let cancelled = false;
 
-    async function loadLoans() {
-      setLoading(true);
-      setError(null);
-      try {
-        const firstPage = await fetchLoansPage({ page: 1, size: 50, mine: false });
-        if (cancelled) return;
-
-        const merged: LoanSummary[] = [...firstPage.items];
-        for (let next = 2; next <= firstPage.total_pages; next += 1) {
-          const pageResult = await fetchLoansPage({ page: next, size: firstPage.size, mine: false });
-          if (cancelled) return;
-          merged.push(...pageResult.items);
-        }
-
-        merged.sort((a, b) => {
-          const left = parseDate(a.scheduled_at)?.getTime() ?? 0;
-          const right = parseDate(b.scheduled_at)?.getTime() ?? 0;
-          return right - left;
-        });
-
-        setAllLoans(merged);
-      } catch (requestError) {
-        if (cancelled) return;
-        setError(getErrorMessage(requestError, "No se pudo cargar el listado de prestamos."));
-      } finally {
-        if (!cancelled) setLoading(false);
+    async function bootstrap() {
+      await loadLoans(true);
+      if (cancelled) {
+        return;
       }
     }
 
-    void loadLoans();
+    void bootstrap();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadLoans]);
+
+  useEffect(() => {
+    if (pollingPaused) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void loadLoans(false);
+    }, 180000);
+
+    return () => window.clearInterval(intervalId);
+  }, [loadLoans, pollingPaused]);
 
   const filteredLoans = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -623,6 +650,14 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
           </div>
         </div>
       ) : null}
+      <PresencePollingModal
+        visible={promptVisible}
+        pollingPaused={pollingPaused}
+        countdownSeconds={countdownSeconds}
+        onContinue={() => {
+          void resumePolling();
+        }}
+      />
     </div>
   );
 

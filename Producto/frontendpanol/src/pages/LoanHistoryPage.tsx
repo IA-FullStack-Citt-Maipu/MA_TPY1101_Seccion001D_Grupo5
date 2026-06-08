@@ -11,7 +11,9 @@ import {
   Search,
   Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { PresencePollingModal } from "../components/ui/PresencePollingModal";
+import { useInactivityPollingGate } from "../hooks/useInactivityPollingGate";
 import { getErrorMessage } from "../services/apiClient";
 import { cancelLoan, fetchLoansPage } from "../services/loanService";
 import type { LoanSummary } from "../types/loan";
@@ -175,52 +177,69 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
   const [loanToDelete, setLoanToDelete] = useState<LoanSummary | null>(null);
   const [deleteConfirmationInput, setDeleteConfirmationInput] = useState("");
 
+  const loadHistory = useCallback(async (showLoading = true) => {
+    if (showLoading) {
+      setLoading(true);
+    }
+    setError(null);
+    try {
+      const firstPage = await fetchLoansPage({ page: 1, size: 50, mine: true });
+      const merged: LoanSummary[] = [...firstPage.items];
+      for (let nextPage = 2; nextPage <= firstPage.total_pages; nextPage += 1) {
+        const pageData = await fetchLoansPage({ page: nextPage, size: firstPage.size, mine: true });
+        merged.push(...pageData.items);
+      }
+
+      merged.sort((a, b) => {
+        const left = parseDate(a.scheduled_at)?.getTime() ?? 0;
+        const right = parseDate(b.scheduled_at)?.getTime() ?? 0;
+        return right - left;
+      });
+
+      setAllLoans(merged);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, "No se pudo cargar tu historial de prestamos."));
+    } finally {
+      if (showLoading) {
+        setLoading(false);
+      }
+    }
+  }, []);
+
+  const { promptVisible, pollingPaused, countdownSeconds, resumePolling } = useInactivityPollingGate({
+    onContinue: async () => {
+      await loadHistory(false);
+    },
+  });
+
   useEffect(() => {
     let cancelled = false;
 
-    async function loadHistory() {
-      setLoading(true);
-      setError(null);
-      try {
-        const firstPage = await fetchLoansPage({ page: 1, size: 50, mine: true });
-        if (cancelled) {
-          return;
-        }
-
-        const merged: LoanSummary[] = [...firstPage.items];
-        for (let nextPage = 2; nextPage <= firstPage.total_pages; nextPage += 1) {
-          const pageData = await fetchLoansPage({ page: nextPage, size: firstPage.size, mine: true });
-          if (cancelled) {
-            return;
-          }
-          merged.push(...pageData.items);
-        }
-
-        merged.sort((a, b) => {
-          const left = parseDate(a.scheduled_at)?.getTime() ?? 0;
-          const right = parseDate(b.scheduled_at)?.getTime() ?? 0;
-          return right - left;
-        });
-
-        setAllLoans(merged);
-      } catch (requestError) {
-        if (cancelled) {
-          return;
-        }
-        setError(getErrorMessage(requestError, "No se pudo cargar tu historial de prestamos."));
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+    async function bootstrap() {
+      await loadHistory(true);
+      if (cancelled) {
+        return;
       }
     }
 
-    void loadHistory();
+    void bootstrap();
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadHistory]);
+
+  useEffect(() => {
+    if (pollingPaused) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void loadHistory(false);
+    }, 180000);
+
+    return () => window.clearInterval(intervalId);
+  }, [loadHistory, pollingPaused]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -625,6 +644,14 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
           </div>
         </div>
       ) : null}
+      <PresencePollingModal
+        visible={promptVisible}
+        pollingPaused={pollingPaused}
+        countdownSeconds={countdownSeconds}
+        onContinue={() => {
+          void resumePolling();
+        }}
+      />
     </div>
   );
 
