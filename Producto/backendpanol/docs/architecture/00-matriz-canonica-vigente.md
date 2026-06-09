@@ -2,7 +2,7 @@
 
 - Estado del documento: vigente
 - Ultima verificacion: 2026-05-31
-- Fuente de verdad: `db/migration/v25/V25..V31`, `docs/architecture/data-management/16-catalogo-bd-v31.md`, controllers V2, `SecurityConfig`,
+- Fuente de verdad: `Producto/databasepanol/migrations/v25/V25..V35`, `docs/architecture/data-management/16-catalogo-bd-v31.md`, controllers V2, `SecurityConfig`,
   `application.yaml`, compose files, `ArchitectureTest`
 
 ## Rutas publicas vigentes
@@ -34,6 +34,7 @@
 
 ## Compose vigente
 
+- `Producto/databasepanol/docker-compose.yaml`: PostgreSQL local desacoplado.
 - `Producto/docker-compose.yaml`: frontend + backend (sin postgres local).
 - `Producto/backendpanol/docker-compose.yaml`: backend only.
 

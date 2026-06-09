@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import { getErrorMessage } from "../services/apiClient";
 import { login } from "../services/authService";
+import { getDefaultHashByRole } from "../utils/auth";
 
 const MAX_RUT_LENGTH = 9;
 
@@ -60,8 +61,8 @@ export function LoginPage() {
     setSubmitting(true);
 
     try {
-      await login({ rut: rutClean, password: password.trim(), rememberMe });
-      window.location.hash = "#/inventory/categories";
+      const result = await login({ rut: rutClean, password: password.trim(), rememberMe });
+      window.location.hash = getDefaultHashByRole(result.user.role);
     } catch (e) {
       setFormError(getErrorMessage(e, "No fue posible iniciar sesión"));
       setSubmitting(false);
@@ -168,3 +169,4 @@ export function LoginPage() {
     </div>
   );
 }
+

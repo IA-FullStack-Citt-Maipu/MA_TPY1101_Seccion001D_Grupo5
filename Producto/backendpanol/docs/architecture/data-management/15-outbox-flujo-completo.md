@@ -2,7 +2,7 @@
 
 - Estado del documento: vigente
 - Ultima verificacion: 2026-05-31
-- Fuente de verdad: `OutboxService`, `OutboxWorker`, `OutboxJooqRepository`, `db/migration/v25/V25..V31`, `16-catalogo-bd-v31.md`
+- Fuente de verdad: `OutboxService`, `OutboxWorker`, `OutboxJooqRepository`, `Producto/databasepanol/migrations/v25/V25..V35`, `16-catalogo-bd-v31.md`
 
 ## Objetivo
 

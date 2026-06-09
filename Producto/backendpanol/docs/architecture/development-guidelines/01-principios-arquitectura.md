@@ -30,7 +30,7 @@ Asegurar que cada incremento preserve decisiones base:
 
 5. **Migraciones por corte controlado**
 - Priorizar cambios incrementales por módulo, con feature parity.
-- Los cambios masivos de esquema deben ir con plan de corte, rollback y validación (ej. `db/migration/v25/V25__schema_alignment_big_bang.sql`).
+- Los cambios masivos de esquema deben ir con plan de corte, rollback y validación (ej. `Producto/databasepanol/migrations/v25/V25__schema_alignment_big_bang.sql`).
 
 ## Regla de oro
 

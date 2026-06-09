@@ -1,8 +1,8 @@
-﻿# 01 - Flujo End-to-End de Datos (V31)
+﻿# 01 - Flujo End-to-End de Datos (Vigente)
 
 - Estado del documento: vigente
 - Ultima verificacion: 2026-05-31
-- Fuente de verdad: casos de uso V2 + `shared/outbox` + `db/migration/v25/V25..V31` + `16-catalogo-bd-v31.md`
+- Fuente de verdad: casos de uso V2 + `shared/outbox` + `Producto/databasepanol/migrations/v25/V25..V35` + `16-catalogo-bd-v31.md`
 
 ## Flujo operativo actual
 

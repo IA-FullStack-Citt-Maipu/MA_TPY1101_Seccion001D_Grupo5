@@ -17,6 +17,7 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanCreateCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanDetailItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanImplementAvailability;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRepositoryPort;
+import com.panol_project.backendpanol.modules.loan.domain.LoanRequestedItemAvailability;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStatus;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
 import com.panol_project.backendpanol.shared.error.security.RestAccessDeniedHandler;
@@ -80,6 +81,7 @@ class LoanV2ControllerTest {
         UUID ignoredRequesterUuid = UUID.randomUUID();
         UUID loanUuid = UUID.randomUUID();
         OffsetDateTime scheduledAt = OffsetDateTime.parse("2026-06-12T10:30:00-04:00");
+        OffsetDateTime expectedReturnAt = OffsetDateTime.parse("2026-06-12T13:45:00-04:00");
 
         LoanAggregate createdLoan = new LoanAggregate(
                 loanUuid,
@@ -109,6 +111,8 @@ class LoanV2ControllerTest {
         when(loanRepositoryPort.existsActiveSubjectByUuid(subjectUuid)).thenReturn(true);
         when(loanRepositoryPort.findImplementAvailabilityByUuid(implementUuid))
                 .thenReturn(Optional.of(new LoanImplementAvailability(implementUuid, true)));
+        when(loanRepositoryPort.findRequestedItemAvailabilities(List.of(implementUuid), scheduledAt, expectedReturnAt, null))
+                .thenReturn(List.of(new LoanRequestedItemAvailability(implementUuid, "Fonendoscopio", true, 5)));
         when(loanRepositoryPort.existsPendingLoanConflict(authenticatedUserUuid, List.of(implementUuid))).thenReturn(false);
         when(loanRepositoryPort.createPendingLoan(any(LoanCreateCommand.class))).thenReturn(createdLoan);
         when(loanRepositoryPort.findVisibleLoanSummaryByUuid(loanUuid)).thenReturn(Optional.of(response));
@@ -122,6 +126,7 @@ class LoanV2ControllerTest {
                                   "room_uuid": "%s",
                                   "subject_uuid": "%s",
                                   "scheduled_at": "2026-06-12T10:30:00-04:00",
+                                  "expected_return_at": "2026-06-12T13:45:00-04:00",
                                   "items": [
                                     {
                                       "implement_uuid": "%s",
@@ -152,10 +157,7 @@ class LoanV2ControllerTest {
         org.junit.jupiter.api.Assertions.assertEquals(authenticatedUserUuid, command.requesterUuid());
         org.junit.jupiter.api.Assertions.assertEquals(roomUuid, command.roomUuid());
         org.junit.jupiter.api.Assertions.assertEquals(subjectUuid, command.subjectUuid());
-        org.junit.jupiter.api.Assertions.assertEquals(
-                scheduledAt.plusHours(2).toInstant(),
-                command.expectedReturnAt().toInstant()
-        );
+        org.junit.jupiter.api.Assertions.assertEquals(expectedReturnAt.toInstant(), command.expectedReturnAt().toInstant());
         org.junit.jupiter.api.Assertions.assertEquals(1, command.requestedItems().size());
         org.junit.jupiter.api.Assertions.assertEquals(implementUuid, command.requestedItems().getFirst().implementUuid());
         org.junit.jupiter.api.Assertions.assertEquals(2, command.requestedItems().getFirst().requestedQuantity());
@@ -219,6 +221,12 @@ class LoanV2ControllerTest {
         when(loanRepositoryPort.existsActiveRoomByUuid(roomUuid)).thenReturn(true);
         when(loanRepositoryPort.findImplementAvailabilityByUuid(implementUuid))
                 .thenReturn(Optional.of(new LoanImplementAvailability(implementUuid, true)));
+        when(loanRepositoryPort.findRequestedItemAvailabilities(
+                List.of(implementUuid),
+                OffsetDateTime.parse("2026-06-12T10:30:00-04:00"),
+                null,
+                null
+        )).thenReturn(List.of(new LoanRequestedItemAvailability(implementUuid, "Implemento prueba", true, 5)));
         when(loanRepositoryPort.existsPendingLoanConflict(authenticatedUserUuid, List.of(implementUuid))).thenReturn(true);
 
         mockMvc.perform(post("/api/v2/loans")

@@ -88,7 +88,7 @@ public class LoanV2Controller {
                         request.roomUuid(),
                         request.subjectUuid(),
                         request.scheduledAt(),
-                        request.scheduledAt() == null ? null : request.scheduledAt().plusHours(2),
+                        request.expectedReturnAt(),
                         items
                 )
         );
@@ -117,7 +117,7 @@ public class LoanV2Controller {
                         request.roomUuid(),
                         request.subjectUuid(),
                         request.scheduledAt(),
-                        request.scheduledAt() == null ? null : request.scheduledAt().plusHours(2),
+                        request.expectedReturnAt(),
                         items
                 )
         );

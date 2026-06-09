@@ -1,8 +1,8 @@
 services:
   backend:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: backendpanol/Dockerfile
       args:
         JOOQ_DB_URL: ${JOOQ_DB_URL}
         JOOQ_DB_USER: ${JOOQ_DB_USER}
@@ -12,8 +12,14 @@ services:
     env_file:
       - .env.local
     environment:
-      APP_DB_ENV: supabase
+      DB_DOCKER_HOST: ${DB_DOCKER_HOST_DOCKER_COMPOSE:-panol-postgres}
     volumes:
       - ./secrets:/app/secrets:ro
     ports:
       - "${APP_PORT:-8080}:8080"
+    networks:
+      - panol-local
+
+networks:
+  panol-local:
+    name: panol-local

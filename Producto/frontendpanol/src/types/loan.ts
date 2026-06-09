@@ -47,6 +47,7 @@ export interface CreateLoanPayload {
   room_uuid: string;
   subject_uuid?: string | null;
   scheduled_at: string;
+  expected_return_at?: string | null;
   items: CreateLoanItemPayload[];
 }
 

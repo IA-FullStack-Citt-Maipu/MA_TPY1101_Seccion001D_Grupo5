@@ -1,8 +1,8 @@
 services:
   backend:
     build:
-      context: ./backendpanol
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backendpanol/Dockerfile
       args:
         JOOQ_DB_URL: ${JOOQ_DB_URL}
         JOOQ_DB_USER: ${JOOQ_DB_USER}
@@ -13,7 +13,6 @@ services:
       - ./backendpanol/.env
       - ./backendpanol/.env.local
     environment:
-      APP_DB_ENV: supabase
       APP_PORT: ${BACKEND_INTERNAL_PORT:-8080}
       APP_SECURITY_ENABLED: ${APP_SECURITY_ENABLED:-true}
       APP_SECURITY_AI_AGENT_SECRET: ${APP_SECURITY_AI_AGENT_SECRET:-panol-ai-agent-secret-change-in-prod-1234567890123}
@@ -22,16 +21,18 @@ services:
       APP_AUTH_JWT_ISSUER: ${APP_AUTH_JWT_ISSUER:-panol-backend}
       APP_AUTH_JWT_EXPIRATION_SECONDS: ${APP_AUTH_JWT_EXPIRATION_SECONDS:-3600}
       APP_AUTH_JWT_SECRET: ${APP_AUTH_JWT_SECRET:-panol-secret-key-change-in-prod-1234567890123}
+      DB_DOCKER_HOST: ${DB_DOCKER_HOST_DOCKER_COMPOSE:-panol-postgres}
       DB_SUPABASE_HOST: ${DB_SUPABASE_HOST:-aws-1-us-east-1.pooler.supabase.com}
       DB_SUPABASE_PORT: ${DB_SUPABASE_PORT:-5432}
       DB_SUPABASE_NAME: ${DB_SUPABASE_NAME:-postgres}
       DB_SUPABASE_USER: ${DB_SUPABASE_USER:-postgres.ekqbucfoygimzgxupdhm}
-      DB_SUPABASE_PASSWORD: ${DB_SUPABASE_PASSWORD}
       DB_SUPABASE_SSL_MODE: ${DB_SUPABASE_SSL_MODE:-require}
     ports:
       - "${BACKEND_PORT:-18080}:8080"
     volumes:
       - ./backendpanol/secrets:/app/secrets:ro
+    networks:
+      - panol-local
 
   frontend:
     build:
@@ -45,3 +46,7 @@ services:
       - backend
     ports:
       - "${FRONTEND_PORT:-18081}:80"
+
+networks:
+  panol-local:
+    name: panol-local

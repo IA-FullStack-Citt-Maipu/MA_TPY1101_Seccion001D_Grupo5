@@ -1,8 +1,8 @@
-﻿# Gestion de Datos: Canon Operativo V31
+﻿# Gestion de Datos: Canon Operativo Vigente
 
 - Estado del documento: vigente
 - Ultima verificacion: 2026-05-31
-- Fuente de verdad: `db/migration/v25/V25..V31` + introspeccion de esquema `public` en Supabase
+- Fuente de verdad: `Producto/databasepanol/migrations/v25/V25..V35` + introspeccion de esquema `public` en Supabase
 
 ## Documento principal de base de datos
 
@@ -28,4 +28,4 @@
 ## Politica de legado
 
 - No se consideran vigentes documentos/artefactos previos al baseline V25.
-- Las extensiones funcionales posteriores al baseline quedan trazadas por Flyway (`V26..V31`) y reflejadas en el catalogo V31.
+- Las extensiones funcionales posteriores al baseline quedan trazadas por Flyway (`V26..V35`) y se contrastan con el catalogo tecnico historico `16-catalogo-bd-v31.md`.

@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { InventoryLayout } from "../components/layout/InventoryLayout";
+import { PresencePollingModal } from "../components/ui/PresencePollingModal";
+import { useInactivityPollingGate } from "../hooks/useInactivityPollingGate";
 import { getApiErrorPayload, getErrorMessage } from "../services/apiClient";
 import { fetchImplements } from "../services/implementService";
 import {
@@ -63,6 +65,24 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
   const role = getUserRoleFromToken();
   const canCreateMovement = role === "COORDINADOR";
 
+  const reloadMovements = useCallback(async () => {
+    setLoadingMovements(true);
+    try {
+      const rows = await fetchInventoryMovements();
+      setMovements(rows);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, "No se pudo recargar movimientos."));
+    } finally {
+      setLoadingMovements(false);
+    }
+  }, []);
+
+  const { promptVisible, pollingPaused, countdownSeconds, resumePolling } = useInactivityPollingGate({
+    onContinue: async () => {
+      await reloadMovements();
+    },
+  });
+
   useEffect(() => {
     async function bootstrap() {
       setError(null);
@@ -85,6 +105,18 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
 
     void bootstrap();
   }, []);
+
+  useEffect(() => {
+    if (pollingPaused) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void reloadMovements();
+    }, 180000);
+
+    return () => window.clearInterval(intervalId);
+  }, [pollingPaused, reloadMovements]);
 
   const implementByUuid = useMemo(() => {
     const map = new Map<string, ImplementSummary>();
@@ -138,18 +170,6 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
     setUserFilter("");
     setDateFrom("");
     setDateTo("");
-  }
-
-  async function reloadMovements() {
-    setLoadingMovements(true);
-    try {
-      const rows = await fetchInventoryMovements();
-      setMovements(rows);
-    } catch (requestError) {
-      setError(getErrorMessage(requestError, "No se pudo recargar movimientos."));
-    } finally {
-      setLoadingMovements(false);
-    }
   }
 
   async function submitMovement() {
@@ -353,6 +373,14 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
           </tbody>
         </Table>
       </section>
+      <PresencePollingModal
+        visible={promptVisible}
+        pollingPaused={pollingPaused}
+        countdownSeconds={countdownSeconds}
+        onContinue={() => {
+          void resumePolling();
+        }}
+      />
     </>
   );
 

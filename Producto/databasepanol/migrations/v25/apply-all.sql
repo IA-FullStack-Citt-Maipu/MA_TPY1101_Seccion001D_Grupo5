@@ -1,0 +1,12 @@
+\ir ./beforeMigrate.sql
+\ir ./V25__schema_alignment_big_bang.sql
+\ir ./V26__loan_request_notification_function.sql
+\ir ./V27__loan_status_enum_add_expired.sql
+\ir ./V29__loan_flow_data_refinement.sql
+\ir ./V30__loan_flow_operational_refinement.sql
+\ir ./V31__fix_loan_function_column_aliases.sql
+\ir ./V32__ensure_return_condition_enum_and_dedup_loan_history_index.sql
+\ir ./V33__auth_login_user_summary.sql
+\ir ./V34__auth_find_user_by_rut_support_normalized_input.sql
+\ir ./V35__drop_legacy_varchar_auth_lookup_function.sql
+\ir ./V36__ensure_loan_lifecycle_system_user.sql

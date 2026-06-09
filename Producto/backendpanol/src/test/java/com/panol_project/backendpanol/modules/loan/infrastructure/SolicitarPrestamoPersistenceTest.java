@@ -106,7 +106,7 @@ class SolicitarPrestamoPersistenceTest {
         UUID coordinatorUuid = insertUser("coordinador", "Coordinador Persistencia");
         UUID roomUuid = insertRoom();
         UUID subjectUuid = insertSubject();
-        UUID implementUuid = insertImplement();
+        UUID implementUuid = insertImplement(10);
 
         int expectedNotificationRecipients = countActiveHumanCoordinators();
         String expectedMessage = notificationMessage("Docente Persistencia");
@@ -177,7 +177,7 @@ class SolicitarPrestamoPersistenceTest {
                 .from(OUTBOX_EVENTS)
                 .where(OUTBOX_EVENTS.AGGREGATE_ID.eq(created.uuid()))
                 .fetchOne(0, Integer.class));
-        assertEquals(0, dsl.selectCount()
+        assertEquals(1, dsl.selectCount()
                 .from(STOCK)
                 .where(STOCK.IMPLEMENT_ID.eq(implementId))
                 .fetchOne(0, Integer.class));
@@ -193,7 +193,7 @@ class SolicitarPrestamoPersistenceTest {
         UUID coordinatorUuid = insertUser("coordinador", "Coordinador Rollback");
         UUID roomUuid = insertRoom();
         UUID subjectUuid = insertSubject();
-        UUID implementUuid = insertImplement();
+        UUID implementUuid = insertImplement(10);
 
         String expectedMessage = notificationMessage("Docente Rollback");
         int notificationsBefore = notificationCount(notificationTitle(), expectedMessage);
@@ -240,7 +240,7 @@ class SolicitarPrestamoPersistenceTest {
         UUID requesterUuid = insertUser("docente", "Docente Sin Coordinadores");
         UUID roomUuid = insertRoom();
         UUID subjectUuid = insertSubject();
-        UUID implementUuid = insertImplement();
+        UUID implementUuid = insertImplement(10);
 
         String expectedMessage = notificationMessage("Docente Sin Coordinadores");
         int notificationsBefore = notificationCount(notificationTitle(), expectedMessage);
@@ -315,7 +315,7 @@ class SolicitarPrestamoPersistenceTest {
         return subjectUuid;
     }
 
-    private UUID insertImplement() {
+    private UUID insertImplement(int availableQuantity) {
         UUID implementUuid = UUID.randomUUID();
         String suffix = implementUuid.toString().substring(0, 8);
         dsl.insertInto(IMPLEMENT)
@@ -324,6 +324,16 @@ class SolicitarPrestamoPersistenceTest {
                 .set(IMPLEMENT.DESCRIPTION, "Implemento de prueba")
                 .set(IMPLEMENT.ITEM_TYPE, ItemTypeEnum.consumable)
                 .set(IMPLEMENT.ACTIVE, true)
+                .execute();
+        Long implementId = findImplementId(implementUuid);
+        dsl.insertInto(STOCK)
+                .set(STOCK.IMPLEMENT_ID, implementId)
+                .set(STOCK.TOTAL_STOCK, availableQuantity)
+                .set(STOCK.MIN_STOCK, 0)
+                .set(STOCK.AVAILABLE, availableQuantity)
+                .set(STOCK.RESERVED, 0)
+                .set(STOCK.LOANED, 0)
+                .set(STOCK.DAMAGED, 0)
                 .execute();
         implementUuidsToCleanup.add(implementUuid);
         return implementUuid;
