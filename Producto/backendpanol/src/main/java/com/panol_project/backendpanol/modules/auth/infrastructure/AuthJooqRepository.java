@@ -1,6 +1,7 @@
 package com.panol_project.backendpanol.modules.auth.infrastructure;
 
 import static com.panol_project.backendpanol.jooq.tables.TokenRevocation.TOKEN_REVOCATION;
+import static com.panol_project.backendpanol.jooq.tables.Role.ROLE;
 import static com.panol_project.backendpanol.jooq.tables.User.USER;
 
 import com.panol_project.backendpanol.modules.auth.domain.AuthUser;
@@ -40,6 +41,49 @@ public class AuthJooqRepository implements UserAuthPort, TokenRevocationPort {
     }
 
     @Override
+    public Optional<AuthUser> findAuthUserByUuid(UUID userUuid) {
+        if (userUuid == null) {
+            return Optional.empty();
+        }
+        return dsl.select(
+                        USER.UUID,
+                        USER.RUT,
+                        USER.NAME,
+                        USER.EMAIL,
+                        USER.PASSWORD_HASH,
+                        ROLE.NAME,
+                        USER.FAILED_LOGIN_ATTEMPTS,
+                        USER.BLOCKED_UNTIL
+                )
+                .from(USER)
+                .join(ROLE).on(ROLE.ID.eq(USER.ROLE_ID))
+                .where(USER.UUID.eq(userUuid).and(USER.ACTIVE.isTrue()))
+                .fetchOptional(record -> new AuthUser(
+                        record.get(USER.UUID),
+                        record.get(USER.RUT),
+                        record.get(USER.NAME),
+                        record.get(USER.EMAIL),
+                        record.get(USER.PASSWORD_HASH),
+                        record.get(ROLE.NAME),
+                        record.get(USER.FAILED_LOGIN_ATTEMPTS) == null ? 0 : record.get(USER.FAILED_LOGIN_ATTEMPTS),
+                        record.get(USER.BLOCKED_UNTIL)
+                ));
+    }
+
+    @Override
+    public boolean existsOtherUserWithEmail(String normalizedEmail, UUID excludeUserUuid) {
+        if (normalizedEmail == null || normalizedEmail.isBlank()) {
+            return false;
+        }
+        return dsl.fetchExists(
+                dsl.selectOne()
+                        .from(USER)
+                        .where(USER.EMAIL.equalIgnoreCase(normalizedEmail))
+                        .and(excludeUserUuid == null ? USER.UUID.isNotNull() : USER.UUID.ne(excludeUserUuid))
+        );
+    }
+
+    @Override
     public void registerFailedAttempt(UUID userUuid, int attempts, OffsetDateTime blockedUntil) {
         dsl.update(USER)
                 .set(USER.FAILED_LOGIN_ATTEMPTS, attempts)
@@ -54,6 +98,22 @@ public class AuthJooqRepository implements UserAuthPort, TokenRevocationPort {
                 .set(USER.FAILED_LOGIN_ATTEMPTS, 0)
                 .set(USER.BLOCKED_UNTIL, (OffsetDateTime) null)
                 .set(USER.LAST_LOGIN_AT, lastLoginAt)
+                .where(USER.UUID.eq(userUuid))
+                .execute();
+    }
+
+    @Override
+    public void updateEmail(UUID userUuid, String normalizedEmail) {
+        dsl.update(USER)
+                .set(USER.EMAIL, normalizedEmail)
+                .where(USER.UUID.eq(userUuid))
+                .execute();
+    }
+
+    @Override
+    public void updatePasswordHash(UUID userUuid, String passwordHash) {
+        dsl.update(USER)
+                .set(USER.PASSWORD_HASH, passwordHash)
                 .where(USER.UUID.eq(userUuid))
                 .execute();
     }

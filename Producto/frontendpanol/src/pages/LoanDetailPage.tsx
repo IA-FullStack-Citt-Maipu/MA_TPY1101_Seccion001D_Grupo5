@@ -164,14 +164,19 @@ function timelineStatusChipClass(
 export function LoanDetailPage({
   loanUuid,
   embedded = false,
+  hideBackNav = false,
+  onLoanChanged,
 }: {
   loanUuid: string;
   embedded?: boolean;
+  hideBackNav?: boolean;
+  onLoanChanged?: (loan: LoanSummary) => void;
 }) {
   const currentRole = getUserRoleFromToken();
-  const canEditLoan = currentRole === "DOCENTE";
   const isCoordinator = currentRole === "COORDINADOR";
   const [loan, setLoan] = useState<LoanSummary | null>(null);
+  const canModifyLoan = currentRole === "DOCENTE" && loan?.status === "pending";
+  const canCancelLoan = currentRole === "DOCENTE";
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreatedBanner, setShowCreatedBanner] = useState(false);
@@ -296,6 +301,7 @@ export function LoanDetailPage({
     try {
       const updated = await completeLoan(loan.uuid);
       setLoan(updated);
+      onLoanChanged?.(updated);
       await refreshTraceability(updated.uuid);
     } catch (requestError) {
       setError(getErrorMessage(requestError, "No se pudo completar el prestamo."));
@@ -341,6 +347,7 @@ export function LoanDetailPage({
     try {
       const cancelled = await cancelLoan(loan.uuid, { notes: "Cancelado por docente desde detalle" });
       setLoan(cancelled);
+      onLoanChanged?.(cancelled);
       await refreshTraceability(cancelled.uuid);
       closeDeleteModal();
     } catch (requestError) {
@@ -351,13 +358,15 @@ export function LoanDetailPage({
   }
 
   const content = (
-    <div className="teacher-loan-detail-page">
-      <nav className="teacher-loan-detail-backnav">
-        <button type="button" className="teacher-loan-detail-backnav__btn" onClick={goBackToList}>
-          <ArrowLeft size={16} />
-          Volver al listado
-        </button>
-      </nav>
+    <div className={`teacher-loan-detail-page${embedded ? " teacher-loan-detail-page--embedded" : ""}`}>
+      {!hideBackNav ? (
+        <nav className="teacher-loan-detail-backnav">
+          <button type="button" className="teacher-loan-detail-backnav__btn" onClick={goBackToList}>
+            <ArrowLeft size={16} />
+            Volver al listado
+          </button>
+        </nav>
+      ) : null}
 
       {showCreatedBanner && loan ? (
         <div className="success-banner">
@@ -455,7 +464,7 @@ export function LoanDetailPage({
               </article>
 
               <article className="teacher-loan-detail-card teacher-loan-detail-card--actions">
-                {canEditLoan ? (
+                {canModifyLoan ? (
                   <button type="button" className="teacher-loan-detail-action-btn" onClick={goToLoanEdit}>
                     <Edit3 size={16} />
                     Modificar solicitud
@@ -488,7 +497,7 @@ export function LoanDetailPage({
                   type="button"
                   className="teacher-loan-detail-action-btn teacher-loan-detail-action-btn--danger"
                   onClick={openDeleteModal}
-                  disabled={processingLoan || !canEditLoan}
+                  disabled={processingLoan || !canCancelLoan}
                 >
                   <Trash2 size={16} />
                   Cancelar solicitud

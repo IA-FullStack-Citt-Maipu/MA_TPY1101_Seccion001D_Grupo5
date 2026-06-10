@@ -1,8 +1,10 @@
 package com.panol_project.backendpanol.modules.auth.application;
 
 import com.panol_project.backendpanol.modules.auth.application.dto.LoginCommand;
+import com.panol_project.backendpanol.modules.auth.application.dto.ChangeCurrentPasswordCommand;
 import com.panol_project.backendpanol.modules.auth.application.dto.AuthenticatedUserSummary;
 import com.panol_project.backendpanol.modules.auth.application.dto.LoginResult;
+import com.panol_project.backendpanol.modules.auth.application.dto.UpdateCurrentEmailCommand;
 import com.panol_project.backendpanol.modules.auth.domain.AuthUser;
 import com.panol_project.backendpanol.modules.auth.domain.AuditLogPort;
 import com.panol_project.backendpanol.modules.auth.domain.TokenRevocationPort;
@@ -144,6 +146,63 @@ public class AuthService {
         outboxService.enqueue("auth", userUuid, "UserLoggedOut", userUuid, Map.of("jti", jti));
     }
 
+    @Transactional(readOnly = true)
+    public AuthenticatedUserSummary getCurrentUser(UUID userUuid) {
+        AuthUser user = requireUserByUuid(userUuid);
+        return toAuthenticatedUserSummary(user);
+    }
+
+    @Transactional
+    public AuthenticatedUserSummary updateCurrentUserEmail(UUID userUuid, UpdateCurrentEmailCommand command) {
+        AuthUser user = requireUserByUuid(userUuid);
+        String normalizedEmail = normalizeEmail(command.email());
+
+        if (user.email() != null && normalizedEmail.equalsIgnoreCase(user.email())) {
+            return toAuthenticatedUserSummary(user);
+        }
+
+        if (userAuthRepository.existsOtherUserWithEmail(normalizedEmail, userUuid)) {
+            throw new ApiException(HttpStatus.CONFLICT, "AUTH_EMAIL_ALREADY_IN_USE", "El correo ya esta en uso");
+        }
+
+        userAuthRepository.updateEmail(userUuid, normalizedEmail);
+        auditLogPort.log("user_email_changed", userUuid, userUuid, Map.of("email", normalizedEmail));
+        outboxService.enqueue("user", userUuid, "UserEmailChanged", userUuid, Map.of("email", normalizedEmail));
+        return new AuthenticatedUserSummary(
+                user.uuid(),
+                user.name(),
+                normalizedEmail,
+                normalizeRole(user.roleName())
+        );
+    }
+
+    @Transactional
+    public void updateCurrentUserPassword(UUID userUuid, ChangeCurrentPasswordCommand command) {
+        AuthUser user = requireUserByUuid(userUuid);
+        String currentPassword = command.currentPassword();
+        String newPassword = command.newPassword();
+
+        if (currentPassword == null || currentPassword.trim().isBlank()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "AUTH_CURRENT_PASSWORD_REQUIRED", "Debes ingresar tu contrasena actual");
+        }
+        if (!BCrypt.checkpw(currentPassword, user.passwordHash())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "AUTH_CURRENT_PASSWORD_INVALID", "La contrasena actual no coincide");
+        }
+        if (newPassword == null || newPassword.trim().isBlank()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "AUTH_NEW_PASSWORD_REQUIRED", "Debes ingresar una nueva contrasena");
+        }
+        if (newPassword.length() < 8) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "AUTH_NEW_PASSWORD_TOO_SHORT", "La nueva contrasena debe tener al menos 8 caracteres");
+        }
+        if (BCrypt.checkpw(newPassword, user.passwordHash())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "AUTH_PASSWORD_REUSE_NOT_ALLOWED", "La nueva contrasena debe ser distinta a la actual");
+        }
+
+        userAuthRepository.updatePasswordHash(userUuid, BCrypt.hashpw(newPassword, BCrypt.gensalt()));
+        auditLogPort.log("user_password_changed", userUuid, userUuid, Map.of("source", "self_service"));
+        outboxService.enqueue("user", userUuid, "UserPasswordChanged", userUuid, Map.of("source", "self_service"));
+    }
+
     private ApiException invalidCredentials(String rut) {
         auditLogPort.log("login_failed", null, null, Map.of("rut", rut));
         outboxService.enqueue("auth", null, "LoginFailed", null, Map.of("rut", rut));
@@ -170,5 +229,29 @@ public class AuthService {
             return "";
         }
         return rutWithoutVerifier;
+    }
+
+    private String normalizeEmail(String emailRaw) {
+        if (emailRaw == null || emailRaw.trim().isBlank()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "AUTH_EMAIL_REQUIRED", "El correo es obligatorio");
+        }
+        return emailRaw.trim().toLowerCase();
+    }
+
+    private AuthUser requireUserByUuid(UUID userUuid) {
+        if (userUuid == null) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "AUTH_REQUIRED", "Autenticacion requerida");
+        }
+        return userAuthRepository.findAuthUserByUuid(userUuid)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "AUTH_USER_NOT_FOUND", "Usuario no encontrado"));
+    }
+
+    private AuthenticatedUserSummary toAuthenticatedUserSummary(AuthUser user) {
+        return new AuthenticatedUserSummary(
+                user.uuid(),
+                user.name(),
+                user.email(),
+                normalizeRole(user.roleName())
+        );
     }
 }

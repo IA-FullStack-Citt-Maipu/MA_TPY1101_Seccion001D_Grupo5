@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, ClipboardCheck, Eye, PencilLine, Plus, Search, ShieldAlert, TriangleAlert, X } from "lucide-react";
 import { InventoryLayout } from "../components/layout/InventoryLayout";
-import { ImplementFormModal } from "../components/implements/ImplementFormModal";
-import { ImplementEditModal } from "../components/implements/ImplementEditModal";
-import { createImplement, fetchImplements } from "../services/implementService";
+import { fetchImplements } from "../services/implementService";
 import { fetchActiveCategories } from "../services/activeCategoryService";
 import { getErrorMessage } from "../services/apiClient";
 import type { ActiveCategoryOption } from "../types/categoryActive";
@@ -68,12 +66,8 @@ function hashToTone(value: string): 1 | 2 | 3 | 4 {
 }
 
 export function InventoryItemsPage({ embedded = false }: { embedded?: boolean }) {
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [editingUuid, setEditingUuid] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [allImplements, setAllImplements] = useState<ImplementSummary[]>([]);
   const [totalImplements, setTotalImplements] = useState(0);
   const [categoryOptions, setCategoryOptions] = useState<ActiveCategoryOption[]>([]);
@@ -286,50 +280,6 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
     return `${selectedStockStatuses.length} estados`;
   }, [selectedStockStatuses]);
 
-  async function handleSubmit(payload: {
-    name: string;
-    categoryUuid: string;
-    itemType: "consumable" | "reusable" | "individual";
-    locationUuid: string;
-    description: string | null;
-    barcode: string | null;
-    imgUrl: string | null;
-    minStock: number;
-    observations: string | null;
-  }) {
-    setSaving(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      const created = await createImplement({
-        name: payload.name,
-        categoryUuid: payload.categoryUuid,
-        item_type: payload.itemType,
-        locationUuid: payload.locationUuid,
-        description: payload.description,
-        barcode: payload.barcode,
-        img_url: payload.imgUrl,
-        min_stock: payload.minStock,
-        observations: payload.observations,
-      });
-      try {
-        window.sessionStorage.setItem("inventory.justCreatedImplementId", created.uuid);
-      } catch {
-        // Si el storage no esta disponible, el flujo principal de creacion debe continuar.
-      }
-      setIsCreateOpen(false);
-      window.location.hash = `#/inventory/implementos/${created.uuid}`;
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleSaved() {
-    await refreshImplements();
-    setSuccess("Implemento actualizado correctamente.");
-  }
-
   const content = (
     <div className="inventory-items-page">
       <section className="content-header inventory-items-header">
@@ -523,8 +473,6 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
 
         {loading ? <div className="field-hint">Cargando implementos...</div> : null}
         {error ? <div className="error-banner">{error}</div> : null}
-        {success ? <div className="success-banner">{success}</div> : null}
-
         {implementos.length === 0 && !loading ? (
           <div className="empty-state">No se encontraron implementos con los filtros aplicados</div>
         ) : null}
@@ -652,7 +600,9 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
                               <button
                                 type="button"
                                 className="button button--table button--ghost inventory-action-btn"
-                                onClick={() => setEditingUuid(row.uuid)}
+                                onClick={() => {
+                                  window.location.hash = `#/inventory/implementos/${row.uuid}/editar`;
+                                }}
                                 aria-label={`Editar ${row.name}`}
                                 title="Editar"
                               >
@@ -697,24 +647,12 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
         type="button"
         className="inventory-fab"
         aria-label="Crear nuevo implemento"
-        onClick={() => setIsCreateOpen(true)}
+        onClick={() => {
+          window.location.hash = "#/inventory/implementos/nuevo";
+        }}
       >
         <Plus size={28} />
       </button>
-
-      <ImplementFormModal
-        isOpen={isCreateOpen}
-        saving={saving}
-        onClose={() => setIsCreateOpen(false)}
-        onSubmit={handleSubmit}
-      />
-
-      <ImplementEditModal
-        implementUuid={editingUuid}
-        isOpen={editingUuid != null}
-        onClose={() => setEditingUuid(null)}
-        onSaved={handleSaved}
-      />
     </div>
   );
 

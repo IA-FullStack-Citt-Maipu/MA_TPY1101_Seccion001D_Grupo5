@@ -127,7 +127,8 @@ class SolicitarPrestamoUseCaseTest {
                 .thenReturn(Optional.of(new LoanImplementAvailability(implementUuid, true)));
         when(loanRepositoryPort.findRequestedItemAvailabilities(List.of(implementUuid), scheduledAt, null, null))
                 .thenReturn(List.of(new LoanRequestedItemAvailability(implementUuid, "Fonendoscopio", true, 5)));
-        when(loanRepositoryPort.existsPendingLoanConflict(requesterUuid, List.of(implementUuid))).thenReturn(false);
+        when(loanRepositoryPort.existsPendingLoanConflict(requesterUuid, scheduledAt, null, List.of(implementUuid)))
+                .thenReturn(false);
         when(loanRepositoryPort.createPendingLoan(any(LoanCreateCommand.class))).thenReturn(createdLoan);
         when(loanRepositoryPort.findVisibleLoanSummaryByUuid(loanUuid)).thenReturn(Optional.of(expectedSummary));
 
@@ -154,7 +155,7 @@ class SolicitarPrestamoUseCaseTest {
         verify(loanRepositoryPort).existsActiveSubjectByUuid(subjectUuid);
         verify(loanRepositoryPort).findImplementAvailabilityByUuid(implementUuid);
         verify(loanRepositoryPort).findRequestedItemAvailabilities(List.of(implementUuid), scheduledAt, null, null);
-        verify(loanRepositoryPort).existsPendingLoanConflict(requesterUuid, List.of(implementUuid));
+        verify(loanRepositoryPort).existsPendingLoanConflict(requesterUuid, scheduledAt, null, List.of(implementUuid));
         verify(loanRepositoryPort).findVisibleLoanSummaryByUuid(loanUuid);
         verifyNoMoreInteractions(loanRepositoryPort);
     }
@@ -269,7 +270,7 @@ class SolicitarPrestamoUseCaseTest {
         verify(loanRepositoryPort).existsActiveRequesterByUuid(requesterUuid);
         verify(loanRepositoryPort).existsActiveRoomByUuid(roomUuid);
         verify(loanRepositoryPort).findImplementAvailabilityByUuid(implementUuid);
-        verify(loanRepositoryPort, never()).existsPendingLoanConflict(any(), any());
+        verify(loanRepositoryPort, never()).existsPendingLoanConflict(any(), any(), any(), any());
         verify(loanRepositoryPort, never()).createPendingLoan(any());
         verifyNoMoreInteractions(loanRepositoryPort);
     }
@@ -302,22 +303,23 @@ class SolicitarPrestamoUseCaseTest {
         verify(loanRepositoryPort).existsActiveRequesterByUuid(requesterUuid);
         verify(loanRepositoryPort).existsActiveRoomByUuid(roomUuid);
         verify(loanRepositoryPort).findImplementAvailabilityByUuid(implementUuid);
-        verify(loanRepositoryPort, never()).existsPendingLoanConflict(any(), any());
+        verify(loanRepositoryPort, never()).existsPendingLoanConflict(any(), any(), any(), any());
         verify(loanRepositoryPort, never()).createPendingLoan(any());
         verifyNoMoreInteractions(loanRepositoryPort);
     }
 
     @Test
-    void solicitarDebeRetornar409CuandoExisteSolicitudPendienteConInterseccionDeImplementos() {
+    void solicitarDebeRetornar409CuandoExisteSolicitudPendienteConInterseccionDeImplementosEnHorarioSolapado() {
         UUID requesterUuid = UUID.randomUUID();
         UUID roomUuid = UUID.randomUUID();
         UUID implementUuid = UUID.randomUUID();
+        OffsetDateTime scheduledAt = OffsetDateTime.parse("2026-06-12T10:30:00-04:00");
 
         SolicitarPrestamoCommand command = new SolicitarPrestamoCommand(
                 requesterUuid,
                 roomUuid,
                 null,
-                OffsetDateTime.parse("2026-06-12T10:30:00-04:00"),
+                scheduledAt,
                 null,
                 List.of(new SolicitarPrestamoItemCommand(implementUuid, 1))
         );
@@ -328,11 +330,12 @@ class SolicitarPrestamoUseCaseTest {
                 .thenReturn(Optional.of(new LoanImplementAvailability(implementUuid, true)));
         when(loanRepositoryPort.findRequestedItemAvailabilities(
                 List.of(implementUuid),
-                OffsetDateTime.parse("2026-06-12T10:30:00-04:00"),
+                scheduledAt,
                 null,
                 null
         )).thenReturn(List.of(new LoanRequestedItemAvailability(implementUuid, "Implemento prueba", true, 5)));
-        when(loanRepositoryPort.existsPendingLoanConflict(requesterUuid, List.of(implementUuid))).thenReturn(true);
+        when(loanRepositoryPort.existsPendingLoanConflict(requesterUuid, scheduledAt, null, List.of(implementUuid)))
+                .thenReturn(true);
 
         SolicitarPrestamoUseCase useCase = new SolicitarPrestamoUseCase(loanRepositoryPort);
 
@@ -346,11 +349,11 @@ class SolicitarPrestamoUseCaseTest {
         verify(loanRepositoryPort).findImplementAvailabilityByUuid(implementUuid);
         verify(loanRepositoryPort).findRequestedItemAvailabilities(
                 List.of(implementUuid),
-                OffsetDateTime.parse("2026-06-12T10:30:00-04:00"),
+                scheduledAt,
                 null,
                 null
         );
-        verify(loanRepositoryPort).existsPendingLoanConflict(requesterUuid, List.of(implementUuid));
+        verify(loanRepositoryPort).existsPendingLoanConflict(requesterUuid, scheduledAt, null, List.of(implementUuid));
         verify(loanRepositoryPort, never()).createPendingLoan(any());
         verifyNoMoreInteractions(loanRepositoryPort);
     }
@@ -433,7 +436,7 @@ class SolicitarPrestamoUseCaseTest {
         verify(loanRepositoryPort).existsActiveRoomByUuid(roomUuid);
         verify(loanRepositoryPort).findImplementAvailabilityByUuid(implementUuid);
         verify(loanRepositoryPort).findRequestedItemAvailabilities(List.of(implementUuid), scheduledAt, null, null);
-        verify(loanRepositoryPort, never()).existsPendingLoanConflict(any(), any());
+        verify(loanRepositoryPort, never()).existsPendingLoanConflict(any(), any(), any(), any());
         verify(loanRepositoryPort, never()).createPendingLoan(any());
         verifyNoMoreInteractions(loanRepositoryPort);
     }
@@ -457,5 +460,44 @@ class SolicitarPrestamoUseCaseTest {
 
         assertEquals("LOAN_SCHEDULE_PAST_NOT_ALLOWED", ex.getCode());
         verifyNoInteractions(loanRepositoryPort);
+    }
+
+    @Test
+    void modificarDebeRechazarPrestamoNoPendienteAntesDeValidarHorario() {
+        UUID loanUuid = UUID.randomUUID();
+        UUID requesterUuid = UUID.randomUUID();
+        UUID roomUuid = UUID.randomUUID();
+        UUID implementUuid = UUID.randomUUID();
+
+        SolicitarPrestamoCommand command = new SolicitarPrestamoCommand(
+                requesterUuid,
+                roomUuid,
+                null,
+                OffsetDateTime.parse("2026-06-19T21:30:00-04:00"),
+                OffsetDateTime.parse("2026-06-19T23:30:00-04:00"),
+                List.of(new SolicitarPrestamoItemCommand(implementUuid, 1))
+        );
+
+        LoanSummaryView existingLoan = new LoanSummaryView(
+                loanUuid,
+                requesterUuid,
+                LoanStatus.APPROVED,
+                OffsetDateTime.parse("2026-06-19T12:00:00-04:00"),
+                OffsetDateTime.parse("2026-06-19T14:00:00-04:00"),
+                OffsetDateTime.parse("2026-06-09T10:00:00-04:00"),
+                new LoanSummaryView.RoomView(roomUuid, "Sala 321"),
+                null,
+                List.of(new LoanSummaryView.ItemView(implementUuid, "Fonendoscopio", 1, 1, 0))
+        );
+
+        when(loanRepositoryPort.findVisibleLoanSummaryByUuid(loanUuid)).thenReturn(Optional.of(existingLoan));
+
+        SolicitarPrestamoUseCase useCase = new SolicitarPrestamoUseCase(loanRepositoryPort);
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> useCase.modificar(loanUuid, command));
+
+        assertEquals("LOAN_UPDATE_INVALID_STATE", ex.getCode());
+        verify(loanRepositoryPort).findVisibleLoanSummaryByUuid(loanUuid);
+        verifyNoMoreInteractions(loanRepositoryPort);
     }
 }

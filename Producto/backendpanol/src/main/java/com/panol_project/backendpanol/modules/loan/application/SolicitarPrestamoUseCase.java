@@ -8,6 +8,7 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanImplementAvailabil
 import com.panol_project.backendpanol.modules.loan.domain.LoanRepositoryPort;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRequestedItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRequestedItemAvailability;
+import com.panol_project.backendpanol.modules.loan.domain.LoanStatus;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
 import com.panol_project.backendpanol.modules.loan.domain.LoanUpdateCommand;
 import com.panol_project.backendpanol.shared.error.ApiException;
@@ -72,7 +73,12 @@ public class SolicitarPrestamoUseCase {
 
         validateStockAvailability(requestedItems, command.scheduledAt(), command.expectedReturnAt(), null);
 
-        if (loanRepositoryPort.existsPendingLoanConflict(requesterUuid, implementUuids)) {
+        if (loanRepositoryPort.existsPendingLoanConflict(
+                requesterUuid,
+                command.scheduledAt(),
+                command.expectedReturnAt(),
+                implementUuids
+        )) {
             throw new ApiException(
                     HttpStatus.CONFLICT,
                     "LOAN_DUPLICATE_REQUEST",
@@ -100,11 +106,14 @@ public class SolicitarPrestamoUseCase {
         if (loanUuid == null) {
             throw new BadRequestException("LOAN_UUID_REQUIRED", "loan_uuid es obligatorio");
         }
-        validateCommand(command);
+        validateCommandEnvelope(command);
 
         UUID requesterUuid = command.requesterUuid();
         UUID roomUuid = command.roomUuid();
         UUID subjectUuid = command.subjectUuid();
+        LoanSummaryView currentLoan = requireEditablePendingLoan(loanUuid, requesterUuid);
+
+        validateCommand(command);
 
         if (!loanRepositoryPort.existsActiveRequesterByUuid(requesterUuid)) {
             throw new NotFoundException("LOAN_REQUESTER_NOT_FOUND", "El solicitante no existe o esta inactivo");
@@ -134,7 +143,13 @@ public class SolicitarPrestamoUseCase {
 
         validateStockAvailability(requestedItems, command.scheduledAt(), command.expectedReturnAt(), loanUuid);
 
-        if (loanRepositoryPort.existsPendingLoanConflict(requesterUuid, loanUuid, implementUuids)) {
+        if (loanRepositoryPort.existsPendingLoanConflict(
+                requesterUuid,
+                loanUuid,
+                command.scheduledAt(),
+                command.expectedReturnAt(),
+                implementUuids
+        )) {
             throw new ApiException(
                     HttpStatus.CONFLICT,
                     "LOAN_DUPLICATE_REQUEST",
@@ -144,7 +159,7 @@ public class SolicitarPrestamoUseCase {
 
         LoanAggregate loan = loanRepositoryPort.updatePendingLoan(
                 new LoanUpdateCommand(
-                        loanUuid,
+                        currentLoan.uuid(),
                         requesterUuid,
                         roomUuid,
                         subjectUuid,
@@ -159,15 +174,7 @@ public class SolicitarPrestamoUseCase {
     }
 
     private void validateCommand(SolicitarPrestamoCommand command) {
-        if (command == null) {
-            throw new BadRequestException("LOAN_REQUEST_INVALID", "La solicitud del prestamo es obligatoria");
-        }
-        if (command.requesterUuid() == null) {
-            throw new BadRequestException("LOAN_REQUESTER_REQUIRED", "El solicitante autenticado es obligatorio");
-        }
-        if (command.roomUuid() == null) {
-            throw new BadRequestException("LOAN_ROOM_REQUIRED", "room_uuid es obligatorio");
-        }
+        validateCommandEnvelope(command);
         validateScheduledAt(command.scheduledAt());
         validateExpectedReturnAt(command.scheduledAt(), command.expectedReturnAt());
 
@@ -188,6 +195,31 @@ public class SolicitarPrestamoUseCase {
                 throw new BadRequestException("LOAN_ITEM_DUPLICATE", "No puedes incluir implementos duplicados en la solicitud");
             }
         }
+    }
+
+    private void validateCommandEnvelope(SolicitarPrestamoCommand command) {
+        if (command == null) {
+            throw new BadRequestException("LOAN_REQUEST_INVALID", "La solicitud del prestamo es obligatoria");
+        }
+        if (command.requesterUuid() == null) {
+            throw new BadRequestException("LOAN_REQUESTER_REQUIRED", "El solicitante autenticado es obligatorio");
+        }
+        if (command.roomUuid() == null) {
+            throw new BadRequestException("LOAN_ROOM_REQUIRED", "room_uuid es obligatorio");
+        }
+    }
+
+    private LoanSummaryView requireEditablePendingLoan(UUID loanUuid, UUID requesterUuid) {
+        LoanSummaryView loan = loanRepositoryPort.findVisibleLoanSummaryByUuid(loanUuid)
+                .orElseThrow(() -> new NotFoundException("LOAN_NOT_FOUND", "Prestamo no encontrado"));
+
+        if (!loan.requesterUuid().equals(requesterUuid)) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "LOAN_UPDATE_FORBIDDEN", "No tienes permisos para modificar este prestamo");
+        }
+        if (loan.status() != LoanStatus.PENDING) {
+            throw new BadRequestException("LOAN_UPDATE_INVALID_STATE", "Solo se puede modificar un prestamo en estado pending");
+        }
+        return loan;
     }
 
     private void validateScheduledAt(OffsetDateTime scheduledAt) {

@@ -61,8 +61,7 @@ jobs:
       - name: Compute runtime URLs (dev)
         id: runtime
         run: |
-          PROJECT_NUMBER="$(gcloud projects describe "${{ vars.GCP_PROJECT_ID_DEV }}" --format='value(projectNumber)')"
-          BACKEND_URL="https://panol-backend-dev-${PROJECT_NUMBER}.${{ vars.GCP_REGION_DEV }}.run.app"
+          BACKEND_URL="https://api.dev.panol.cl"
           echo "backend_url=${BACKEND_URL}" >> "$GITHUB_OUTPUT"
 
       - name: Configure Docker auth for Artifact Registry
@@ -99,8 +98,8 @@ jobs:
           TF_VAR_db_supabase_password_secret_value: ${{ secrets.DB_SUPABASE_PASSWORD_DEV }}
           TF_VAR_app_auth_jwt_secret_value: ${{ secrets.APP_AUTH_JWT_SECRET_DEV }}
           TF_VAR_runtime_sa_user_members: '["serviceAccount:${{ secrets.GCP_SERVICE_ACCOUNT_DEV }}"]'
-          TF_VAR_backend_domain: ""
-          TF_VAR_frontend_domain: ""
+          TF_VAR_backend_domain: "api.dev.panol.cl"
+          TF_VAR_frontend_domain: "dev.panol.cl"
         run: |
           terraform apply -auto-approve \
             -target=module.artifact_registry \
@@ -162,8 +161,8 @@ jobs:
           TF_VAR_db_supabase_password_secret_value: ${{ secrets.DB_SUPABASE_PASSWORD_DEV }}
           TF_VAR_app_auth_jwt_secret_value: ${{ secrets.APP_AUTH_JWT_SECRET_DEV }}
           TF_VAR_runtime_sa_user_members: '["serviceAccount:${{ secrets.GCP_SERVICE_ACCOUNT_DEV }}"]'
-          TF_VAR_backend_domain: ""
-          TF_VAR_frontend_domain: ""
+          TF_VAR_backend_domain: "api.dev.panol.cl"
+          TF_VAR_frontend_domain: "dev.panol.cl"
           TF_VAR_backend_min_instances: "0"
           TF_VAR_backend_max_instances: "1"
           TF_VAR_frontend_min_instances: "0"

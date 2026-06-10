@@ -10,7 +10,7 @@ export function SupportPage({ embedded = false }: { embedded?: boolean }) {
         <div className="support-page__hero">
           <img
             src="/ImagenSupportPanol.webp"
-            alt="Soporte Pañol Salud"
+            alt="Soporte Panol Salud"
             className="support-page__image"
           />
           <div className="support-page__bubble" aria-hidden="true">
@@ -22,7 +22,7 @@ export function SupportPage({ embedded = false }: { embedded?: boolean }) {
           <h1>
             ¿Tienes <span>problemas</span> o sugerencias?
           </h1>
-          <p className="support-page__subtitle">Contáctanos al siguiente correo:</p>
+          <p className="support-page__subtitle">Contactanos al siguiente correo:</p>
 
           <a className="support-page__mail-card" href="mailto:panolproject@gmail.com">
             <span className="support-page__mail-icon" aria-hidden="true">
@@ -32,9 +32,9 @@ export function SupportPage({ embedded = false }: { embedded?: boolean }) {
           </a>
 
           <p className="support-page__caption">
-            Tu opinión es muy importante para nosotros.
+            Tu opinion es muy importante para nosotros.
             <br />
-            Estamos aquí para ayudarte.
+            Estamos aqui para ayudarte.
           </p>
         </div>
       </div>

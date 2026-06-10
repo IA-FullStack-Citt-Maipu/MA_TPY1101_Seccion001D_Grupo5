@@ -25,6 +25,7 @@ import com.panol_project.backendpanol.modules.loan.application.SolicitarPrestamo
 import com.panol_project.backendpanol.modules.loan.application.dto.SolicitarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.SolicitarPrestamoItemCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
+import com.panol_project.backendpanol.shared.error.ApiException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -259,6 +260,72 @@ class SolicitarPrestamoPersistenceTest {
 
         assertNotNull(created);
         assertEquals(notificationsBefore, notificationCount(notificationTitle(), expectedMessage));
+    }
+
+    @Test
+    void solicitarDebePermitirMismoImplementoCuandoLosHorariosNoSeSolapan() {
+        UUID requesterUuid = insertUser("docente", "Docente Horarios Distintos");
+        UUID roomUuid = insertRoom();
+        UUID subjectUuid = insertSubject();
+        UUID implementUuid = insertImplement(10);
+        setAuthenticatedUser(requesterUuid, "DOCENTE");
+
+        LoanSummaryView firstLoan = solicitarPrestamoUseCase.solicitar(new SolicitarPrestamoCommand(
+                requesterUuid,
+                roomUuid,
+                subjectUuid,
+                OffsetDateTime.parse("2026-06-25T10:00:00-04:00"),
+                OffsetDateTime.parse("2026-06-25T12:00:00-04:00"),
+                List.of(new SolicitarPrestamoItemCommand(implementUuid, 1))
+        ));
+        loanUuidsToCleanup.add(firstLoan.uuid());
+
+        LoanSummaryView secondLoan = solicitarPrestamoUseCase.solicitar(new SolicitarPrestamoCommand(
+                requesterUuid,
+                roomUuid,
+                subjectUuid,
+                OffsetDateTime.parse("2026-06-25T15:00:00-04:00"),
+                OffsetDateTime.parse("2026-06-25T17:00:00-04:00"),
+                List.of(new SolicitarPrestamoItemCommand(implementUuid, 1))
+        ));
+        loanUuidsToCleanup.add(secondLoan.uuid());
+        SecurityContextHolder.clearContext();
+
+        assertNotNull(firstLoan);
+        assertNotNull(secondLoan);
+        assertEquals(2, dsl.fetchCount(LOAN, LOAN.UUID.in(firstLoan.uuid(), secondLoan.uuid())));
+    }
+
+    @Test
+    void solicitarDebeBloquearMismoImplementoCuandoLosHorariosSeSolapan() {
+        UUID requesterUuid = insertUser("docente", "Docente Horarios Solapados");
+        UUID roomUuid = insertRoom();
+        UUID subjectUuid = insertSubject();
+        UUID implementUuid = insertImplement(10);
+        setAuthenticatedUser(requesterUuid, "DOCENTE");
+
+        LoanSummaryView firstLoan = solicitarPrestamoUseCase.solicitar(new SolicitarPrestamoCommand(
+                requesterUuid,
+                roomUuid,
+                subjectUuid,
+                OffsetDateTime.parse("2026-06-26T10:00:00-04:00"),
+                OffsetDateTime.parse("2026-06-26T12:00:00-04:00"),
+                List.of(new SolicitarPrestamoItemCommand(implementUuid, 1))
+        ));
+        loanUuidsToCleanup.add(firstLoan.uuid());
+
+        ApiException ex = assertThrows(ApiException.class, () -> solicitarPrestamoUseCase.solicitar(new SolicitarPrestamoCommand(
+                requesterUuid,
+                roomUuid,
+                subjectUuid,
+                OffsetDateTime.parse("2026-06-26T11:00:00-04:00"),
+                OffsetDateTime.parse("2026-06-26T13:00:00-04:00"),
+                List.of(new SolicitarPrestamoItemCommand(implementUuid, 1))
+        )));
+        SecurityContextHolder.clearContext();
+
+        assertEquals("LOAN_DUPLICATE_REQUEST", ex.getCode());
+        assertEquals("Ya tienes una solicitud pendiente con uno o más de estos implementos", ex.getMessage());
     }
 
     @Test
