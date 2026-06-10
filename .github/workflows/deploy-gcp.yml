@@ -163,7 +163,7 @@ jobs:
           TF_VAR_runtime_sa_user_members: '["serviceAccount:${{ secrets.GCP_SERVICE_ACCOUNT_DEV }}"]'
           TF_VAR_backend_domain: "api.dev.panol.cl"
           TF_VAR_frontend_domain: "dev.panol.cl"
-          TF_VAR_backend_min_instances: "0"
+          TF_VAR_backend_min_instances: "1"
           TF_VAR_backend_max_instances: "1"
           TF_VAR_frontend_min_instances: "0"
           TF_VAR_frontend_max_instances: "1"

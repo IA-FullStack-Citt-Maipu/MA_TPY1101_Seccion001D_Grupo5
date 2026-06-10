@@ -1,20 +1,21 @@
-﻿# Backend Docs
+# Backend Docs
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-05-17
+- Ultima verificacion: 2026-06-10
 - Fuente de verdad: controllers V2, SecurityConfig, application.yaml
 
 ## Alcance
 
-Guia operativa del backend para rutas publicas, seguridad, errores y convenciones de uso entre frontend y backend.
+Guia operativa del backend para rutas publicas, seguridad, errores y convenciones
+de uso entre frontend y backend.
 
 ### Modelo de datos vigente
 
-- Estado canónico de dominio: **PostgreSQL (Supabase en producción/desarrollo según APP_DB_ENV)**.
-- El catálogo de implementos usa `item_type` con valores:
+- Estado canonico de dominio: **PostgreSQL (Supabase en produccion/desarrollo segun APP_DB_ENV)**.
+- El catalogo de implementos usa `item_type` con valores:
   - `fungible`
   - `no_fungible`
-- El flujo de integración asíncrona usa tabla `public.outbox_event`
+- El flujo de integracion asincrona usa tabla `public.outbox_event`
   (estados `PENDING`, `PROCESSING`, `SENT`, `FAILED`).
 
 ### Regla de identidad de datos
@@ -30,6 +31,9 @@ Base publica: `/api/v2/**`
 ### Auth
 - `POST /api/v2/auth/login`
 - `POST /api/v2/auth/logout`
+- `GET /api/v2/auth/me`
+- `PATCH /api/v2/auth/me/email`
+- `PATCH /api/v2/auth/me/password`
 
 ### Users
 - `GET /api/v2/users`
@@ -79,7 +83,7 @@ Base publica: `/api/v2/**`
 - `PUT /api/v2/implements/{implementUuid}/stock/individuals/{individualUuid}`
 - `GET /api/v2/implements/{implementUuid}/labels/pdf`
 
-Valores canónicos de `movement_type`/`action`:
+Valores canonicos de `movement_type`/`action`:
 - `STOCK_IN`
 - `STOCK_OUT`
 - `LOAN_DELIVERY`
@@ -92,6 +96,8 @@ Valores canónicos de `movement_type`/`action`:
 - `permitAll`: solo `POST /api/v2/auth/login` + `/actuator/health` y `/actuator/info`.
 - Rutas bloqueadas: `/api/v1/**` y `/internal/**`.
 - Resto de rutas: autenticadas.
+- `GET /api/v2/auth/me` y sus `PATCH` son parte del contrato requerido por
+  la vista de configuracion del frontend.
 
 ## Formato de error publico
 
@@ -105,4 +111,5 @@ Valores canónicos de `movement_type`/`action`:
 
 ## Nota de compatibilidad
 
-No se deben usar rutas legacy (`/api/categorias`, `/api/implements`, `/api/v1/**`) en clientes nuevos ni en documentacion operativa vigente.
+No se deben usar rutas legacy (`/api/categorias`, `/api/implements`, `/api/v1/**`)
+en clientes nuevos ni en documentacion operativa vigente.

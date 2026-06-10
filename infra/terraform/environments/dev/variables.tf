@@ -78,7 +78,7 @@ variable "backend_domain" {
 
 variable "backend_min_instances" {
   type    = number
-  default = 0
+  default = 1
 }
 
 variable "backend_max_instances" {

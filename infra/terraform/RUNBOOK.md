@@ -72,7 +72,9 @@ Use Cloud Logging and Cloud Monitoring dashboards for:
 
 ## 8. Cost profile guidance
 
-- For **dev**: use `min_instance_count = 0` to scale to zero and pay mostly by traffic.
+- For **dev**:
+  - use `backend min_instance_count = 1` when login latency or cold starts affect UX.
+  - `frontend min_instance_count = 0` is still reasonable when only the API needs to stay warm.
 - For **prod**:
   - `min_instance_count = 0` is possible and valid when occasional cold starts are acceptable.
   - use `min_instance_count >= 1` for low-latency APIs or strict UX/SLA requirements.
