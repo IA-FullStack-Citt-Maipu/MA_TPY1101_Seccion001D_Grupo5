@@ -20,6 +20,14 @@ const ACCESS_TOKEN_KEY = "access_token";
 const LEGACY_TOKEN_KEY = "token";
 const AUTH_USER_KEY = "auth_user";
 
+function shouldPersistSessionInLocalStorage() {
+  return (
+    localStorage.getItem(AUTH_USER_KEY) !== null ||
+    localStorage.getItem(ACCESS_TOKEN_KEY) !== null ||
+    localStorage.getItem(LEGACY_TOKEN_KEY) !== null
+  );
+}
+
 export function normalizeUserRole(roleRaw: string | null | undefined): UserRole {
   const normalized = String(roleRaw ?? "")
     .replace("ROLE_", "")
@@ -90,6 +98,17 @@ export function getSessionUser(): SessionUserSummary | null {
   } catch {
     return null;
   }
+}
+
+export function replaceSessionUser(user: SessionUserSummary) {
+  const payload = JSON.stringify(user);
+  if (shouldPersistSessionInLocalStorage()) {
+    localStorage.setItem(AUTH_USER_KEY, payload);
+    sessionStorage.removeItem(AUTH_USER_KEY);
+    return;
+  }
+  sessionStorage.setItem(AUTH_USER_KEY, payload);
+  localStorage.removeItem(AUTH_USER_KEY);
 }
 
 function parseTokenPayload(): TokenPayload | null {

@@ -10,7 +10,8 @@
 
 ## Ajustes aplicados
 
-- Dev con `min_instance_count=0` (scale-to-zero).
+- Backend dev con `min_instance_count=1` para evitar cold starts en login.
+- Frontend dev con `min_instance_count=0` para mantener costo bajo donde la latencia inicial no rompe el flujo.
 - Concurrency y timeout moderados en dev.
 - Cancelación de pipelines redundantes.
 - Rotación de secretos no automática en cada push.
@@ -21,12 +22,12 @@
    - conservar últimas N imágenes por servicio.
 2. Reducir frecuencia de deploy en dev:
    - agrupar commits cuando sea posible.
-3. Evitar `min_instance_count > 0` en dev.
-4. Medir cold starts vs costo antes de subir mínimos en prod.
+3. Mantener `min_instance_count > 0` solo en servicios donde el cold start afecte el flujo principal.
+4. Medir cold starts vs costo antes de subir mínimos en otros servicios o en prod.
 
 ## Política sugerida por entorno
 
-- `dev`: costo mínimo (min=0, max bajo, sin dominio custom)
+- `dev`: backend tibio para UX (`backend min=1`) y resto con costo contenido (`frontend min=0`, max bajo)
 - `prod`: balance costo/latencia (definir min instances según SLA)
 
 ## Señales para revisar costo

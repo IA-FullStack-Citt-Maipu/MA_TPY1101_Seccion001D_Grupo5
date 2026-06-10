@@ -21,7 +21,6 @@ import {
   X,
 } from "lucide-react";
 import { InventoryLayout } from "../components/layout/InventoryLayout";
-import { ImplementEditModal } from "../components/implements/ImplementEditModal";
 import { getErrorMessage } from "../services/apiClient";
 import { fetchImplementById } from "../services/implementService";
 import { fetchLabelsPdfBlob, type LabelScope } from "../services/labelService";
@@ -182,7 +181,6 @@ export function InventoryItemDetailPage({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [stockError, setStockError] = useState<string | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
   const [isStockAdjustModalOpen, setIsStockAdjustModalOpen] = useState(false);
   const [isMovementModalOpen, setIsMovementModalOpen] = useState(false);
 
@@ -228,7 +226,6 @@ export function InventoryItemDetailPage({
 
   useEffect(() => {
     const hasModalOpen =
-      isEditing ||
       editingIndividual != null ||
       isLabelModalOpen ||
       isStockAdjustModalOpen ||
@@ -240,7 +237,7 @@ export function InventoryItemDetailPage({
     return () => {
       document.body.classList.remove("modal-open");
     };
-  }, [isEditing, editingIndividual, isLabelModalOpen, isStockAdjustModalOpen, isMovementModalOpen]);
+  }, [editingIndividual, isLabelModalOpen, isStockAdjustModalOpen, isMovementModalOpen]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -628,7 +625,17 @@ export function InventoryItemDetailPage({
           {!isDocente && (
             <>
               {isCoordinator ? (
-                <button type="button" className="button" onClick={() => setIsEditing(true)} disabled={loading || !implement}><Edit3 size={16} />Editar implemento</button>
+                <button
+                  type="button"
+                  className="button"
+                  onClick={() => {
+                    window.location.hash = `#/inventory/implementos/${implementUuid}/editar`;
+                  }}
+                  disabled={loading || !implement}
+                >
+                  <Edit3 size={16} />
+                  Editar implemento
+                </button>
               ) : null}
               <button
                 type="button"
@@ -820,17 +827,6 @@ export function InventoryItemDetailPage({
           </div>
         ) : null}
       </section>
-
-      <ImplementEditModal
-        implementUuid={implementUuid}
-        isOpen={isEditing}
-        onClose={() => setIsEditing(false)}
-        onSaved={async (updated) => {
-          setImplement(updated);
-          setSuccess("Producto actualizado correctamente.");
-          await refreshStock();
-        }}
-      />
 
       {isStockAdjustModalOpen && implement ? (
         <div className="modal-overlay" role="dialog" aria-modal="true">

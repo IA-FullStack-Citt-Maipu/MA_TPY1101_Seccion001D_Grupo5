@@ -20,7 +20,7 @@ import { saveLastCreatedLoan } from "../services/loanSessionService";
 import { fetchRooms } from "../services/roomService";
 import { fetchSubjects } from "../services/subjectService";
 import type { ImplementSummary } from "../types/implement";
-import type { CreateLoanPayload, LoanSummary } from "../types/loan";
+import type { CreateLoanPayload, LoanStatus, LoanSummary } from "../types/loan";
 import type { RoomOption } from "../types/room";
 import type { SubjectOption } from "../types/subject";
 
@@ -272,6 +272,21 @@ function isLowStock(implement: ImplementSummary): boolean {
   return availableStock <= minStock;
 }
 
+function normalizeLoanStatusLabel(status: LoanStatus): string {
+  const labels: Record<LoanStatus, string> = {
+    pending: "Pendiente",
+    approved: "Aprobado",
+    prepared: "Preparado",
+    delivered: "Entregado",
+    completed: "Completado",
+    rejected: "Rechazado",
+    cancelled: "Cancelado",
+    expired: "Expirado",
+    overdue: "Atrasado",
+  };
+  return labels[status];
+}
+
 export function LoanCreatePage({
   embedded = false,
   editLoanUuid,
@@ -312,6 +327,10 @@ export function LoanCreatePage({
     ? buildScheduledAtIso(returnDateValue, returnTimeValue)
     : null;
   const effectiveExpectedReturnAt = expectedReturnAt ?? (scheduledAt ? addHoursToIso(scheduledAt, 2) : null);
+  const editBlockedMessage =
+    isEditMode && editingLoan && editingLoan.status !== "pending"
+      ? `Esta solicitud ya no se puede modificar porque esta en estado ${normalizeLoanStatusLabel(editingLoan.status).toLowerCase()}.`
+      : null;
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -738,6 +757,11 @@ export function LoanCreatePage({
     setSearchInlineError(null);
     setDuplicateWarning(null);
 
+    if (isEditMode && editingLoan && editingLoan.status !== "pending") {
+      setGlobalError("Solo puedes modificar solicitudes en estado pendiente.");
+      return;
+    }
+
     if (!roomUuid) {
       setRoomInlineError("Debes seleccionar una sala.");
       return;
@@ -872,6 +896,20 @@ export function LoanCreatePage({
         <div className="field-hint">Editando solicitud {editingLoan.uuid}</div>
       ) : null}
 
+      {editBlockedMessage ? (
+        <div className="panel">
+          <p className="field-error">{editBlockedMessage}</p>
+          <p className="text-muted">
+            Vuelve al detalle de la solicitud para revisar su estado actual. Las solicitudes aprobadas o en otro estado ya no
+            permiten cambios desde este formulario.
+          </p>
+          <div className="loan-create-summary__actions">
+            <button type="button" className="button button--ghost" onClick={navigateCancel}>
+              Volver al detalle
+            </button>
+          </div>
+        </div>
+      ) : (
       <section className="loan-create-layout">
         <div className="loan-create-left-column">
           <article className="panel loan-create-card">
@@ -1264,6 +1302,7 @@ export function LoanCreatePage({
           </section>
         </aside>
       </section>
+      )}
     </div>
   );
 

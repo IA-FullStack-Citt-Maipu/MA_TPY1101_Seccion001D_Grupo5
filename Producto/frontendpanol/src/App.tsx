@@ -23,7 +23,9 @@ import { LoanHistoryPage } from "./pages/LoanHistoryPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { SupportPage } from "./pages/SupportPage";
+import { SettingsPage } from "./pages/SettingsPage";
 import { logout } from "./services/authService";
+import { useCallback } from "react";
 import {
   clearSession,
   getDefaultHashByRole,
@@ -31,8 +33,11 @@ import {
   getSessionUser,
   getUserRoleFromToken,
   isAuthenticated,
+  replaceSessionUser,
+  type SessionUserSummary,
   type UserRole,
 } from "./utils/auth";
+import { applyThemeMode, getStoredThemeMode, persistThemeMode, type ThemeMode } from "./utils/theme";
 
 interface RouteView {
   key: string;
@@ -70,6 +75,8 @@ function renderAccessDenied(message: string) {
 function App() {
   const [hash, setHash] = useState(() => window.location.hash || "#/login");
   const [routeTransitionKey, setRouteTransitionKey] = useState(0);
+  const [sessionUser, setSessionUser] = useState<SessionUserSummary | null>(() => getSessionUser());
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => getStoredThemeMode());
 
   useEffect(() => {
     function handleHashChange() {
@@ -87,7 +94,6 @@ function App() {
   }
 
   const role = getUserRoleFromToken();
-  const sessionUser = getSessionUser();
   const authenticated = isAuthenticated();
   const normalizedHash = hash || "#/login";
   const defaultHash = getDefaultHashByRole(role);
@@ -96,6 +102,24 @@ function App() {
     : normalizedHash === "#/login"
       ? defaultHash
       : normalizedHash;
+
+  useEffect(() => {
+    setSessionUser(getSessionUser());
+  }, [authenticated, normalizedHash]);
+
+  useEffect(() => {
+    applyThemeMode(themeMode);
+  }, [themeMode]);
+
+  const handleSessionUserChange = useCallback((updatedUser: SessionUserSummary) => {
+    replaceSessionUser(updatedUser);
+    setSessionUser(updatedUser);
+  }, []);
+
+  const handleThemeModeChange = useCallback((nextThemeMode: ThemeMode) => {
+    persistThemeMode(nextThemeMode);
+    setThemeMode(nextThemeMode);
+  }, []);
 
   useEffect(() => {
     if (!authenticated && normalizedHash !== "#/login") {
@@ -158,7 +182,7 @@ function App() {
         key: "director-dashboard",
         navigationMode: "director",
         activeSection: "director-dashboard",
-        breadcrumbs: [{ label: "Director" }, { label: "Dashboard" }],
+        breadcrumbs: [{ label: "Director" }, { label: "Panel" }],
         content: <DirectorDashboardPage embedded />,
       };
     }
@@ -169,13 +193,36 @@ function App() {
         navigationMode: directorRole ? "director" : "inventory",
         activeSection: "support",
         breadcrumbs: directorRole
-          ? [{ label: "Director", href: "#/director/dashboard" }, { label: "Support" }]
+          ? [{ label: "Director", href: "#/director/dashboard" }, { label: "Soporte" }]
           : teacherRole
-            ? [{ label: "Prestamos", href: "#/inventory/prestamos" }, { label: "Support" }]
-            : [{ label: "Inventario", href: "#/inventory/dashboard" }, { label: "Support" }],
+            ? [{ label: "Prestamos", href: "#/inventory/prestamos" }, { label: "Soporte" }]
+            : [{ label: "Inventario", href: "#/inventory/dashboard" }, { label: "Soporte" }],
         searchPlaceholder: "Buscar en el inventario o guias...",
         showSearch: true,
         content: <SupportPage embedded />,
+      };
+    }
+
+    if (currentHash.startsWith("#/configuracion")) {
+      return {
+        key: "settings",
+        navigationMode: directorRole ? "director" : "inventory",
+        activeSection: "settings",
+        breadcrumbs: directorRole
+          ? [{ label: "Director", href: "#/director/dashboard" }, { label: "Configuracion" }]
+          : teacherRole
+            ? [{ label: "Prestamos", href: "#/inventory/prestamos" }, { label: "Configuracion" }]
+            : [{ label: "Inventario", href: "#/inventory/dashboard" }, { label: "Configuracion" }],
+        showSearch: false,
+        content: (
+          <SettingsPage
+            embedded
+            sessionUser={sessionUser}
+            onSessionUserChange={handleSessionUserChange}
+            themeMode={themeMode}
+            onThemeModeChange={handleThemeModeChange}
+          />
+        ),
       };
     }
 
@@ -204,9 +251,26 @@ function App() {
       };
     }
 
+    const itemEditMatch = currentHash.match(
+      /^#\/inventory\/(?:implementos|items)\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})\/editar$/,
+    );
     const itemDetailMatch = currentHash.match(
       /^#\/inventory\/(?:implementos|items)\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$/,
     );
+    if (itemEditMatch) {
+      if (!coordinatorRole) {
+        return inventoryDenied("items", "Implementos", "Solo el rol Coordinador puede acceder al catalogo operativo.");
+      }
+      const implementUuid = itemEditMatch[1];
+      return {
+        key: `item-edit-${implementUuid}`,
+        navigationMode: "inventory",
+        activeSection: "items",
+        breadcrumbs: [{ label: "Inventario", href: "#/inventory/dashboard" }, { label: "Implementos", href: "#/inventory/implementos" }, { label: "Edicion" }],
+        content: <InventoryImplementCreatePage embedded implementUuid={implementUuid} />,
+      };
+    }
+
     if (itemDetailMatch) {
       if (!coordinatorRole) {
         return inventoryDenied("items", "Implementos", "Solo el rol Coordinador puede acceder al catalogo operativo.");
@@ -382,13 +446,13 @@ function App() {
 
     if (currentHash.startsWith("#/inventory/dashboard")) {
       if (!coordinatorRole) {
-        return inventoryDenied("dashboard", "Dashboard", "Solo el rol Coordinador puede acceder al dashboard operativo.");
+        return inventoryDenied("dashboard", "Panel", "Solo el rol Coordinador puede acceder al panel operativo.");
       }
       return {
         key: "inventory-dashboard",
         navigationMode: "inventory",
         activeSection: "dashboard",
-        breadcrumbs: [{ label: "Inventario" }, { label: "Dashboard" }],
+        breadcrumbs: [{ label: "Inventario" }, { label: "Panel" }],
         content: <InventoryHealthDashboardPage embedded />,
       };
     }
@@ -401,7 +465,7 @@ function App() {
       content: <NotFoundPage />,
       notFound: true,
     };
-  }, [effectiveHash, role]);
+  }, [effectiveHash, role, sessionUser, themeMode]);
 
   if (effectiveHash === "#/login") {
     return <LoginPage />;

@@ -11,6 +11,7 @@
   MapPin,
   Menu,
   Search,
+  Settings,
   Users,
   X,
 } from "lucide-react";
@@ -29,7 +30,7 @@ interface MenuItem {
 }
 
 const coordinatorMenu: MenuItem[] = [
-  { label: "Dashboard", icon: LayoutDashboard, href: "#/inventory/dashboard", activeSections: ["dashboard"] },
+  { label: "Panel", icon: LayoutDashboard, href: "#/inventory/dashboard", activeSections: ["dashboard"] },
   { label: "Implementos", icon: Boxes, href: "#/inventory/implementos", activeSections: ["items"] },
   { label: "Categorias", icon: ClipboardList, href: "#/inventory/categories", activeSections: ["categories"] },
   { label: "Ubicaciones", icon: MapPin, href: "#/inventory/locations", activeSections: ["locations"] },
@@ -45,7 +46,7 @@ const teacherMenu: MenuItem[] = [
 ];
 
 const directorMenu: MenuItem[] = [
-  { label: "Dashboard", icon: LayoutDashboard, href: "#/director/dashboard", activeSections: ["director-dashboard"] },
+  { label: "Panel", icon: LayoutDashboard, href: "#/director/dashboard", activeSections: ["director-dashboard"] },
   { label: "Usuarios", icon: Users, href: "#/director/users/create", activeSections: ["director-users"] },
 ];
 
@@ -61,6 +62,7 @@ export type InventorySection =
   | "agenda"
   | "reports"
   | "support"
+  | "settings"
   | "director-dashboard"
   | "director-users";
 
@@ -114,7 +116,7 @@ export function Sidebar({
     <aside className="sidebar">
       <div className="sidebar__brand">
         <strong>Panol Salud</strong>
-        <p>Medical Inventory</p>
+        <p>Inventario clinico</p>
         {navigationMode === "inventory" && modePill ? (
           <div className="sidebar__mode-pill" aria-label={modePill}>
             <span />
@@ -159,7 +161,15 @@ export function Sidebar({
           className={activeSection === "support" ? "sidebar__item sidebar__item--support sidebar__item--active" : "sidebar__item sidebar__item--support"}
         >
           <Headset size={18} />
-          <span>Support</span>
+          <span>Soporte</span>
+        </a>
+        <a
+          href="#/configuracion"
+          onClick={onNavigate}
+          className={activeSection === "settings" ? "sidebar__item sidebar__item--support sidebar__item--active" : "sidebar__item sidebar__item--support"}
+        >
+          <Settings size={18} />
+          <span>Configuracion</span>
         </a>
         <button
           type="button"
@@ -298,7 +308,7 @@ export function TopBar({
 
   return (
     <header className="topbar">
-      <button type="button" className="topbar__burger topbar__burger--inline" onClick={onToggleSidebar} aria-label="Toggle menu lateral">
+      <button type="button" className="topbar__burger topbar__burger--inline" onClick={onToggleSidebar} aria-label="Mostrar u ocultar menu lateral">
         {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
       </button>
 
@@ -343,10 +353,10 @@ export function TopBar({
             <CircleHelp size={18} />
           </button>
         </div>
-        <div className="topbar__avatar">{userInitials || "US"}</div>
+        <div className="topbar__avatar" aria-hidden="true">{userInitials || "US"}</div>
         <div className="topbar__user-meta">
-          <strong>{safeUserName}</strong>
-          <p>{userRole}</p>
+          <strong title={safeUserName}>{safeUserName}</strong>
+          <p title={userRole}>{userRole}</p>
         </div>
       </div>
     </header>

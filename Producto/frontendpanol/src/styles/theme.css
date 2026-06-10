@@ -5476,6 +5476,10 @@ a:focus-visible {
   gap: 16px;
 }
 
+.teacher-loan-detail-page--embedded {
+  max-width: none;
+}
+
 .teacher-loan-detail-backnav {
   margin-top: 2px;
 }
@@ -6862,9 +6866,11 @@ a:focus-visible {
 }
 
 .loan-calendar-nav {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 40px;
   align-items: center;
   gap: 10px;
+  width: min(100%, 420px);
 }
 
 .loan-calendar-nav__pill {
@@ -6875,7 +6881,10 @@ a:focus-visible {
   background: #ffffff;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
+  width: 100%;
+  min-width: 0;
   box-shadow: 0 10px 24px rgba(12, 47, 117, 0.05);
 }
 
@@ -6884,11 +6893,14 @@ a:focus-visible {
   font-family: "Poppins", sans-serif;
   font-size: 16px;
   text-transform: capitalize;
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: center;
 }
 
 .loan-calendar-nav button {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border: 1px solid #d7deeb;
   border-radius: 12px;
   background: #ffffff;
@@ -7107,6 +7119,8 @@ a:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 .loan-calendar-empty {
@@ -7134,6 +7148,26 @@ a:focus-visible {
   display: grid;
   gap: 8px;
   box-shadow: 0 14px 30px rgba(12, 47, 117, 0.05);
+}
+
+.loan-calendar-loan-card--link {
+  width: 100%;
+  border: 1px solid #d9e1ef;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.loan-calendar-loan-card--link:hover {
+  transform: translateY(-1px);
+  border-color: #bfd0f4;
+  box-shadow: 0 18px 34px rgba(12, 47, 117, 0.08);
+}
+
+.loan-calendar-loan-card--link:focus-visible {
+  outline: 2px solid #4f7dff;
+  outline-offset: 2px;
 }
 
 .loan-calendar-loan-card__head {
@@ -7226,10 +7260,137 @@ a:focus-visible {
   font-weight: 700;
 }
 
+.loan-calendar-loan-card__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #0c2f75;
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .loan-calendar-loan-card__actions span {
   color: #53617a;
   font-size: 10px;
   white-space: nowrap;
+}
+
+.loan-calendar-detail-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.loan-calendar-detail-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(7, 14, 28, 0.7);
+}
+
+.loan-calendar-detail-modal__shell {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 1520px);
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) 56px;
+  gap: 16px;
+  align-items: center;
+}
+
+.loan-calendar-detail-modal__surface {
+  position: relative;
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 28px;
+  border-radius: 28px;
+  border: 1px solid rgba(116, 144, 201, 0.22);
+  background: linear-gradient(180deg, #f5f8fd 0%, #edf3fb 100%);
+  box-shadow:
+    0 36px 90px rgba(7, 14, 28, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+.loan-calendar-detail-modal__content .teacher-loan-detail-header {
+  padding-right: 56px;
+}
+
+.loan-calendar-detail-modal__nav,
+.loan-calendar-detail-modal__close {
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  border: 1px solid #d9e1ef;
+  background: rgba(255, 255, 255, 0.96);
+  color: #22324f;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 16px 34px rgba(12, 47, 117, 0.12);
+  transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
+}
+
+.loan-calendar-detail-modal__close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 2;
+}
+
+.loan-calendar-detail-modal__nav:hover:not(:disabled),
+.loan-calendar-detail-modal__close:hover {
+  background: #ffffff;
+  border-color: #bfd0f4;
+  transform: translateY(-1px);
+}
+
+.loan-calendar-detail-modal__nav:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+  transform: none;
+}
+
+@media (max-width: 980px) {
+  .loan-calendar-detail-modal {
+    padding: 12px;
+  }
+
+  .loan-calendar-detail-modal__shell {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .loan-calendar-detail-modal__surface {
+    max-height: calc(100vh - 24px);
+    padding: 18px 14px 82px;
+    border-radius: 22px;
+  }
+
+  .loan-calendar-detail-modal__content .teacher-loan-detail-header {
+    padding-right: 48px;
+  }
+
+  .loan-calendar-detail-modal__content .teacher-loan-detail-header__uuid h1 {
+    font-size: 26px;
+  }
+
+  .loan-calendar-detail-modal__nav {
+    position: absolute;
+    bottom: 18px;
+    z-index: 2;
+  }
+
+  .loan-calendar-detail-modal__nav--prev {
+    left: 18px;
+  }
+
+  .loan-calendar-detail-modal__nav--next {
+    right: 18px;
+  }
 }
 
 .loan-calendar-summary {
@@ -7975,13 +8136,61 @@ a:focus-visible {
     font-size: 32px;
   }
 
+  .loan-calendar-summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    padding: 14px;
+  }
+
   .loan-calendar-summary__metrics {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .loan-calendar-summary__metric {
+    min-width: 0;
+    align-items: flex-start;
+    padding: 10px 12px;
+    border: 1px solid #e1e7f2;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  }
+
+  .loan-calendar-summary__metric > div {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+  }
+
+  .loan-calendar-summary__metric strong {
+    font-size: 20px;
+  }
+
+  .loan-calendar-summary__metric small {
+    margin-top: 0;
+    line-height: 1.35;
+  }
+
+  .loan-calendar-summary__total {
+    min-width: 0;
+    padding-top: 10px;
+    border-top: 1px solid #dfe6f2;
   }
 
   .outbox-monitoring-kpi-grid,
   .stock-health-kpi-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 460px) {
+  .loan-calendar-summary__metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .loan-calendar-summary__metric {
+    align-items: center;
   }
 }
 
@@ -8024,7 +8233,7 @@ a:focus-visible {
   }
 
   .loan-calendar-nav {
-    justify-content: space-between;
+    width: 100%;
   }
 
   .loan-calendar-nav__pill {
@@ -8479,5 +8688,2258 @@ a:focus-visible {
   50% {
     transform: scale(1.04);
     box-shadow: 0 0 0 18px rgba(64, 131, 255, 0.08);
+  }
+}
+
+/* Mobile shell hardening: responsive topbar + dynamic viewport safe area */
+:root {
+  --safe-area-top: env(safe-area-inset-top);
+  --safe-area-right: env(safe-area-inset-right);
+  --safe-area-bottom: env(safe-area-inset-bottom);
+  --safe-area-left: env(safe-area-inset-left);
+}
+
+.app-shell__main {
+  scroll-padding-bottom: calc(32px + var(--safe-area-bottom));
+}
+
+@supports (height: 100dvh) {
+  html,
+  body,
+  #root {
+    height: 100dvh;
+    min-height: 100dvh;
+  }
+
+  .app-shell,
+  .app-shell__workspace,
+  .sidebar {
+    min-height: 100dvh;
+  }
+
+  .app-shell__workspace,
+  .sidebar {
+    height: 100dvh;
+  }
+}
+
+@media (max-width: 980px) {
+  .topbar {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "burger user"
+      "search search";
+    row-gap: 10px;
+    column-gap: 10px;
+    align-items: start;
+    padding-right: calc(var(--spacing-md) + var(--safe-area-right));
+    padding-left: calc(var(--spacing-md) + var(--safe-area-left));
+  }
+
+  .topbar__burger {
+    grid-area: burger;
+    justify-self: start;
+    align-self: start;
+  }
+
+  .topbar__crumbs {
+    display: none;
+  }
+
+  .topbar__search {
+    grid-area: search;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .topbar__user {
+    grid-area: user;
+    justify-self: end;
+    align-self: start;
+  }
+
+  .topbar__user-meta {
+    max-width: 110px;
+  }
+
+  .app-shell__main {
+    padding-bottom: calc(28px + var(--safe-area-bottom) + 28px);
+  }
+}
+
+@media (max-width: 760px) {
+  .topbar {
+    padding-top: calc(12px + var(--safe-area-top));
+    padding-right: calc(14px + var(--safe-area-right));
+    padding-bottom: 12px;
+    padding-left: calc(14px + var(--safe-area-left));
+  }
+
+  .topbar__burger,
+  .topbar__icon,
+  .topbar__avatar {
+    width: 42px;
+    height: 42px;
+  }
+
+  .topbar__user {
+    gap: 8px;
+  }
+
+  .topbar__actions {
+    gap: 6px;
+  }
+
+  .topbar__user-meta {
+    display: none;
+  }
+
+  .topbar__search {
+    min-height: 48px;
+  }
+
+  .app-shell__main {
+    padding: 16px 16px calc(16px + var(--safe-area-bottom) + 40px);
+  }
+
+  .content-header__actions--mobile-visible {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 10px;
+  }
+
+  .content-header__actions--mobile-visible .button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 820px) {
+  .loan-calendar-mobile-drawer {
+    position: fixed;
+    inset: 0;
+    z-index: 180;
+    display: grid;
+    justify-items: end;
+  }
+
+  .loan-calendar-mobile-drawer__backdrop {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background: rgba(5, 16, 40, 0.42);
+    cursor: pointer;
+  }
+
+  .loan-calendar-drawer--mobile {
+    position: relative;
+    z-index: 1;
+    width: min(100%, 420px);
+    height: 100dvh;
+    max-height: none;
+    border-radius: 24px 0 0 24px;
+    box-shadow: -18px 0 44px rgba(10, 33, 88, 0.24);
+    animation: loan-calendar-drawer-enter 220ms ease;
+  }
+
+  .loan-calendar-drawer--mobile .loan-calendar-drawer__header {
+    padding-top: calc(16px + var(--safe-area-top));
+    padding-right: calc(14px + var(--safe-area-right));
+    padding-left: calc(14px + var(--safe-area-left));
+  }
+
+  .loan-calendar-drawer--mobile .loan-calendar-drawer__list {
+    padding: 12px 12px calc(18px + var(--safe-area-bottom));
+  }
+}
+
+@keyframes loan-calendar-drawer-enter {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.settings-page {
+  max-width: 1320px;
+  margin: 0 auto;
+  display: grid;
+  gap: 18px;
+}
+
+.settings-page__hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.settings-page__eyebrow {
+  margin: 0 0 8px;
+  color: #55627d;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.settings-page__hero h1 {
+  margin: 0;
+  color: #001b50;
+  font-family: "Poppins", sans-serif;
+  font-size: clamp(2rem, 1.8rem + 0.8vw, 2.9rem);
+  line-height: 1.05;
+}
+
+.settings-page__lead {
+  max-width: 780px;
+  margin: 10px 0 0;
+  color: #55627d;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.settings-page__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.settings-card {
+  margin-top: 0;
+}
+
+.settings-card--summary,
+.settings-card--preferences {
+  grid-column: 1 / -1;
+}
+
+.settings-card__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.settings-card__header h2 {
+  margin: 0;
+  color: #10274f;
+  font-family: "Poppins", sans-serif;
+  font-size: 1.2rem;
+}
+
+.settings-card__header p {
+  margin: 6px 0 0;
+  color: #60708e;
+  line-height: 1.55;
+}
+
+.settings-card__icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(180deg, rgba(12, 47, 117, 0.08), rgba(11, 184, 217, 0.18));
+  color: #0c2f75;
+  flex-shrink: 0;
+}
+
+.settings-summary-list {
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.settings-summary-list__row {
+  display: grid;
+  grid-template-columns: minmax(140px, 180px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fbfcff 0%, #f2f6ff 100%);
+  border: 1px solid rgba(181, 201, 235, 0.9);
+}
+
+.settings-summary-list__row dt {
+  color: #54647f;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.settings-summary-list__row dd {
+  margin: 0;
+  color: #12284f;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.settings-summary-list__mono {
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 0.9rem;
+}
+
+.settings-form {
+  display: grid;
+  gap: 14px;
+}
+
+.settings-field {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-field span {
+  color: #49566f;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.settings-form__actions {
+  display: flex;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.settings-theme-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(181, 201, 235, 0.9);
+  background: linear-gradient(180deg, #fbfcff 0%, #f2f6ff 100%);
+}
+
+.settings-theme-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.settings-theme-copy strong {
+  color: #10274f;
+  font-size: 1rem;
+}
+
+.settings-theme-copy span {
+  color: #60708e;
+  line-height: 1.5;
+}
+
+.settings-switch {
+  border: 1px solid rgba(12, 47, 117, 0.14);
+  background: #ffffff;
+  border-radius: 999px;
+  min-height: 50px;
+  padding: 6px 10px 6px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: background-color 180ms ease, border-color 180ms ease, transform 180ms ease;
+}
+
+.settings-switch:hover {
+  transform: translateY(-1px);
+}
+
+.settings-switch__track {
+  width: 52px;
+  height: 30px;
+  border-radius: 999px;
+  background: #d7dfef;
+  padding: 3px;
+  display: flex;
+  align-items: center;
+  transition: background-color 180ms ease;
+}
+
+.settings-switch__thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 4px 10px rgba(12, 47, 117, 0.2);
+  transition: transform 180ms ease;
+}
+
+.settings-switch__label {
+  color: #10274f;
+  font-weight: 700;
+  min-width: 88px;
+  text-align: left;
+}
+
+.settings-switch--active {
+  border-color: rgba(11, 184, 217, 0.36);
+  background: rgba(11, 184, 217, 0.08);
+}
+
+.settings-switch--active .settings-switch__track {
+  background: linear-gradient(135deg, #0c2f75 0%, #0bb8d9 100%);
+}
+
+.settings-switch--active .settings-switch__thumb {
+  transform: translateX(22px);
+}
+
+.settings-preference-note {
+  margin-top: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #596985;
+  font-weight: 600;
+}
+
+@media (max-width: 980px) {
+  .settings-page__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-card--summary,
+  .settings-card--preferences {
+    grid-column: auto;
+  }
+
+  .settings-theme-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .settings-switch {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 680px) {
+  .settings-summary-list__row {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-page__hero h1 {
+    font-size: 2rem;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #08111d;
+  --surface: #0f1828;
+  --surface-muted: #131f33;
+  --line: #263246;
+  --text: #edf3ff;
+  --text-soft: #9cadc8;
+  --brand-700: #1f5fe0;
+  --brand-600: #143d99;
+  --brand-500: #2cc2df;
+  --cyan-500: #2cc2df;
+  --ok-500: #41c77a;
+  --warn-500: #ffba49;
+  --danger-500: #ff667a;
+  --shadow: 0 20px 40px rgba(0, 0, 0, 0.34);
+}
+
+:root[data-theme="dark"] body {
+  background:
+    radial-gradient(circle at top left, rgba(28, 83, 214, 0.14), transparent 28%),
+    linear-gradient(180deg, #08111d 0%, #0b1422 100%);
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .app-shell,
+:root[data-theme="dark"] .app-shell__workspace {
+  background: transparent;
+}
+
+:root[data-theme="dark"] .app-shell .sidebar {
+  background: linear-gradient(180deg, #071427 0%, #050e1b 100%);
+  border-right-color: rgba(143, 184, 255, 0.12);
+}
+
+:root[data-theme="dark"] .sidebar__brand p,
+:root[data-theme="dark"] .sidebar__title {
+  color: rgba(180, 209, 255, 0.72);
+}
+
+:root[data-theme="dark"] .sidebar__item {
+  color: rgba(239, 245, 255, 0.8);
+}
+
+:root[data-theme="dark"] .sidebar__item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme="dark"] .sidebar__item--active {
+  background: rgba(46, 111, 240, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(93, 157, 255, 0.18);
+}
+
+:root[data-theme="dark"] .topbar {
+  background: rgba(8, 17, 29, 0.92);
+  border-bottom-color: rgba(143, 184, 255, 0.12);
+  backdrop-filter: blur(12px);
+}
+
+:root[data-theme="dark"] .topbar__crumbs,
+:root[data-theme="dark"] .topbar__crumb-link,
+:root[data-theme="dark"] .topbar__crumb-sep,
+:root[data-theme="dark"] .topbar__user-meta p {
+  color: #90a2c1;
+}
+
+:root[data-theme="dark"] .topbar__crumb-current,
+:root[data-theme="dark"] .topbar__user-meta strong {
+  color: #f5f8ff;
+}
+
+:root[data-theme="dark"] .topbar__search,
+:root[data-theme="dark"] .topbar__icon,
+:root[data-theme="dark"] .topbar__burger,
+:root[data-theme="dark"] .topbar__burger--inline,
+:root[data-theme="dark"] .catalog-filters__item select,
+:root[data-theme="dark"] .catalog-filters__item input,
+:root[data-theme="dark"] .ui-input,
+:root[data-theme="dark"] .ui-select,
+:root[data-theme="dark"] .modal input,
+:root[data-theme="dark"] .modal textarea,
+:root[data-theme="dark"] .modal select,
+:root[data-theme="dark"] .login-field input {
+  background: #121d30;
+  border-color: #29364b;
+  color: #edf3ff;
+}
+
+:root[data-theme="dark"] .topbar__search svg,
+:root[data-theme="dark"] .topbar__burger,
+:root[data-theme="dark"] .topbar__burger--inline,
+:root[data-theme="dark"] .topbar__icon,
+:root[data-theme="dark"] .login-field__password-toggle {
+  color: #b6c6e1;
+}
+
+:root[data-theme="dark"] .topbar__avatar {
+  background: linear-gradient(135deg, #1a3158 0%, #244a8f 100%);
+  color: #eef3ff;
+}
+
+:root[data-theme="dark"] .panel,
+:root[data-theme="dark"] .inventory-kpi,
+:root[data-theme="dark"] .inventory-catalog-panel,
+:root[data-theme="dark"] .modal,
+:root[data-theme="dark"] .detail-card,
+:root[data-theme="dark"] .support-page__bubble,
+:root[data-theme="dark"] .support-page__mail-card,
+:root[data-theme="dark"] .settings-summary-list__row,
+:root[data-theme="dark"] .settings-theme-row,
+:root[data-theme="dark"] .settings-switch,
+:root[data-theme="dark"] .login-card {
+  background: linear-gradient(180deg, rgba(18, 29, 48, 0.96) 0%, rgba(12, 22, 38, 0.98) 100%);
+  border-color: rgba(143, 184, 255, 0.12);
+  box-shadow: var(--shadow);
+}
+
+:root[data-theme="dark"] .settings-card__icon {
+  background: linear-gradient(180deg, rgba(44, 194, 223, 0.14), rgba(31, 95, 224, 0.22));
+  color: #8bdcff;
+}
+
+:root[data-theme="dark"] .settings-page__eyebrow,
+:root[data-theme="dark"] .inventory-items-header__eyebrow,
+:root[data-theme="dark"] .support-page__subtitle,
+:root[data-theme="dark"] .support-page__caption,
+:root[data-theme="dark"] .field-hint,
+:root[data-theme="dark"] .text-muted,
+:root[data-theme="dark"] .settings-theme-copy span,
+:root[data-theme="dark"] .settings-card__header p,
+:root[data-theme="dark"] .settings-field span,
+:root[data-theme="dark"] .table-hint,
+:root[data-theme="dark"] .category-table th,
+:root[data-theme="dark"] .catalog-filters__summary p,
+:root[data-theme="dark"] .login-card__copy p,
+:root[data-theme="dark"] .login-form__footnote,
+:root[data-theme="dark"] .login-form__link {
+  color: #97aac8;
+}
+
+:root[data-theme="dark"] .settings-page__hero h1,
+:root[data-theme="dark"] .settings-summary-list__row dd,
+:root[data-theme="dark"] .settings-card__header h2,
+:root[data-theme="dark"] .settings-theme-copy strong,
+:root[data-theme="dark"] .settings-switch__label,
+:root[data-theme="dark"] .inventory-items-header h1,
+:root[data-theme="dark"] .support-page__content h1,
+:root[data-theme="dark"] .support-page__mail-card strong,
+:root[data-theme="dark"] .login-card__brand strong,
+:root[data-theme="dark"] .login-card__copy h1,
+:root[data-theme="dark"] .panel__head h2,
+:root[data-theme="dark"] .detail-card h2,
+:root[data-theme="dark"] .detail-card h3 {
+  color: #f4f7ff;
+}
+
+:root[data-theme="dark"] .button--ghost {
+  border-color: rgba(44, 194, 223, 0.42);
+  color: #7fe8ff;
+}
+
+:root[data-theme="dark"] .category-table td,
+:root[data-theme="dark"] .modal p,
+:root[data-theme="dark"] .detail-card p {
+  color: #d7e1f2;
+}
+
+:root[data-theme="dark"] .table-row-hover:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+:root[data-theme="dark"] .empty-state {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+:root[data-theme="dark"] .support-page {
+  background:
+    radial-gradient(circle at 18% 22%, rgba(59, 126, 255, 0.18), transparent 34%),
+    radial-gradient(circle at 82% 14%, rgba(19, 178, 255, 0.14), transparent 28%),
+    linear-gradient(180deg, #091424 0%, #0d182a 100%);
+  border-color: rgba(143, 184, 255, 0.12);
+}
+
+:root[data-theme="dark"] .support-page__mail-icon {
+  background: linear-gradient(180deg, rgba(47, 112, 255, 0.18), rgba(44, 194, 223, 0.18));
+  color: #8bdcff;
+}
+
+:root[data-theme="dark"] .support-page__content h1 span {
+  color: #7bcfff;
+}
+
+:root[data-theme="dark"] .login-screen {
+  background:
+    radial-gradient(circle at top left, rgba(31, 95, 224, 0.2), transparent 32%),
+    linear-gradient(180deg, #08111d 0%, #0b1422 100%);
+}
+
+:root[data-theme="dark"] .login-screen__form-side {
+  background: transparent;
+}
+
+:root[data-theme="dark"] .login-card {
+  border-color: rgba(143, 184, 255, 0.12);
+}
+
+:root[data-theme="dark"] .error-banner {
+  background: rgba(147, 34, 56, 0.24);
+  border-color: rgba(255, 102, 122, 0.28);
+  color: #ffb8c3;
+}
+
+:root[data-theme="dark"] .success-banner {
+  background: rgba(30, 138, 89, 0.2);
+  border-color: rgba(65, 199, 122, 0.24);
+  color: #99f0bc;
+}
+
+/* Dark theme refinement: unify shell, content canvas and data surfaces */
+:root[data-theme="dark"] {
+  --bg: #07111c;
+  --surface: #101a29;
+  --surface-muted: #162234;
+  --line: rgba(143, 184, 255, 0.14);
+  --text: #edf4ff;
+  --text-soft: #a0b2cd;
+  --brand-700: #2f6cff;
+  --brand-600: #2455d8;
+  --brand-500: #62ddf4;
+  --shadow: 0 18px 42px rgba(2, 8, 20, 0.28);
+}
+
+:root[data-theme="dark"] body,
+:root[data-theme="dark"] .app-shell {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(49, 112, 247, 0.18), transparent 26%),
+    radial-gradient(circle at 100% 0%, rgba(44, 194, 223, 0.1), transparent 18%),
+    linear-gradient(180deg, #07111c 0%, #0b1523 46%, #09121d 100%);
+}
+
+:root[data-theme="dark"] .app-shell__main {
+  background:
+    radial-gradient(circle at 12% 16%, rgba(49, 112, 247, 0.12), transparent 24%),
+    radial-gradient(circle at 88% 8%, rgba(44, 194, 223, 0.08), transparent 18%),
+    linear-gradient(180deg, #0b1523 0%, #09121d 100%);
+}
+
+:root[data-theme="dark"] .content-header h1,
+:root[data-theme="dark"] .inventory-items-header h1 {
+  color: #f5f8ff;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.18);
+}
+
+:root[data-theme="dark"] .content-header p,
+:root[data-theme="dark"] .panel__head p,
+:root[data-theme="dark"] .inventory-items-header p,
+:root[data-theme="dark"] .stat-card p,
+:root[data-theme="dark"] .table-hint {
+  color: #97aac7;
+}
+
+:root[data-theme="dark"] .panel,
+:root[data-theme="dark"] .inventory-kpi,
+:root[data-theme="dark"] .inventory-catalog-panel,
+:root[data-theme="dark"] .modal,
+:root[data-theme="dark"] .detail-card,
+:root[data-theme="dark"] .support-page__bubble,
+:root[data-theme="dark"] .support-page__mail-card,
+:root[data-theme="dark"] .settings-summary-list__row,
+:root[data-theme="dark"] .settings-theme-row,
+:root[data-theme="dark"] .settings-switch,
+:root[data-theme="dark"] .login-card,
+:root[data-theme="dark"] .stat-card {
+  background:
+    linear-gradient(180deg, rgba(17, 27, 43, 0.96) 0%, rgba(11, 19, 31, 0.98) 100%);
+  border-color: rgba(143, 184, 255, 0.12);
+  box-shadow:
+    0 16px 36px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+:root[data-theme="dark"] .stat-card strong {
+  color: #f5f8ff;
+}
+
+:root[data-theme="dark"] .stat-card--blue strong {
+  color: #6da8ff;
+}
+
+:root[data-theme="dark"] .stat-card--green strong {
+  color: #62d998;
+}
+
+:root[data-theme="dark"] .stat-card--orange strong {
+  color: #ffc660;
+}
+
+:root[data-theme="dark"] .stat-card--cyan strong {
+  color: #67dcf4;
+}
+
+:root[data-theme="dark"] .panel__head {
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(143, 184, 255, 0.08);
+  margin-bottom: 2px;
+}
+
+:root[data-theme="dark"] .table-wrapper {
+  border: 1px solid rgba(143, 184, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(7, 14, 24, 0.34);
+}
+
+:root[data-theme="dark"] .category-table thead {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+:root[data-theme="dark"] .category-table th,
+:root[data-theme="dark"] .category-table td {
+  border-bottom-color: rgba(143, 184, 255, 0.09);
+}
+
+:root[data-theme="dark"] .category-table tbody tr:hover,
+:root[data-theme="dark"] .table-row-hover:hover {
+  background: rgba(55, 112, 247, 0.08);
+}
+
+:root[data-theme="dark"] .category-table strong,
+:root[data-theme="dark"] .category-table td {
+  color: #e4ebf8;
+}
+
+:root[data-theme="dark"] .badge--active {
+  background: rgba(65, 199, 122, 0.15);
+  color: #8fe6b3;
+}
+
+:root[data-theme="dark"] .badge--inactive {
+  background: rgba(138, 155, 182, 0.16);
+  color: #c6d2e6;
+}
+
+:root[data-theme="dark"] .badge--warn {
+  background: rgba(255, 186, 73, 0.16);
+  color: #ffd48a;
+}
+
+:root[data-theme="dark"] .button {
+  background: linear-gradient(135deg, #2a68fb 0%, #1e8bff 100%);
+  border-color: rgba(117, 167, 255, 0.38);
+  box-shadow: 0 10px 24px rgba(20, 76, 191, 0.24);
+}
+
+:root[data-theme="dark"] .button:hover {
+  box-shadow: 0 14px 28px rgba(20, 76, 191, 0.28);
+}
+
+:root[data-theme="dark"] .button--ghost {
+  background: rgba(16, 26, 41, 0.92);
+  border-color: rgba(98, 221, 244, 0.22);
+  color: #8ee8ff;
+  box-shadow: none;
+}
+
+:root[data-theme="dark"] .button--warn {
+  background: linear-gradient(135deg, #d78d1a 0%, #b96c00 100%);
+  border-color: rgba(255, 198, 96, 0.28);
+}
+
+:root[data-theme="dark"] .button--danger {
+  background: linear-gradient(135deg, #d04a5f 0%, #a92e44 100%);
+  border-color: rgba(255, 129, 150, 0.24);
+}
+
+:root[data-theme="dark"] .button--table {
+  box-shadow: none;
+}
+
+:root[data-theme="dark"] .coordinator-loans-header h1,
+:root[data-theme="dark"] .loan-calendar-header h1 {
+  color: #f4f8ff;
+}
+
+:root[data-theme="dark"] .inventory-items-page,
+:root[data-theme="dark"] .stock-health-page,
+:root[data-theme="dark"] .teacher-loan-detail-page {
+  color: #dce6f5;
+}
+
+:root[data-theme="dark"] .coordinator-loans-header p,
+:root[data-theme="dark"] .loan-calendar-header p,
+:root[data-theme="dark"] .coordinator-loans-filters label span,
+:root[data-theme="dark"] .coordinator-loans-footer p,
+:root[data-theme="dark"] .loan-calendar-loading,
+:root[data-theme="dark"] .loan-calendar-empty,
+:root[data-theme="dark"] .inventory-items-header p,
+:root[data-theme="dark"] .stock-health-header p,
+:root[data-theme="dark"] .teacher-loan-detail-header small {
+  color: #9bb0ce;
+}
+
+:root[data-theme="dark"] .inventory-items-header__eyebrow,
+:root[data-theme="dark"] .stock-health-bar-group p,
+:root[data-theme="dark"] .teacher-loan-detail-header__eyebrow,
+:root[data-theme="dark"] .teacher-loan-detail-info-list span,
+:root[data-theme="dark"] .teacher-loan-detail-items thead th,
+:root[data-theme="dark"] .teacher-loan-detail-items__empty,
+:root[data-theme="dark"] .teacher-loan-timeline-entry__meta time,
+:root[data-theme="dark"] .teacher-loan-timeline-entry__actor,
+:root[data-theme="dark"] .teacher-loan-detail-item-cell small,
+:root[data-theme="dark"] .stock-health-summary-card > header span,
+:root[data-theme="dark"] .stock-health-activity-card > header span,
+:root[data-theme="dark"] .stock-health-item-cell small,
+:root[data-theme="dark"] .stock-health-qty-cell small,
+:root[data-theme="dark"] .stock-health-loading,
+:root[data-theme="dark"] .stock-health-empty {
+  color: #9bb0ce;
+}
+
+:root[data-theme="dark"] .inventory-items-header h1,
+:root[data-theme="dark"] .stock-health-header h1,
+:root[data-theme="dark"] .teacher-loan-detail-header__uuid h1,
+:root[data-theme="dark"] .teacher-loan-detail-card--summary header h2,
+:root[data-theme="dark"] .teacher-loan-detail-items__header h2,
+:root[data-theme="dark"] .stock-health-table-card > header h2,
+:root[data-theme="dark"] .stock-health-summary-card > header h2,
+:root[data-theme="dark"] .stock-health-activity-card > header h2 {
+  color: #f4f8ff;
+}
+
+:root[data-theme="dark"] .inventory-kpi__content p,
+:root[data-theme="dark"] .stock-health-kpi span {
+  color: #95abc7;
+}
+
+:root[data-theme="dark"] .inventory-kpi__content strong,
+:root[data-theme="dark"] .inventory-item-cell__copy strong,
+:root[data-theme="dark"] .inventory-location-cell strong,
+:root[data-theme="dark"] .inventory-stock-cell__meta strong,
+:root[data-theme="dark"] .inventory-catalog-summary strong,
+:root[data-theme="dark"] .stock-health-kpi strong,
+:root[data-theme="dark"] .stock-health-item-cell strong,
+:root[data-theme="dark"] .teacher-loan-detail-info-list p,
+:root[data-theme="dark"] .teacher-loan-detail-item-cell strong,
+:root[data-theme="dark"] .teacher-loan-timeline-entry__card h3 {
+  color: #edf4ff;
+}
+
+:root[data-theme="dark"] .inventory-catalog-panel,
+:root[data-theme="dark"] .stock-health-kpi,
+:root[data-theme="dark"] .stock-health-table-card,
+:root[data-theme="dark"] .stock-health-summary-card,
+:root[data-theme="dark"] .stock-health-activity-card,
+:root[data-theme="dark"] .teacher-loan-detail-card,
+:root[data-theme="dark"] .teacher-loan-detail-items,
+:root[data-theme="dark"] .teacher-loan-timeline-entry__card {
+  background: linear-gradient(180deg, rgba(17, 27, 43, 0.97) 0%, rgba(10, 18, 30, 0.99) 100%);
+  border-color: rgba(143, 184, 255, 0.12);
+  box-shadow:
+    0 16px 36px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+:root[data-theme="dark"] .inventory-filter-shell,
+:root[data-theme="dark"] .inventory-catalog-summary,
+:root[data-theme="dark"] .inventory-active-filters,
+:root[data-theme="dark"] .inventory-table-footer,
+:root[data-theme="dark"] .stock-health-table-card > header,
+:root[data-theme="dark"] .stock-health-summary-card > header,
+:root[data-theme="dark"] .stock-health-activity-card > header,
+:root[data-theme="dark"] .teacher-loan-detail-card--summary header,
+:root[data-theme="dark"] .teacher-loan-detail-items__header,
+:root[data-theme="dark"] .teacher-loan-detail-items__footer {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(143, 184, 255, 0.1);
+}
+
+:root[data-theme="dark"] .inventory-search-input-wrap,
+:root[data-theme="dark"] .inventory-catalog-filters select,
+:root[data-theme="dark"] .inventory-multiselect__trigger,
+:root[data-theme="dark"] .inventory-multiselect__menu,
+:root[data-theme="dark"] .inventory-pagination__btn,
+:root[data-theme="dark"] .stock-health-link-btn,
+:root[data-theme="dark"] .teacher-loan-detail-copy-btn,
+:root[data-theme="dark"] .teacher-loan-detail-backnav__btn {
+  background: #121d30;
+  border-color: #2a3850;
+  color: #dce7fb;
+}
+
+:root[data-theme="dark"] .inventory-search-input-wrap svg,
+:root[data-theme="dark"] .teacher-loan-detail-copy-btn,
+:root[data-theme="dark"] .teacher-loan-detail-backnav__btn,
+:root[data-theme="dark"] .stock-health-link-btn {
+  color: #b9cbe6;
+}
+
+:root[data-theme="dark"] .inventory-search-input-wrap input,
+:root[data-theme="dark"] .inventory-catalog-filters select,
+:root[data-theme="dark"] .inventory-multiselect__trigger {
+  color: #edf4ff;
+}
+
+:root[data-theme="dark"] .inventory-search-input-wrap input::placeholder {
+  color: #8196b4;
+}
+
+:root[data-theme="dark"] .inventory-multiselect__option {
+  color: #d6e1f3;
+}
+
+:root[data-theme="dark"] .inventory-multiselect__option:hover {
+  background: rgba(55, 112, 247, 0.09);
+}
+
+:root[data-theme="dark"] .inventory-multiselect__hint,
+:root[data-theme="dark"] .inventory-catalog-summary p,
+:root[data-theme="dark"] .inventory-catalog-summary__hint,
+:root[data-theme="dark"] .inventory-item-cell__id,
+:root[data-theme="dark"] .inventory-location-cell span,
+:root[data-theme="dark"] .inventory-stock-cell__meta span,
+:root[data-theme="dark"] .inventory-table-footer p {
+  color: #98adcb;
+}
+
+:root[data-theme="dark"] .inventory-items-table thead th,
+:root[data-theme="dark"] .stock-health-table thead th {
+  background: rgba(255, 255, 255, 0.045);
+  color: #9eb3cf;
+  border-bottom-color: rgba(143, 184, 255, 0.12);
+}
+
+:root[data-theme="dark"] .inventory-items-table tbody tr,
+:root[data-theme="dark"] .stock-health-table tbody tr {
+  background: rgba(16, 26, 41, 0.9);
+}
+
+:root[data-theme="dark"] .inventory-items-table tbody tr:nth-child(even),
+:root[data-theme="dark"] .stock-health-table tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+:root[data-theme="dark"] .inventory-items-table tbody tr:hover,
+:root[data-theme="dark"] .stock-health-table tbody tr:hover {
+  background: rgba(55, 112, 247, 0.08);
+}
+
+:root[data-theme="dark"] .inventory-items-table td,
+:root[data-theme="dark"] .stock-health-table tbody td,
+:root[data-theme="dark"] .teacher-loan-detail-items tbody td {
+  border-bottom-color: rgba(143, 184, 255, 0.08);
+  color: #dfe8f7;
+}
+
+:root[data-theme="dark"] .inventory-filter-chip {
+  border-color: rgba(103, 139, 214, 0.28);
+  background: rgba(52, 77, 138, 0.24);
+  color: #bcd2ff;
+}
+
+:root[data-theme="dark"] .inventory-filter-chip__remove:hover,
+:root[data-theme="dark"] .inventory-clear-all:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+:root[data-theme="dark"] .inventory-clear-all {
+  color: #8bddff;
+}
+
+:root[data-theme="dark"] .stock-badge--healthy {
+  background: rgba(15, 122, 82, 0.18);
+  color: #8fe3b6;
+}
+
+:root[data-theme="dark"] .stock-badge--low {
+  background: rgba(212, 134, 8, 0.2);
+  color: #ffd181;
+}
+
+:root[data-theme="dark"] .stock-badge--critical {
+  background: rgba(194, 56, 74, 0.2);
+  color: #ff9db0;
+}
+
+:root[data-theme="dark"] .stock-badge--unknown {
+  background: rgba(113, 126, 152, 0.22);
+  color: #d1daea;
+}
+
+:root[data-theme="dark"] .inventory-chip--tone-1 {
+  background: rgba(83, 111, 203, 0.2);
+  color: #b8cbff;
+}
+
+:root[data-theme="dark"] .inventory-chip--tone-2 {
+  background: rgba(11, 184, 217, 0.18);
+  color: #9deefe;
+}
+
+:root[data-theme="dark"] .inventory-chip--tone-3 {
+  background: rgba(212, 126, 63, 0.2);
+  color: #ffc596;
+}
+
+:root[data-theme="dark"] .inventory-chip--tone-4 {
+  background: rgba(86, 132, 36, 0.2);
+  color: #c2ef90;
+}
+
+:root[data-theme="dark"] .stock-health-link-btn--primary,
+:root[data-theme="dark"] .inventory-pagination__btn--active {
+  background: linear-gradient(135deg, #2a68fb 0%, #1e8bff 100%);
+  border-color: rgba(117, 167, 255, 0.38);
+  color: #ffffff;
+}
+
+:root[data-theme="dark"] .stock-health-status--critical {
+  background: rgba(194, 56, 74, 0.18);
+  color: #ff9eb1;
+}
+
+:root[data-theme="dark"] .stock-health-status--warning {
+  background: rgba(212, 134, 8, 0.18);
+  color: #ffd286;
+}
+
+:root[data-theme="dark"] .stock-health-status--ok {
+  background: rgba(15, 122, 82, 0.18);
+  color: #8ee2b4;
+}
+
+:root[data-theme="dark"] .stock-health-bar-group {
+  border-bottom-color: rgba(143, 184, 255, 0.08);
+}
+
+:root[data-theme="dark"] .stock-health-bar-group div {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+:root[data-theme="dark"] .stock-health-bar-group small,
+:root[data-theme="dark"] .stock-health-summary-card footer,
+:root[data-theme="dark"] .stock-health-activity p,
+:root[data-theme="dark"] .stock-health-activity small {
+  color: #98adcb;
+}
+
+:root[data-theme="dark"] .stock-health-activity {
+  border-color: rgba(143, 184, 255, 0.1);
+}
+
+:root[data-theme="dark"] .stock-health-activity strong {
+  color: #edf4ff;
+}
+
+:root[data-theme="dark"] .stock-health-activity--ok {
+  background: rgba(15, 122, 82, 0.09);
+  border-color: rgba(91, 202, 150, 0.16);
+}
+
+:root[data-theme="dark"] .stock-health-activity--warning {
+  background: rgba(212, 134, 8, 0.09);
+  border-color: rgba(255, 208, 120, 0.16);
+}
+
+:root[data-theme="dark"] .stock-health-activity--attention {
+  background: rgba(194, 56, 74, 0.1);
+  border-color: rgba(255, 158, 177, 0.16);
+}
+
+:root[data-theme="dark"] .teacher-loan-detail-backnav__btn:hover,
+:root[data-theme="dark"] .teacher-loan-detail-copy-btn:hover {
+  background: rgba(55, 112, 247, 0.1);
+}
+
+:root[data-theme="dark"] .teacher-loan-detail-info-list p,
+:root[data-theme="dark"] .teacher-loan-detail-item-cell strong,
+:root[data-theme="dark"] .teacher-loan-detail-items__footer {
+  color: #dce7f7;
+}
+
+:root[data-theme="dark"] .teacher-loan-detail-item-cell__thumb,
+:root[data-theme="dark"] .teacher-loan-timeline-entry__node {
+  border-color: rgba(143, 184, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #a7bbd8;
+}
+
+:root[data-theme="dark"] .teacher-loan-timeline-entry__node.is-done {
+  background: #1f4fb8;
+  border-color: #1f4fb8;
+  color: #ffffff;
+}
+
+:root[data-theme="dark"] .teacher-loan-timeline-list::before {
+  background: rgba(143, 184, 255, 0.12);
+}
+
+:root[data-theme="dark"] .teacher-loan-timeline-entry.is-last::after {
+  background: #0a1320;
+}
+
+:root[data-theme="dark"] .teacher-loan-timeline-entry__card {
+  border-color: rgba(143, 184, 255, 0.1);
+}
+
+:root[data-theme="dark"] .teacher-loan-timeline-entry__notes {
+  background: rgba(255, 255, 255, 0.04);
+  color: #c8d6ea;
+}
+
+:root[data-theme="dark"] .loan-calendar-chip {
+  background: rgba(255, 255, 255, 0.06);
+  color: #c7d4ea;
+}
+
+:root[data-theme="dark"] .loan-calendar-chip--pending {
+  background: rgba(212, 134, 8, 0.2);
+  color: #ffd27f;
+}
+
+:root[data-theme="dark"] .loan-calendar-chip--approved {
+  background: rgba(11, 139, 176, 0.22);
+  color: #9feeff;
+}
+
+:root[data-theme="dark"] .loan-calendar-chip--delivered {
+  background: rgba(15, 122, 82, 0.2);
+  color: #8de2b3;
+}
+
+:root[data-theme="dark"] .loan-calendar-chip--completed {
+  background: rgba(30, 127, 89, 0.18);
+  color: #9fe5bf;
+}
+
+:root[data-theme="dark"] .loan-calendar-chip--danger {
+  background: rgba(194, 56, 74, 0.22);
+  color: #ff9cb0;
+}
+
+:root[data-theme="dark"] .loan-calendar-status--pending {
+  background: rgba(212, 134, 8, 0.2);
+  color: #ffd27f;
+}
+
+:root[data-theme="dark"] .loan-calendar-status--approved {
+  background: rgba(11, 139, 176, 0.22);
+  color: #9feeff;
+}
+
+:root[data-theme="dark"] .loan-calendar-status--delivered {
+  background: rgba(15, 122, 82, 0.2);
+  color: #8de2b3;
+}
+
+:root[data-theme="dark"] .loan-calendar-status--completed {
+  background: rgba(30, 127, 89, 0.18);
+  color: #9fe5bf;
+}
+
+:root[data-theme="dark"] .loan-calendar-status--danger {
+  background: rgba(194, 56, 74, 0.22);
+  color: #ff9cb0;
+}
+
+:root[data-theme="dark"] .loan-calendar-loan-card--link:hover {
+  border-color: rgba(98, 221, 244, 0.28);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.24);
+}
+
+:root[data-theme="dark"] .loan-calendar-loan-card__cta,
+:root[data-theme="dark"] .loan-calendar-loan-card__actions a {
+  color: #8bddff;
+}
+
+:root[data-theme="dark"] .loan-calendar-detail-modal__backdrop {
+  background: rgba(2, 8, 16, 0.82);
+}
+
+:root[data-theme="dark"] .loan-calendar-detail-modal__surface {
+  background: linear-gradient(180deg, rgba(11, 20, 34, 0.99) 0%, rgba(7, 13, 24, 0.995) 100%);
+  border-color: rgba(143, 184, 255, 0.14);
+  box-shadow:
+    0 32px 90px rgba(0, 0, 0, 0.48),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+:root[data-theme="dark"] .loan-calendar-detail-modal__nav,
+:root[data-theme="dark"] .loan-calendar-detail-modal__close {
+  background: rgba(18, 29, 48, 0.96);
+  border-color: rgba(143, 184, 255, 0.14);
+  color: #dce7fb;
+}
+
+:root[data-theme="dark"] .loan-calendar-detail-modal__nav:hover:not(:disabled),
+:root[data-theme="dark"] .loan-calendar-detail-modal__close:hover {
+  background: rgba(30, 44, 68, 0.98);
+  border-color: rgba(143, 184, 255, 0.24);
+}
+
+:root[data-theme="dark"] .coordinator-loans-kpi,
+:root[data-theme="dark"] .coordinator-loans-card,
+:root[data-theme="dark"] .loan-calendar-card,
+:root[data-theme="dark"] .loan-calendar-drawer,
+:root[data-theme="dark"] .loan-calendar-summary {
+  background: linear-gradient(180deg, rgba(16, 26, 41, 0.97) 0%, rgba(10, 18, 30, 0.99) 100%);
+  border-color: rgba(143, 184, 255, 0.13);
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+:root[data-theme="dark"] .coordinator-loans-kpi p,
+:root[data-theme="dark"] .loan-calendar-summary__metric small,
+:root[data-theme="dark"] .loan-calendar-summary__total small {
+  color: #98aeca;
+}
+
+:root[data-theme="dark"] .coordinator-loans-kpi strong,
+:root[data-theme="dark"] .loan-calendar-summary__metric strong,
+:root[data-theme="dark"] .loan-calendar-summary__total strong {
+  color: #f4f8ff;
+}
+
+:root[data-theme="dark"] .loan-calendar-summary__metric {
+  color: #f4f8ff;
+}
+
+:root[data-theme="dark"] .loan-calendar-summary__total {
+  border-top-color: rgba(143, 184, 255, 0.12);
+}
+
+:root[data-theme="dark"] .coordinator-loans-filters,
+:root[data-theme="dark"] .coordinator-loans-footer,
+:root[data-theme="dark"] .loan-calendar-card__header {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(143, 184, 255, 0.1);
+}
+
+:root[data-theme="dark"] .coordinator-loans-search,
+:root[data-theme="dark"] .coordinator-loans-filters select,
+:root[data-theme="dark"] .coordinator-loans-filters > label:not(.coordinator-loans-search) input,
+:root[data-theme="dark"] .loan-calendar-link-btn,
+:root[data-theme="dark"] .loan-calendar-nav button,
+:root[data-theme="dark"] .loan-calendar-nav__pill,
+:root[data-theme="dark"] .loan-calendar-counter-pill,
+:root[data-theme="dark"] .loan-calendar-view-btn {
+  background: #121d30;
+  border-color: #2a3850;
+  color: #dde8fb;
+}
+
+:root[data-theme="dark"] .coordinator-loans-search svg,
+:root[data-theme="dark"] .loan-calendar-link-btn svg,
+:root[data-theme="dark"] .loan-calendar-nav button,
+:root[data-theme="dark"] .loan-calendar-counter-pill,
+:root[data-theme="dark"] .loan-calendar-view-btn {
+  color: #b8cae6;
+}
+
+:root[data-theme="dark"] .coordinator-loans-search input,
+:root[data-theme="dark"] .coordinator-loans-filters select,
+:root[data-theme="dark"] .coordinator-loans-filters > label:not(.coordinator-loans-search) input {
+  color: #edf4ff;
+}
+
+:root[data-theme="dark"] .coordinator-loans-search input::placeholder,
+:root[data-theme="dark"] .coordinator-loans-filters > label:not(.coordinator-loans-search) input::placeholder {
+  color: #8398b6;
+}
+
+:root[data-theme="dark"] .coordinator-loans-table thead th {
+  background: rgba(255, 255, 255, 0.045);
+  border-bottom-color: rgba(143, 184, 255, 0.12);
+  color: #9fb2cf;
+}
+
+:root[data-theme="dark"] .coordinator-loans-table tbody td {
+  border-bottom-color: rgba(143, 184, 255, 0.08);
+  color: #dfe8f7;
+}
+
+:root[data-theme="dark"] .coordinator-loans-table tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.018);
+}
+
+:root[data-theme="dark"] .coordinator-loans-table tbody tr:hover {
+  background: rgba(55, 112, 247, 0.08);
+}
+
+:root[data-theme="dark"] .coordinator-loans-id-cell strong,
+:root[data-theme="dark"] .coordinator-loans-location strong,
+:root[data-theme="dark"] .coordinator-loans-summary {
+  color: #eef4ff;
+}
+
+:root[data-theme="dark"] .coordinator-loans-id-cell span,
+:root[data-theme="dark"] .coordinator-loans-location span,
+:root[data-theme="dark"] .coordinator-loans-empty {
+  color: #9aafcc;
+}
+
+:root[data-theme="dark"] .coordinator-loans-icon-btn {
+  background: rgba(17, 27, 43, 0.92);
+  border-color: rgba(98, 221, 244, 0.28);
+  color: #7fdfff;
+}
+
+:root[data-theme="dark"] .coordinator-loans-icon-btn:hover {
+  background: rgba(34, 54, 86, 0.92);
+}
+
+:root[data-theme="dark"] .coordinator-loans-action-btn {
+  background: rgba(17, 27, 43, 0.92);
+  border-color: rgba(143, 184, 255, 0.16);
+  color: #d5e1f5;
+}
+
+:root[data-theme="dark"] .coordinator-loans-action-btn--reject {
+  background: rgba(66, 19, 31, 0.32);
+  border-color: rgba(255, 110, 131, 0.28);
+  color: #ff99aa;
+}
+
+:root[data-theme="dark"] .coordinator-loans-pagination__btn {
+  background: #121d30;
+  border-color: #2a3850;
+  color: #d9e5f8;
+}
+
+:root[data-theme="dark"] .coordinator-loans-pagination__btn:hover:not(:disabled) {
+  background: rgba(55, 112, 247, 0.14);
+}
+
+:root[data-theme="dark"] .loan-calendar-nav__pill strong,
+:root[data-theme="dark"] .loan-calendar-loan-card strong {
+  color: #f3f7ff;
+}
+
+:root[data-theme="dark"] .loan-calendar-grid--weekday div {
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom-color: rgba(143, 184, 255, 0.1);
+  color: #95abc8;
+}
+
+:root[data-theme="dark"] .loan-calendar-day {
+  background: rgba(16, 26, 41, 0.88);
+  border-right-color: rgba(143, 184, 255, 0.08);
+  border-bottom-color: rgba(143, 184, 255, 0.08);
+}
+
+:root[data-theme="dark"] .loan-calendar-day:hover {
+  background: rgba(37, 55, 86, 0.92);
+}
+
+:root[data-theme="dark"] .loan-calendar-day.is-faded {
+  background: rgba(11, 19, 31, 0.92);
+  color: #657898;
+}
+
+:root[data-theme="dark"] .loan-calendar-day.is-today {
+  background: linear-gradient(180deg, rgba(24, 40, 67, 0.96) 0%, rgba(18, 31, 52, 0.96) 100%);
+}
+
+:root[data-theme="dark"] .loan-calendar-day.is-selected {
+  background: linear-gradient(180deg, rgba(32, 52, 90, 0.98) 0%, rgba(22, 38, 66, 0.98) 100%);
+  box-shadow: inset 0 0 0 2px #5b86ff, 0 16px 30px rgba(46, 86, 255, 0.18);
+}
+
+:root[data-theme="dark"] .loan-calendar-day.is-selected.is-today {
+  background: linear-gradient(180deg, rgba(40, 64, 110, 0.98) 0%, rgba(27, 45, 80, 0.98) 100%);
+}
+
+:root[data-theme="dark"] .loan-calendar-day__top span {
+  color: #edf4ff;
+}
+
+:root[data-theme="dark"] .loan-calendar-day__top small {
+  background: rgba(91, 134, 255, 0.22);
+  color: #cfe0ff;
+}
+
+:root[data-theme="dark"] .loan-calendar-chip:not(.loan-calendar-chip--pending):not(.loan-calendar-chip--approved):not(.loan-calendar-chip--delivered):not(.loan-calendar-chip--completed):not(.loan-calendar-chip--danger):not(.loan-calendar-chip--more) {
+  background: rgba(255, 255, 255, 0.06);
+  color: #c7d4ea;
+}
+
+:root[data-theme="dark"] .loan-calendar-chip--more {
+  background: rgba(91, 134, 255, 0.12);
+  color: #a9c1ff;
+}
+
+:root[data-theme="dark"] .loan-calendar-chip--pending {
+  background: rgba(212, 134, 8, 0.22);
+  color: #ffd27f;
+}
+
+:root[data-theme="dark"] .loan-calendar-chip--approved {
+  background: rgba(11, 139, 176, 0.24);
+  color: #a6efff;
+}
+
+:root[data-theme="dark"] .loan-calendar-chip--delivered,
+:root[data-theme="dark"] .loan-calendar-chip--completed {
+  background: rgba(15, 122, 82, 0.22);
+  color: #96e6ba;
+}
+
+:root[data-theme="dark"] .loan-calendar-chip--danger {
+  background: rgba(194, 56, 74, 0.24);
+  color: #ff9db1;
+}
+
+:root[data-theme="dark"] .loan-calendar-drawer__list {
+  background: linear-gradient(180deg, #0d1726 0%, #09121d 100%);
+}
+
+:root[data-theme="dark"] .loan-calendar-loan-card {
+  background: linear-gradient(180deg, rgba(18, 29, 48, 0.96) 0%, rgba(13, 22, 37, 0.98) 100%);
+  border-color: rgba(143, 184, 255, 0.1);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.18);
+}
+
+:root[data-theme="dark"] .loan-calendar-loan-card p,
+:root[data-theme="dark"] .loan-calendar-loan-card__head small,
+:root[data-theme="dark"] .loan-calendar-loan-card__actions span,
+:root[data-theme="dark"] .loan-calendar-loan-card__meta {
+  color: #9ab0ce !important;
+}
+
+:root[data-theme="dark"] .loan-calendar-loan-card__actions {
+  border-top-color: rgba(143, 184, 255, 0.08);
+}
+
+:root[data-theme="dark"] .loan-calendar-loan-card__cta,
+:root[data-theme="dark"] .loan-calendar-loan-card__actions a {
+  color: #8bddff;
+}
+
+:root[data-theme="dark"] .inventory-items-page .field-hint,
+:root[data-theme="dark"] .inventory-items-page .empty-state,
+:root[data-theme="dark"] .inventory-items-page .text-muted,
+:root[data-theme="dark"] .stock-health-page .text-muted,
+:root[data-theme="dark"] .teacher-loan-detail-page .text-muted {
+  color: #9ab0ce;
+}
+
+:root[data-theme="dark"] .inventory-kpi {
+  background: linear-gradient(180deg, rgba(16, 26, 41, 0.97) 0%, rgba(10, 18, 30, 0.99) 100%);
+  border-color: rgba(143, 184, 255, 0.13);
+  box-shadow:
+    0 16px 34px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+:root[data-theme="dark"] .inventory-kpi__icon {
+  border: 1px solid rgba(143, 184, 255, 0.16);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+:root[data-theme="dark"] .inventory-kpi--total .inventory-kpi__icon {
+  background: rgba(83, 111, 203, 0.16);
+  color: #c1d2ff;
+}
+
+:root[data-theme="dark"] .inventory-kpi--loaned .inventory-kpi__icon {
+  background: rgba(11, 184, 217, 0.16);
+  color: #a6efff;
+}
+
+:root[data-theme="dark"] .inventory-kpi--warning .inventory-kpi__icon {
+  background: rgba(212, 134, 8, 0.16);
+  color: #ffd080;
+}
+
+:root[data-theme="dark"] .inventory-kpi--critical .inventory-kpi__icon {
+  background: rgba(194, 56, 74, 0.16);
+  color: #ff9caf;
+}
+
+:root[data-theme="dark"] .inventory-catalog-filters .catalog-filters__item label,
+:root[data-theme="dark"] .inventory-toolbar-create__label {
+  color: #97acc9;
+}
+
+:root[data-theme="dark"] .table-wrapper,
+:root[data-theme="dark"] .stock-health-table-wrap,
+:root[data-theme="dark"] .teacher-loan-detail-items__table-wrap {
+  background: rgba(8, 14, 24, 0.28);
+}
+
+:root[data-theme="dark"] .inventory-items-table,
+:root[data-theme="dark"] .stock-health-table,
+:root[data-theme="dark"] .teacher-loan-detail-items table {
+  background: transparent;
+}
+
+:root[data-theme="dark"] .implement-thumb {
+  border-color: rgba(143, 184, 255, 0.12);
+  background: #121d30;
+}
+
+:root[data-theme="dark"] .inventory-action-btn {
+  background: #121d30;
+  border-color: rgba(98, 221, 244, 0.22);
+  color: #8bddff;
+}
+
+:root[data-theme="dark"] .inventory-action-btn:hover {
+  background: rgba(55, 112, 247, 0.12);
+}
+
+:root[data-theme="dark"] .stock-health-header__actions .stock-health-link-btn,
+:root[data-theme="dark"] .teacher-loan-detail-items__header span,
+:root[data-theme="dark"] .stock-health-table-card > header span,
+:root[data-theme="dark"] .stock-health-summary-card > header span,
+:root[data-theme="dark"] .stock-health-activity-card > header span {
+  background: rgba(91, 134, 255, 0.14);
+  border: 1px solid rgba(111, 151, 255, 0.18);
+  color: #cfe0ff;
+}
+
+:root[data-theme="dark"] .stock-health-table-card > header,
+:root[data-theme="dark"] .stock-health-summary-card > header,
+:root[data-theme="dark"] .stock-health-activity-card > header {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+:root[data-theme="dark"] .stock-health-side footer,
+:root[data-theme="dark"] .stock-health-bar-group small {
+  color: #9ab0ce;
+}
+
+:root[data-theme="dark"] .stock-health-activity {
+  background: rgba(14, 24, 39, 0.9);
+}
+
+:root[data-theme="dark"] .teacher-loan-detail-backnav__btn,
+:root[data-theme="dark"] .teacher-loan-detail-copy-btn {
+  background: #121d30;
+  border-color: rgba(143, 184, 255, 0.14);
+}
+
+:root[data-theme="dark"] .teacher-loan-detail-action-btn {
+  box-shadow: 0 12px 24px rgba(20, 76, 191, 0.2);
+}
+
+:root[data-theme="dark"] .teacher-loan-detail-action-btn--danger {
+  background: rgba(85, 20, 33, 0.18);
+  border-color: rgba(255, 129, 150, 0.24);
+  color: #ff9cb0;
+  box-shadow: none;
+}
+
+:root[data-theme="dark"] .teacher-loan-detail-action-btn--danger:hover {
+  background: rgba(111, 31, 49, 0.24);
+}
+
+:root[data-theme="dark"] .teacher-loans-status--pending,
+:root[data-theme="dark"] .teacher-loan-item-status--partial,
+:root[data-theme="dark"] .teacher-loan-timeline-chip--pending {
+  background: rgba(212, 134, 8, 0.2);
+  color: #ffd27f;
+}
+
+:root[data-theme="dark"] .teacher-loans-status--approved,
+:root[data-theme="dark"] .teacher-loans-status--delivered,
+:root[data-theme="dark"] .teacher-loan-item-status--delivered,
+:root[data-theme="dark"] .teacher-loan-timeline-chip--approved,
+:root[data-theme="dark"] .teacher-loan-timeline-chip--delivered,
+:root[data-theme="dark"] .teacher-loan-timeline-chip--completed {
+  background: rgba(15, 122, 82, 0.2);
+  color: #92e3b7;
+}
+
+:root[data-theme="dark"] .teacher-loans-status--completed,
+:root[data-theme="dark"] .teacher-loan-item-status--pending,
+:root[data-theme="dark"] .teacher-loan-timeline-chip,
+:root[data-theme="dark"] .teacher-loan-timeline-chip--new {
+  background: rgba(255, 255, 255, 0.08);
+  color: #d2ddf0;
+}
+
+:root[data-theme="dark"] .teacher-loans-status--danger,
+:root[data-theme="dark"] .teacher-loan-timeline-chip--danger {
+  background: rgba(194, 56, 74, 0.22);
+  color: #ff9daf;
+}
+
+:root[data-theme="dark"] .teacher-loan-detail-items thead th {
+  background: rgba(255, 255, 255, 0.045);
+  border-bottom-color: rgba(143, 184, 255, 0.12);
+  color: #9fb2cf;
+}
+
+:root[data-theme="dark"] .implement-create-header p {
+  color: #9bb0ce;
+}
+
+:root[data-theme="dark"] .implement-create-panel,
+:root[data-theme="dark"] .implement-create-preview {
+  background: linear-gradient(180deg, rgba(17, 27, 43, 0.97) 0%, rgba(10, 18, 30, 0.99) 100%);
+  border-color: rgba(143, 184, 255, 0.12);
+  box-shadow:
+    0 16px 36px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+:root[data-theme="dark"] .implement-create-form__field label,
+:root[data-theme="dark"] .implement-create-preview h3 {
+  color: #97acc9;
+}
+
+:root[data-theme="dark"] .implement-create-form__field input,
+:root[data-theme="dark"] .implement-create-form__field select,
+:root[data-theme="dark"] .implement-create-form__field textarea,
+:root[data-theme="dark"] .implement-create-link-input {
+  background: #121d30;
+  border-color: #2a3850;
+  color: #edf4ff;
+}
+
+:root[data-theme="dark"] .implement-create-form__field input::placeholder,
+:root[data-theme="dark"] .implement-create-form__field textarea::placeholder,
+:root[data-theme="dark"] .implement-create-link-input input::placeholder {
+  color: #8297b5;
+}
+
+:root[data-theme="dark"] .implement-create-link-input svg {
+  color: #a8bbd7;
+}
+
+:root[data-theme="dark"] .implement-create-link-input:focus-within {
+  border-color: #3d8fff;
+  box-shadow: 0 0 0 3px rgba(61, 143, 255, 0.16);
+}
+
+:root[data-theme="dark"] .implement-create-form__actions {
+  border-top-color: rgba(143, 184, 255, 0.1);
+}
+
+:root[data-theme="dark"] .implement-create-preview__surface {
+  border-color: rgba(143, 184, 255, 0.18);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+:root[data-theme="dark"] .implement-create-preview__placeholder {
+  color: #93a8c6;
+}
+
+:root[data-theme="dark"] .implement-create-note {
+  border-color: rgba(72, 121, 217, 0.22);
+  background: rgba(30, 66, 130, 0.16);
+}
+
+:root[data-theme="dark"] .implement-create-note header {
+  color: #8ecbff;
+}
+
+:root[data-theme="dark"] .implement-create-note p {
+  color: #abc8f7;
+}
+
+:root[data-theme="dark"] .topbar-search-suggest {
+  border-color: rgba(143, 184, 255, 0.12);
+  background: #121d30;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.24);
+}
+
+:root[data-theme="dark"] .topbar-search-suggest__hint {
+  color: #9db2d0;
+}
+
+:root[data-theme="dark"] .topbar-search-item {
+  background: #121d30;
+  border-bottom-color: rgba(143, 184, 255, 0.08);
+}
+
+:root[data-theme="dark"] .topbar-search-item:hover,
+:root[data-theme="dark"] .topbar-search-item.is-hover {
+  background: rgba(55, 112, 247, 0.12);
+}
+
+:root[data-theme="dark"] .topbar-search-item__thumb {
+  border-color: rgba(143, 184, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+:root[data-theme="dark"] .topbar-search-item__name {
+  color: #edf4ff;
+}
+
+:root[data-theme="dark"] .skeleton {
+  background: linear-gradient(180deg, rgba(26, 39, 64, 0.96) 0%, rgba(18, 29, 48, 0.98) 100%);
+}
+
+:root[data-theme="dark"] .skeleton::after {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+}
+
+:root[data-theme="dark"] .stock-actions-grid label,
+:root[data-theme="dark"] .inventory-motion-card label {
+  color: #9cb1cf;
+}
+
+:root[data-theme="dark"] .stock-actions-grid input,
+:root[data-theme="dark"] .stock-actions-grid select,
+:root[data-theme="dark"] .stock-actions-grid textarea {
+  background: #121d30;
+  border-color: #2a3850;
+  color: #edf4ff;
+}
+
+:root[data-theme="dark"] .inventory-motion-card input,
+:root[data-theme="dark"] .inventory-motion-card select,
+:root[data-theme="dark"] .inventory-motion-card textarea {
+  background: #121d30;
+  border-color: #2a3850;
+  color: #edf4ff;
+}
+
+:root[data-theme="dark"] .stock-actions-grid input::placeholder,
+:root[data-theme="dark"] .stock-actions-grid textarea::placeholder {
+  color: #8297b5;
+}
+
+:root[data-theme="dark"] .inventory-motion-card input::placeholder,
+:root[data-theme="dark"] .inventory-motion-card textarea::placeholder {
+  color: #8297b5;
+}
+
+:root[data-theme="dark"] .side-info-card {
+  background: linear-gradient(180deg, rgba(17, 27, 43, 0.97) 0%, rgba(10, 18, 30, 0.99) 100%);
+}
+
+:root[data-theme="dark"] .side-card-icon {
+  background: rgba(61, 143, 255, 0.16);
+  color: #8fd9ff;
+}
+
+:root[data-theme="dark"] .implement-detail-layout--inspired .meta-rows p {
+  background: rgba(255, 255, 255, 0.045);
+  border-color: rgba(143, 184, 255, 0.14);
+}
+
+:root[data-theme="dark"] .implement-detail-layout--inspired .meta-rows p strong {
+  color: #edf4ff;
+}
+
+:root[data-theme="dark"] .implement-detail-layout--inspired .meta-rows p span {
+  color: #cdd8eb;
+}
+
+:root[data-theme="dark"] .implement-detail-layout--inspired .meta-rows p svg {
+  color: #67cfff;
+}
+
+:root[data-theme="dark"] .stock-kpi {
+  background: linear-gradient(180deg, rgba(17, 27, 43, 0.97) 0%, rgba(10, 18, 30, 0.99) 100%);
+  border-color: rgba(143, 184, 255, 0.14);
+  box-shadow:
+    0 14px 30px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+:root[data-theme="dark"] .stock-kpi span,
+:root[data-theme="dark"] .stock-kpi small {
+  color: #97acc9;
+}
+
+:root[data-theme="dark"] .stock-kpi strong {
+  color: #f4f8ff;
+}
+
+:root[data-theme="dark"] .stock-kpi__icon--available {
+  background: rgba(15, 122, 82, 0.16);
+  color: #8ee1b4;
+}
+
+:root[data-theme="dark"] .stock-kpi__icon--loaned {
+  background: rgba(61, 143, 255, 0.16);
+  color: #9fd7ff;
+}
+
+:root[data-theme="dark"] .stock-kpi__icon--warn {
+  background: rgba(212, 134, 8, 0.16);
+  color: #ffd07f;
+}
+
+:root[data-theme="dark"] .stock-kpi__icon--danger {
+  background: rgba(194, 56, 74, 0.16);
+  color: #ff9daf;
+}
+
+:root[data-theme="dark"] .stock-kpi__icon--min {
+  background: rgba(122, 73, 208, 0.16);
+  color: #caa7ff;
+}
+
+:root[data-theme="dark"] .movements-compact-table th {
+  background: rgba(255, 255, 255, 0.045);
+  color: #9fb2cf;
+}
+
+:root[data-theme="dark"] .movements-compact-table td {
+  color: #dce6f5;
+}
+
+:root[data-theme="dark"] .side-link {
+  color: #8bddff;
+}
+
+:root[data-theme="dark"] .barcode-preview-surface {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(143, 184, 255, 0.14);
+}
+
+:root[data-theme="dark"] .loan-create-hero h1,
+:root[data-theme="dark"] .teacher-loans-header h1,
+:root[data-theme="dark"] .loan-delivery-header h1 {
+  color: #f4f8ff;
+}
+
+:root[data-theme="dark"] .loan-create-hero p,
+:root[data-theme="dark"] .teacher-loans-header p,
+:root[data-theme="dark"] .loan-delivery-header p,
+:root[data-theme="dark"] .loan-create-card__header p,
+:root[data-theme="dark"] .loan-delivery-main__meta,
+:root[data-theme="dark"] .loan-delivery-item-card__copy p,
+:root[data-theme="dark"] .loan-delivery-side__card p {
+  color: #9bb0ce;
+}
+
+:root[data-theme="dark"] .loan-create-hero__eyebrow,
+:root[data-theme="dark"] .loan-delivery-header__eyebrow {
+  color: #7f97bc;
+}
+
+:root[data-theme="dark"] .loan-create-card,
+:root[data-theme="dark"] .loan-create-summary,
+:root[data-theme="dark"] .teacher-loans-kpi,
+:root[data-theme="dark"] .teacher-loans-card,
+:root[data-theme="dark"] .loan-delivery-main,
+:root[data-theme="dark"] .loan-delivery-side__card {
+  background: linear-gradient(180deg, rgba(17, 27, 43, 0.97) 0%, rgba(10, 18, 30, 0.99) 100%);
+  border-color: rgba(143, 184, 255, 0.14);
+  box-shadow:
+    0 18px 36px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+:root[data-theme="dark"] .loan-create-card__header h2,
+:root[data-theme="dark"] .loan-create-summary__header,
+:root[data-theme="dark"] .teacher-loans-kpi strong,
+:root[data-theme="dark"] .teacher-loans-card strong,
+:root[data-theme="dark"] .loan-delivery-main h2,
+:root[data-theme="dark"] .loan-delivery-side__card h2,
+:root[data-theme="dark"] .loan-delivery-side__card h3 {
+  color: #f4f8ff;
+}
+
+:root[data-theme="dark"] .loan-create-field label,
+:root[data-theme="dark"] .teacher-loans-toolbar__field,
+:root[data-theme="dark"] .teacher-loans-toolbar__search,
+:root[data-theme="dark"] .loan-delivery-individuals__legend,
+:root[data-theme="dark"] .loan-delivery-item-card__copy small,
+:root[data-theme="dark"] .loan-delivery-side__card span,
+:root[data-theme="dark"] .loan-create-summary__table thead th,
+:root[data-theme="dark"] .teacher-loans-table thead th {
+  color: #9fb2cf;
+}
+
+:root[data-theme="dark"] .loan-create-field input,
+:root[data-theme="dark"] .loan-create-field select,
+:root[data-theme="dark"] .loan-create-search-box,
+:root[data-theme="dark"] .loan-create-search-box input,
+:root[data-theme="dark"] .teacher-loans-toolbar input,
+:root[data-theme="dark"] .teacher-loans-toolbar select,
+:root[data-theme="dark"] .teacher-loans-delete-modal input,
+:root[data-theme="dark"] .loan-delivery-stepper,
+:root[data-theme="dark"] .loan-delivery-stepper input,
+:root[data-theme="dark"] .loan-delivery-side__card input {
+  background: #121d30;
+  border-color: #2a3850;
+  color: #edf4ff;
+}
+
+:root[data-theme="dark"] .loan-create-field input::placeholder,
+:root[data-theme="dark"] .loan-create-search-box input::placeholder,
+:root[data-theme="dark"] .teacher-loans-toolbar input::placeholder,
+:root[data-theme="dark"] .teacher-loans-delete-modal input::placeholder,
+:root[data-theme="dark"] .loan-delivery-stepper input::placeholder {
+  color: #8297b5;
+}
+
+:root[data-theme="dark"] .loan-create-search-box svg,
+:root[data-theme="dark"] .teacher-loans-toolbar__search svg,
+:root[data-theme="dark"] .loan-delivery-back-btn svg {
+  color: #a8bbd7;
+}
+
+:root[data-theme="dark"] .loan-create-chip,
+:root[data-theme="dark"] .loan-create-summary__count {
+  background: rgba(56, 109, 226, 0.16);
+  border-color: rgba(143, 184, 255, 0.14);
+  color: #b5d5ff;
+}
+
+:root[data-theme="dark"] .loan-create-chip--muted {
+  background: rgba(255, 255, 255, 0.06);
+  color: #cdd8eb;
+}
+
+:root[data-theme="dark"] .loan-stock-label {
+  color: #79deab;
+}
+
+:root[data-theme="dark"] .loan-stock-label--low {
+  color: #ffc76f;
+}
+
+:root[data-theme="dark"] .loan-create-result-item {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(143, 184, 255, 0.12);
+}
+
+:root[data-theme="dark"] .loan-create-result-item__thumb {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(143, 184, 255, 0.12);
+}
+
+:root[data-theme="dark"] .loan-create-result-item__meta strong,
+:root[data-theme="dark"] .loan-create-summary__header h3,
+:root[data-theme="dark"] .loan-summary-item-cell__copy p,
+:root[data-theme="dark"] .loan-create-summary__table tbody td,
+:root[data-theme="dark"] .loan-create-summary__footer strong,
+:root[data-theme="dark"] .teacher-loans-id-cell strong,
+:root[data-theme="dark"] .teacher-loans-summary-cell,
+:root[data-theme="dark"] .loan-delivery-item-card__copy strong,
+:root[data-theme="dark"] .loan-delivery-side__card strong {
+  color: #edf4ff;
+}
+
+:root[data-theme="dark"] .loan-create-result-item__meta span,
+:root[data-theme="dark"] .loan-create-result-item__meta p,
+:root[data-theme="dark"] .loan-create-summary__empty,
+:root[data-theme="dark"] .loan-create-summary__footer p,
+:root[data-theme="dark"] .loan-results-footer p,
+:root[data-theme="dark"] .teacher-loans-id-cell span,
+:root[data-theme="dark"] .teacher-loans-footer p,
+:root[data-theme="dark"] .loan-delivery-item-card__copy span,
+:root[data-theme="dark"] .loan-delivery-individuals__option-copy {
+  color: #9bb0ce;
+}
+
+:root[data-theme="dark"] .loan-create-summary__table-wrap,
+:root[data-theme="dark"] .teacher-loans-table-wrap {
+  border-color: rgba(143, 184, 255, 0.12);
+}
+
+:root[data-theme="dark"] .loan-create-summary__table thead th,
+:root[data-theme="dark"] .teacher-loans-table thead th {
+  background: rgba(255, 255, 255, 0.045);
+  border-bottom-color: rgba(143, 184, 255, 0.12);
+}
+
+:root[data-theme="dark"] .loan-create-summary__table tbody tr,
+:root[data-theme="dark"] .teacher-loans-table tbody tr {
+  border-bottom-color: rgba(143, 184, 255, 0.1);
+}
+
+:root[data-theme="dark"] .loan-stepper {
+  background: #121d30;
+  border-color: #2a3850;
+}
+
+:root[data-theme="dark"] .loan-stepper button {
+  background: rgba(255, 255, 255, 0.05);
+  color: #cfe0fa;
+}
+
+:root[data-theme="dark"] .loan-stepper button:hover:not(:disabled) {
+  background: rgba(56, 109, 226, 0.18);
+}
+
+:root[data-theme="dark"] .loan-stepper__value {
+  border-left-color: rgba(143, 184, 255, 0.12);
+  border-right-color: rgba(143, 184, 255, 0.12);
+  color: #f4f8ff;
+}
+
+:root[data-theme="dark"] .loan-add-item-btn {
+  border-color: #2b57b6;
+  background: #163c86;
+  color: #f4f8ff;
+}
+
+:root[data-theme="dark"] .loan-add-item-btn:hover:not(:disabled) {
+  background: #1d4ca9;
+  border-color: #1d4ca9;
+}
+
+:root[data-theme="dark"] .loan-add-item-btn:disabled {
+  background: rgba(33, 60, 117, 0.55);
+  border-color: rgba(60, 94, 162, 0.45);
+  color: #b3c3e1;
+  opacity: 1;
+}
+
+:root[data-theme="dark"] .loan-remove-item-btn {
+  background: rgba(85, 20, 33, 0.18);
+  border-color: rgba(255, 129, 150, 0.24);
+  color: #ffb1bf;
+}
+
+:root[data-theme="dark"] .loan-remove-item-btn:hover:not(:disabled) {
+  background: rgba(118, 29, 46, 0.24);
+}
+
+:root[data-theme="dark"] .loan-pagination__btn {
+  background: #121d30;
+  border-color: #2a3850;
+  color: #dce6f5;
+}
+
+:root[data-theme="dark"] .loan-pagination__btn:hover:not(:disabled) {
+  background: rgba(56, 109, 226, 0.12);
+}
+
+:root[data-theme="dark"] .loan-pagination__btn--active {
+  background: #1c4aa6;
+  border-color: #1c4aa6;
+  color: #f4f8ff;
+}
+
+:root[data-theme="dark"] .loan-pagination__btn:disabled {
+  color: #7083a3;
+}
+
+:root[data-theme="dark"] .teacher-loans-table tbody td {
+  color: #dce6f5;
+}
+
+:root[data-theme="dark"] .teacher-loans-table tbody tr:hover {
+  background: rgba(56, 109, 226, 0.07);
+}
+
+:root[data-theme="dark"] .teacher-loans-icon-btn,
+:root[data-theme="dark"] .teacher-loans-new-btn,
+:root[data-theme="dark"] .loan-delivery-back-btn {
+  border-color: rgba(143, 184, 255, 0.14);
+}
+
+:root[data-theme="dark"] .teacher-loans-icon-btn {
+  background: #121d30;
+  color: #9fd7ff;
+}
+
+:root[data-theme="dark"] .teacher-loans-icon-btn--danger {
+  background: rgba(85, 20, 33, 0.18);
+  color: #ff9daf;
+  border-color: rgba(255, 129, 150, 0.2);
+}
+
+:root[data-theme="dark"] .teacher-loans-new-btn,
+:root[data-theme="dark"] .loan-primary-btn {
+  box-shadow: 0 12px 24px rgba(20, 76, 191, 0.24);
+}
+
+:root[data-theme="dark"] .teacher-loans-pagination__btn,
+:root[data-theme="dark"] .loan-secondary-btn,
+:root[data-theme="dark"] .loan-delivery-back-btn {
+  background: #121d30;
+  color: #dce6f5;
+}
+
+:root[data-theme="dark"] .teacher-loans-pagination__btn:not(.teacher-loans-pagination__btn--active):disabled {
+  color: #6d82a1;
+}
+
+:root[data-theme="dark"] .teacher-loans-delete-modal {
+  background: linear-gradient(180deg, rgba(17, 27, 43, 0.99) 0%, rgba(10, 18, 30, 1) 100%);
+  border-color: rgba(143, 184, 255, 0.14);
+  color: #edf4ff;
+}
+
+:root[data-theme="dark"] .teacher-loans-delete-modal p {
+  color: #9bb0ce;
+}
+
+:root[data-theme="dark"] .teacher-loans-card,
+:root[data-theme="dark"] .teacher-loans-toolbar,
+:root[data-theme="dark"] .teacher-loans-footer,
+:root[data-theme="dark"] .teacher-loans-table-wrap,
+:root[data-theme="dark"] .teacher-loans-table,
+:root[data-theme="dark"] .teacher-loans-table tbody,
+:root[data-theme="dark"] .teacher-loans-table tbody tr,
+:root[data-theme="dark"] .teacher-loans-table tbody tr:nth-child(even),
+:root[data-theme="dark"] .teacher-loans-table tbody tr:nth-child(odd) {
+  background: #121d30;
+}
+
+:root[data-theme="dark"] .teacher-loans-toolbar,
+:root[data-theme="dark"] .teacher-loans-footer {
+  border-color: rgba(143, 184, 255, 0.12);
+}
+
+:root[data-theme="dark"] .teacher-loans-toolbar__search {
+  background: #121d30;
+  border-color: #2a3850;
+}
+
+:root[data-theme="dark"] .teacher-loans-table__empty {
+  color: #cdd8eb;
+}
+
+:root[data-theme="dark"] .teacher-loans-table tbody tr:hover,
+:root[data-theme="dark"] .teacher-loans-table tbody tr:nth-child(even):hover {
+  background: rgba(56, 109, 226, 0.08);
+}
+
+:root[data-theme="dark"] .loan-create-note--warning {
+  background: rgba(120, 82, 8, 0.18);
+  border-color: rgba(255, 205, 96, 0.28);
+  color: #ffdd94;
+}
+
+:root[data-theme="dark"] .loan-create-summary__footer {
+  border-top-color: rgba(143, 184, 255, 0.12);
+}
+
+:root[data-theme="dark"] .loan-delivery-main__meta {
+  background: rgba(255, 255, 255, 0.045);
+  border-bottom-color: rgba(143, 184, 255, 0.12);
+}
+
+:root[data-theme="dark"] .loan-delivery-main__meta p {
+  color: #b7c9e1;
+}
+
+:root[data-theme="dark"] .loan-delivery-window {
+  border-color: rgba(143, 184, 255, 0.14);
+}
+
+:root[data-theme="dark"] .loan-delivery-window.is-open {
+  background: rgba(15, 122, 82, 0.18);
+  color: #98ebc0;
+}
+
+:root[data-theme="dark"] .loan-delivery-window.is-closed {
+  background: rgba(194, 56, 74, 0.18);
+  color: #ff9daf;
+}
+
+:root[data-theme="dark"] .loan-delivery-item-card {
+  background: rgba(255, 255, 255, 0.035);
+  border-color: rgba(143, 184, 255, 0.12);
+}
+
+:root[data-theme="dark"] .loan-delivery-check-btn,
+:root[data-theme="dark"] .loan-delivery-stepper button {
+  background: #121d30;
+  border-color: rgba(143, 184, 255, 0.14);
+  color: #dce6f5;
+}
+
+:root[data-theme="dark"] .loan-delivery-check-btn.is-selected,
+:root[data-theme="dark"] .loan-delivery-stepper button:hover {
+  background: rgba(56, 109, 226, 0.18);
+  color: #edf4ff;
+}
+
+:root[data-theme="dark"] .loan-delivery-individuals {
+  border-top-color: rgba(143, 184, 255, 0.1);
+}
+
+:root[data-theme="dark"] .loan-delivery-individuals__option {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(143, 184, 255, 0.12);
+}
+
+:root[data-theme="dark"] .loan-delivery-individuals__option--available {
+  color: #92e3b7;
+}
+
+:root[data-theme="dark"] .loan-delivery-individuals__option--reserved {
+  background: rgba(212, 134, 8, 0.16);
+  border-color: rgba(255, 205, 96, 0.24);
+  color: #ffd27f;
+}
+
+:root[data-theme="dark"] .loan-delivery-individuals__option--unavailable {
+  background: rgba(85, 20, 33, 0.18);
+  border-color: rgba(255, 129, 150, 0.2);
+  color: #ff9daf;
+}
+
+:root[data-theme="dark"] .loan-delivery-individuals__option.is-selected {
+  box-shadow: inset 0 0 0 1px rgba(61, 143, 255, 0.45);
+}
+
+:root[data-theme="dark"] .loan-delivery-side__actions {
+  border-top-color: rgba(143, 184, 255, 0.12);
+}
+
+@media (max-width: 980px) {
+  :root[data-theme="dark"] .loan-calendar-summary__metric {
+    border-color: rgba(143, 184, 255, 0.14);
+    background: linear-gradient(180deg, rgba(24, 36, 58, 0.98) 0%, rgba(15, 24, 39, 0.99) 100%);
+  }
+
+  :root[data-theme="dark"] .loan-calendar-summary__total {
+    border-top-color: rgba(143, 184, 255, 0.12);
   }
 }

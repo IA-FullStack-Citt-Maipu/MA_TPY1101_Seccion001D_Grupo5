@@ -179,13 +179,24 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
     }
 
     @Override
-    public boolean existsPendingLoanConflict(UUID requesterUuid, List<UUID> implementUuids) {
-        return existsPendingLoanConflict(requesterUuid, null, implementUuids);
+    public boolean existsPendingLoanConflict(
+            UUID requesterUuid,
+            OffsetDateTime scheduledAt,
+            OffsetDateTime expectedReturnAt,
+            List<UUID> implementUuids
+    ) {
+        return existsPendingLoanConflict(requesterUuid, null, scheduledAt, expectedReturnAt, implementUuids);
     }
 
     @Override
-    public boolean existsPendingLoanConflict(UUID requesterUuid, UUID excludeLoanUuid, List<UUID> implementUuids) {
-        if (requesterUuid == null || implementUuids == null || implementUuids.isEmpty()) {
+    public boolean existsPendingLoanConflict(
+            UUID requesterUuid,
+            UUID excludeLoanUuid,
+            OffsetDateTime scheduledAt,
+            OffsetDateTime expectedReturnAt,
+            List<UUID> implementUuids
+    ) {
+        if (requesterUuid == null || scheduledAt == null || implementUuids == null || implementUuids.isEmpty()) {
             return false;
         }
 
@@ -202,9 +213,13 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
             return false;
         }
 
+        OffsetDateTime effectiveExpectedReturnAt = resolveExpectedReturnAt(scheduledAt, expectedReturnAt);
+
         Condition condition = LOAN.REQUESTER_ID.eq(requesterId)
                 .and(LOAN.STATUS.eq(LoanStatusEnum.pending))
-                .and(IMPLEMENT.UUID.in(filteredImplementUuids));
+                .and(IMPLEMENT.UUID.in(filteredImplementUuids))
+                .and(LOAN.SCHEDULED_AT.lt(effectiveExpectedReturnAt))
+                .and(LOAN.EXPECTED_RETURN_AT.gt(scheduledAt));
         if (excludeLoanUuid != null) {
             condition = condition.and(LOAN.UUID.ne(excludeLoanUuid));
         }

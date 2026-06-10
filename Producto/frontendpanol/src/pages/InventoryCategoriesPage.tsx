@@ -82,7 +82,7 @@ export function InventoryCategoriesPage({ embedded = false }: { embedded?: boole
         category: modal.category,
         message:
           result.message ??
-          "La categoría tiene implementos activos asociados. ¿Deseas forzar la desactivación?",
+          "La categoria tiene implementos activos asociados. ¿Deseas forzar la desactivacion?",
       });
     }
   }
@@ -113,18 +113,18 @@ export function InventoryCategoriesPage({ embedded = false }: { embedded?: boole
     <>
       <section className="content-header">
         <div>
-          <h1>Gestión de Inventario</h1>
-          <p>Administra categorías de implementos para organizar el catálogo por tipo de material o uso.</p>
+          <h1>Gestion de inventario</h1>
+          <p>Administra categorias de implementos para organizar el catalogo por tipo de material o uso.</p>
         </div>
 
-        <div className="content-header__actions">
+        <div className="content-header__actions content-header__actions--mobile-visible">
           <button type="button" className="button button--ghost" onClick={() => void load()}>
             <RefreshCcw size={16} />
             Refrescar
           </button>
           <button type="button" className="button" onClick={() => setModal({ type: "create" })}>
             <Plus size={16} />
-            Nueva categoría
+            Nueva categoria
           </button>
         </div>
       </section>
@@ -139,8 +139,8 @@ export function InventoryCategoriesPage({ embedded = false }: { embedded?: boole
       <section className="panel">
         <div className="panel__head">
           <div>
-            <h2>Categorías</h2>
-            <p>Vista de gestión para crear, editar, desactivar y eliminar categorías.</p>
+            <h2>Categorias</h2>
+            <p>Vista de gestion para crear, editar, desactivar y eliminar categorias.</p>
           </div>
         </div>
 
@@ -169,8 +169,8 @@ export function InventoryCategoriesPage({ embedded = false }: { embedded?: boole
 
       <ConfirmModal
         isOpen={modal.type === "activate"}
-        title="Activar categorÃ­a"
-        message="La categorÃ­a volverÃ¡ a estar disponible para nuevas asignaciones de implementos."
+        title="Activar categoria"
+        message="La categoria volvera a estar disponible para nuevas asignaciones de implementos."
         confirmLabel="Activar"
         loading={saving}
         onClose={closeModal}
@@ -179,8 +179,8 @@ export function InventoryCategoriesPage({ embedded = false }: { embedded?: boole
 
       <ConfirmModal
         isOpen={modal.type === "deactivate"}
-        title="Desactivar categoría"
-        message="La categoría quedará inactiva para nuevas asignaciones de implementos."
+        title="Desactivar categoria"
+        message="La categoria quedara inactiva para nuevas asignaciones de implementos."
         confirmLabel="Desactivar"
         tone="warn"
         loading={saving}
@@ -190,12 +190,12 @@ export function InventoryCategoriesPage({ embedded = false }: { embedded?: boole
 
       <ConfirmModal
         isOpen={modal.type === "forceDeactivate"}
-        title="Categoría con implementos activos"
+        title="Categoria con implementos activos"
         message={
           modal.message ??
-          "Existen implementos activos vinculados. Si confirmas, la categoría quedará inactiva igualmente."
+          "Existen implementos activos vinculados. Si confirmas, la categoria quedara inactiva igualmente."
         }
-        confirmLabel="Forzar desactivación"
+        confirmLabel="Forzar desactivacion"
         tone="warn"
         loading={saving}
         onClose={closeModal}
@@ -204,8 +204,8 @@ export function InventoryCategoriesPage({ embedded = false }: { embedded?: boole
 
       <ConfirmModal
         isOpen={modal.type === "delete"}
-        title="Eliminar categoría"
-        message="Esta acción elimina la categoría de forma permanente."
+        title="Eliminar categoria"
+        message="Esta accion elimina la categoria de forma permanente."
         confirmLabel="Eliminar"
         tone="danger"
         loading={saving}
@@ -221,4 +221,3 @@ export function InventoryCategoriesPage({ embedded = false }: { embedded?: boole
 
   return <InventoryLayout activeSection="categories">{content}</InventoryLayout>;
 }
-
