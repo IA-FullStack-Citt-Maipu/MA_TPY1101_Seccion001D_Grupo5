@@ -1,6 +1,8 @@
 package com.panol_project.backendpanol.modules.loan.api;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -12,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.panol_project.backendpanol.modules.loan.application.GestionPrestamoUseCase;
 import com.panol_project.backendpanol.modules.loan.application.SolicitarPrestamoUseCase;
+import com.panol_project.backendpanol.modules.loan.api.dto.CreateLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.domain.LoanAggregate;
 import com.panol_project.backendpanol.modules.loan.domain.LoanCreateCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanDetailItem;
@@ -24,8 +27,10 @@ import com.panol_project.backendpanol.shared.error.security.RestAccessDeniedHand
 import com.panol_project.backendpanol.shared.error.security.RestAuthenticationEntryPoint;
 import com.panol_project.backendpanol.shared.security.CurrentUserUuidResolver;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import java.util.TimeZone;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -113,7 +118,12 @@ class LoanV2ControllerTest {
                 .thenReturn(Optional.of(new LoanImplementAvailability(implementUuid, true)));
         when(loanRepositoryPort.findRequestedItemAvailabilities(List.of(implementUuid), scheduledAt, expectedReturnAt, null))
                 .thenReturn(List.of(new LoanRequestedItemAvailability(implementUuid, "Fonendoscopio", true, 5)));
-        when(loanRepositoryPort.existsPendingLoanConflict(authenticatedUserUuid, List.of(implementUuid))).thenReturn(false);
+        when(loanRepositoryPort.existsPendingLoanConflict(
+                eq(authenticatedUserUuid),
+                eq(scheduledAt),
+                eq(expectedReturnAt),
+                eq(List.of(implementUuid))
+        )).thenReturn(false);
         when(loanRepositoryPort.createPendingLoan(any(LoanCreateCommand.class))).thenReturn(createdLoan);
         when(loanRepositoryPort.findVisibleLoanSummaryByUuid(loanUuid)).thenReturn(Optional.of(response));
 
@@ -212,22 +222,58 @@ class LoanV2ControllerTest {
     }
 
     @Test
+    void objectMapperDebePreservarOffsetEnFechasDePrestamoAunqueElContextoSeaUtc() throws Exception {
+        ObjectMapper utcMapper = objectMapper.copy();
+        utcMapper.setTimeZone(TimeZone.getTimeZone("UTC"));
+
+        CreateLoanV2Request request = utcMapper.readValue(
+                """
+                        {
+                          "room_uuid": "%s",
+                          "scheduled_at": "2026-06-24T19:00:00-04:00",
+                          "expected_return_at": "2026-06-24T19:53:00-04:00",
+                          "items": [
+                            {
+                              "implement_uuid": "%s",
+                              "requested_quantity": 1
+                            }
+                          ]
+                        }
+                        """.formatted(UUID.randomUUID(), UUID.randomUUID()),
+                CreateLoanV2Request.class
+        );
+
+        org.junit.jupiter.api.Assertions.assertEquals(ZoneOffset.ofHours(-4), request.scheduledAt().getOffset());
+        org.junit.jupiter.api.Assertions.assertEquals(19, request.scheduledAt().getHour());
+        org.junit.jupiter.api.Assertions.assertEquals(ZoneOffset.ofHours(-4), request.expectedReturnAt().getOffset());
+        org.junit.jupiter.api.Assertions.assertEquals(19, request.expectedReturnAt().getHour());
+        org.junit.jupiter.api.Assertions.assertEquals(53, request.expectedReturnAt().getMinute());
+    }
+
+    @Test
     void solicitarPrestamoDebeRetornar409CuandoExisteSolicitudPendienteSolapada() throws Exception {
         UUID authenticatedUserUuid = UUID.randomUUID();
         UUID roomUuid = UUID.randomUUID();
         UUID implementUuid = UUID.randomUUID();
+        OffsetDateTime scheduledAt = OffsetDateTime.parse("2026-06-12T10:30:00-04:00");
 
         when(loanRepositoryPort.existsActiveRequesterByUuid(authenticatedUserUuid)).thenReturn(true);
         when(loanRepositoryPort.existsActiveRoomByUuid(roomUuid)).thenReturn(true);
         when(loanRepositoryPort.findImplementAvailabilityByUuid(implementUuid))
                 .thenReturn(Optional.of(new LoanImplementAvailability(implementUuid, true)));
         when(loanRepositoryPort.findRequestedItemAvailabilities(
-                List.of(implementUuid),
-                OffsetDateTime.parse("2026-06-12T10:30:00-04:00"),
-                null,
-                null
+                eq(List.of(implementUuid)),
+                any(OffsetDateTime.class),
+                isNull(),
+                isNull()
         )).thenReturn(List.of(new LoanRequestedItemAvailability(implementUuid, "Implemento prueba", true, 5)));
-        when(loanRepositoryPort.existsPendingLoanConflict(authenticatedUserUuid, List.of(implementUuid))).thenReturn(true);
+        when(loanRepositoryPort.existsPendingLoanConflict(
+                eq(authenticatedUserUuid),
+                any(OffsetDateTime.class),
+                isNull(),
+                eq(List.of(implementUuid))
+        ))
+                .thenReturn(true);
 
         mockMvc.perform(post("/api/v2/loans")
                         .with(authentication(jwtAuthentication(authenticatedUserUuid, "DOCENTE")))

@@ -143,7 +143,7 @@ function buildDashboardData(
 
 export function DirectorDashboardPage({ embedded = false }: { embedded?: boolean }) {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
-  const [errorMessage, setErrorMessage] = useState<string>("No fue posible cargar el dashboard ejecutivo.");
+  const [errorMessage, setErrorMessage] = useState<string>("No fue posible cargar el panel ejecutivo.");
   const [data, setData] = useState<DashboardData | null>(null);
 
   async function load() {
@@ -157,7 +157,7 @@ export function DirectorDashboardPage({ embedded = false }: { embedded?: boolean
       setData(buildDashboardData(implementsRows, movementRows, usersRows));
       setStatus("ready");
     } catch (error) {
-      setErrorMessage(getErrorMessage(error, "No fue posible cargar el dashboard ejecutivo."));
+      setErrorMessage(getErrorMessage(error, "No fue posible cargar el panel ejecutivo."));
       setStatus("error");
     }
   }
@@ -170,7 +170,7 @@ export function DirectorDashboardPage({ embedded = false }: { embedded?: boolean
     <>
       <section className="content-header director-header">
         <div>
-          <h1>Dashboard - Director de Carrera</h1>
+          <h1>Panel - Director de carrera</h1>
           <p>Resumen general del pañol y estado operativo.</p>
         </div>
       </section>

@@ -117,8 +117,8 @@ jobs:
           TF_VAR_db_supabase_password_secret_value: ${{ secrets.DB_SUPABASE_PASSWORD_DEV }}
           TF_VAR_app_auth_jwt_secret_value: ${{ secrets.APP_AUTH_JWT_SECRET_DEV }}
           TF_VAR_runtime_sa_user_members: '["serviceAccount:${{ secrets.GCP_SERVICE_ACCOUNT_DEV }}"]'
-          TF_VAR_backend_domain: ""
-          TF_VAR_frontend_domain: ""
+          TF_VAR_backend_domain: "api.dev.panol.cl"
+          TF_VAR_frontend_domain: "dev.panol.cl"
         run: terraform plan -out=tfplan
 
       - name: Terraform apply (dev)

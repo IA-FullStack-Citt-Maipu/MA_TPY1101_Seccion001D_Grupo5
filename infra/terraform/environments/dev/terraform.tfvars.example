@@ -20,15 +20,16 @@ app_auth_jwt_expiration_seconds   = 3600
 jwt_issuer_uri                    = "https://replace-me.supabase.co/auth/v1"
 vite_supabase_publishable_key     = "sb_publishable_replace_me"
 
-backend_domain           = ""
-frontend_domain          = ""
+backend_domain           = "api.dev.panol.cl"
+frontend_domain          = "dev.panol.cl"
 
-# Cost-optimized dev profile (scale to zero)
-backend_min_instances    = 0
+# Dev profile with warm backend instance to avoid login cold starts
+backend_min_instances    = 1
 backend_max_instances    = 1
 backend_timeout_seconds  = 120
 backend_concurrency      = 40
 
+# Frontend can still scale to zero without impacting auth latency
 frontend_min_instances   = 0
 frontend_max_instances   = 1
 frontend_timeout_seconds = 60

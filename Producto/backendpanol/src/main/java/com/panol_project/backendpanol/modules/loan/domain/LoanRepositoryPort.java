@@ -22,9 +22,20 @@ public interface LoanRepositoryPort {
             UUID excludeLoanUuid
     );
 
-    boolean existsPendingLoanConflict(UUID requesterUuid, List<UUID> implementUuids);
+    boolean existsPendingLoanConflict(
+            UUID requesterUuid,
+            OffsetDateTime scheduledAt,
+            OffsetDateTime expectedReturnAt,
+            List<UUID> implementUuids
+    );
 
-    boolean existsPendingLoanConflict(UUID requesterUuid, UUID excludeLoanUuid, List<UUID> implementUuids);
+    boolean existsPendingLoanConflict(
+            UUID requesterUuid,
+            UUID excludeLoanUuid,
+            OffsetDateTime scheduledAt,
+            OffsetDateTime expectedReturnAt,
+            List<UUID> implementUuids
+    );
 
     LoanAggregate createPendingLoan(LoanCreateCommand command);
 

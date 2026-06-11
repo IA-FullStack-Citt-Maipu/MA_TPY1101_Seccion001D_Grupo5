@@ -1,6 +1,7 @@
 # Infraestructura y Deploy (Indice)
 
-Este directorio documenta de forma integral la infraestructura Terraform y el despliegue automatico hacia GCP.
+Este directorio documenta de forma integral la infraestructura Terraform y el
+despliegue automatico hacia GCP.
 
 ## Documentos
 
@@ -39,5 +40,8 @@ Este directorio documenta de forma integral la infraestructura Terraform y el de
 ## Estado de ambientes
 
 - `dev`: apply automatico para IaC en cambios de infra sobre rama `dev`.
+- `dev`: actualmente usa dominios `https://dev.panol.cl` y `https://api.dev.panol.cl`.
+- `dev`: backend con `min instances = 1` para reducir cold start de login.
 - `prod`: apply manual con aprobacion.
-- Dominio custom: desactivado por defecto (`backend_domain` y `frontend_domain` vacios), usando URLs `*.run.app`.
+- Si `backend_domain` y `frontend_domain` quedan vacios, Cloud Run opera con
+  URLs nativas `*.run.app`.

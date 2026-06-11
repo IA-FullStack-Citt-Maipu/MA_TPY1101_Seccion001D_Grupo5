@@ -1,12 +1,12 @@
 import { ImageOff, Info, Link2, Save } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import type { FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { InventoryLayout } from "../components/layout/InventoryLayout";
 import { fetchActiveCategories } from "../services/activeCategoryService";
 import { getApiErrorPayload, getErrorMessage } from "../services/apiClient";
-import { createImplement } from "../services/implementService";
+import { createImplement, fetchImplementById, updateImplement } from "../services/implementService";
 import { fetchLocations } from "../services/locationService";
 import type { ActiveCategoryOption } from "../types/categoryActive";
+import type { ImplementDetail } from "../types/implement";
 import type { LocationOption } from "../types/location";
 
 type ItemType = "consumable" | "reusable" | "individual";
@@ -75,7 +75,17 @@ function mapApiErrorToFields(message: string): FieldErrors {
   return errors;
 }
 
-export function InventoryImplementCreatePage({ embedded = false }: { embedded?: boolean }) {
+export function InventoryImplementCreatePage({
+  embedded = false,
+  implementUuid,
+}: {
+  embedded?: boolean;
+  implementUuid?: string;
+}) {
+  const isEditMode = Boolean(implementUuid);
+
+  const [implement, setImplement] = useState<ImplementDetail | null>(null);
+  const [loadingImplement, setLoadingImplement] = useState(false);
   const [name, setName] = useState("");
   const [categoryUuidRaw, setCategoryUuidRaw] = useState("");
   const [itemTypeRaw, setItemTypeRaw] = useState<ItemType | "">("");
@@ -100,10 +110,43 @@ export function InventoryImplementCreatePage({ embedded = false }: { embedded?: 
   const normalizedImgUrl = imgUrl.trim();
   const isHttpImageUrl = /^https?:\/\//i.test(normalizedImgUrl);
 
+  const pageTitle = isEditMode ? "Edicion de implemento" : "Agregar Nuevo Implemento";
+  const pageDescription = isEditMode
+    ? "Actualiza los detalles tecnicos, operativos y visuales del implemento."
+    : "Completa los detalles tecnicos del nuevo equipo o insumo medico.";
+  const cancelHash = isEditMode && implementUuid ? `#/inventory/implementos/${implementUuid}` : "#/inventory/implementos";
+
+  function resetForm() {
+    setImplement(null);
+    setName("");
+    setCategoryUuidRaw("");
+    setItemTypeRaw("");
+    setLocationUuidRaw("");
+    setDescription("");
+    setBarcode("");
+    setImgUrl("");
+    setMinStockRaw("");
+    setObservations("");
+    setFieldErrors({});
+    setPreviewFailed(false);
+  }
+
+  function applyImplementToForm(detail: ImplementDetail) {
+    setImplement(detail);
+    setName(detail.name ?? "");
+    setCategoryUuidRaw(detail.category_uuid ?? "");
+    setItemTypeRaw(detail.item_type ?? "");
+    setLocationUuidRaw(detail.location_uuid ?? "");
+    setDescription(detail.description ?? "");
+    setBarcode(detail.barcode ?? "");
+    setImgUrl(detail.img_url ?? "");
+    setMinStockRaw(detail.min_stock == null ? "" : String(detail.min_stock));
+    setObservations(detail.observations ?? "");
+  }
+
   useEffect(() => {
     let cancelled = false;
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoadingCategories(true);
     setCategoriesError(null);
     fetchActiveCategories()
@@ -144,18 +187,69 @@ export function InventoryImplementCreatePage({ embedded = false }: { embedded?: 
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    let cancelled = false;
+
+    setFieldErrors({});
+
+    if (!implementUuid) {
+      setLoadingImplement(false);
+      resetForm();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setLoadingImplement(true);
+    setImplement(null);
+    fetchImplementById(implementUuid)
+      .then((detail) => {
+        if (cancelled) return;
+        applyImplementToForm(detail);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setFieldErrors({
+          form: getErrorMessage(error, "No se pudo cargar el implemento para editar."),
+        });
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoadingImplement(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [implementUuid]);
+
+  useEffect(() => {
     setPreviewFailed(false);
   }, [normalizedImgUrl]);
 
   const isCategoryDisabled = useMemo(
-    () => loadingCategories || Boolean(categoriesError) || categories.length === 0,
-    [categories.length, categoriesError, loadingCategories],
+    () => loadingCategories || (categories.length === 0 && !implement?.category),
+    [categories.length, implement?.category, loadingCategories],
   );
   const isLocationDisabled = useMemo(
-    () => loadingLocations || Boolean(locationsError) || locations.length === 0,
-    [loadingLocations, locations.length, locationsError],
+    () => loadingLocations || (locations.length === 0 && !locationUuidRaw.trim()),
+    [loadingLocations, locationUuidRaw, locations.length],
   );
+
+  const currentCategoryInactive = Boolean(implement?.category && !implement.category.active);
+  const inactiveCategoryOption =
+    currentCategoryInactive && implement?.category
+      ? {
+          uuid: implement.category.uuid,
+          name: implement.category.name,
+        }
+      : null;
+
+  const isUsingInactiveCategory = useMemo(() => {
+    if (!inactiveCategoryOption) {
+      return false;
+    }
+    return categoryUuidRaw.trim() === inactiveCategoryOption.uuid;
+  }, [categoryUuidRaw, inactiveCategoryOption]);
 
   function validateClientSide(): FieldErrors {
     const errors: FieldErrors = {};
@@ -172,6 +266,9 @@ export function InventoryImplementCreatePage({ embedded = false }: { embedded?: 
     }
     if (!categoryUuid) {
       errors.categoryUuid = "La categoria es obligatoria.";
+    }
+    if (currentCategoryInactive && isUsingInactiveCategory) {
+      errors.categoryUuid = "Debes seleccionar una categoria activa para guardar.";
     }
     if (itemTypeRaw.trim().length === 0) {
       errors.itemType = "El tipo de implemento es obligatorio.";
@@ -213,6 +310,22 @@ export function InventoryImplementCreatePage({ embedded = false }: { embedded?: 
 
     setSaving(true);
     try {
+      if (isEditMode && implementUuid) {
+        const updated = await updateImplement(implementUuid, {
+          name: name.trim(),
+          categoryUuid: categoryUuidRaw.trim(),
+          item_type: itemTypeRaw as ItemType,
+          locationUuid: locationUuidRaw.trim(),
+          description: description.trim() ? description.trim() : null,
+          barcode: barcode.trim() ? barcode.trim() : null,
+          img_url: normalizedImgUrl ? normalizedImgUrl : null,
+          min_stock: Number(minStockRaw),
+          observations: observations.trim() ? observations.trim() : null,
+        });
+        window.location.hash = `#/inventory/implementos/${updated.uuid}`;
+        return;
+      }
+
       const created = await createImplement({
         name: name.trim(),
         categoryUuid: categoryUuidRaw.trim(),
@@ -234,7 +347,7 @@ export function InventoryImplementCreatePage({ embedded = false }: { embedded?: 
       window.location.hash = `#/inventory/implementos/${created.uuid}`;
     } catch (error) {
       const payload = getApiErrorPayload(error);
-      const message = payload?.message ?? getErrorMessage(error, "No se pudo crear el implemento.");
+      const message = payload?.message ?? getErrorMessage(error, isEditMode ? "No se pudo actualizar el implemento." : "No se pudo crear el implemento.");
       setFieldErrors(mapApiErrorToFields(message));
     } finally {
       setSaving(false);
@@ -259,12 +372,20 @@ export function InventoryImplementCreatePage({ embedded = false }: { embedded?: 
       <section className="content-header implement-create-header">
         <div>
           <p className="inventory-items-header__eyebrow">Inventario</p>
-          <h1>Agregar Nuevo Implemento</h1>
-          <p>Completa los detalles tecnicos del nuevo equipo o insumo medico.</p>
+          <h1>{pageTitle}</h1>
+          <p>{pageDescription}</p>
         </div>
       </section>
 
       {fieldErrors.form ? <div className="error-banner">{fieldErrors.form}</div> : null}
+      {isEditMode && loadingImplement ? (
+        <section className="panel">
+          <p className="text-muted">Cargando informacion del implemento...</p>
+        </section>
+      ) : null}
+      {isEditMode && implement && !loadingImplement ? (
+        <p className="field-hint">Editando implemento {implement.name}</p>
+      ) : null}
 
       <section className="implement-create-layout">
         <article className="panel implement-create-panel">
@@ -282,6 +403,7 @@ export function InventoryImplementCreatePage({ embedded = false }: { embedded?: 
                   placeholder="Ej. Monitor multiparametro"
                   maxLength={150}
                   required
+                  disabled={saving || loadingImplement}
                 />
                 {fieldErrors.name ? <p className="field-error">{fieldErrors.name}</p> : null}
               </div>
@@ -295,8 +417,13 @@ export function InventoryImplementCreatePage({ embedded = false }: { embedded?: 
                     setCategoryUuidRaw(event.target.value);
                     setFieldErrors((current) => ({ ...current, categoryUuid: undefined }));
                   }}
-                  disabled={isCategoryDisabled || saving}
+                  disabled={isCategoryDisabled || saving || loadingImplement}
                 >
+                  {inactiveCategoryOption ? (
+                    <option value={inactiveCategoryOption.uuid} disabled>
+                      {inactiveCategoryOption.name} [Inactiva]
+                    </option>
+                  ) : null}
                   <option value="">Seleccionar...</option>
                   {categories.map((category) => (
                     <option key={category.uuid} value={category.uuid}>
@@ -317,7 +444,7 @@ export function InventoryImplementCreatePage({ embedded = false }: { embedded?: 
                     setLocationUuidRaw(event.target.value);
                     setFieldErrors((current) => ({ ...current, locationUuid: undefined }));
                   }}
-                  disabled={isLocationDisabled || saving}
+                  disabled={isLocationDisabled || saving || loadingImplement}
                 >
                   <option value="">Seleccionar...</option>
                   {locations.map((location) => (
@@ -339,7 +466,7 @@ export function InventoryImplementCreatePage({ embedded = false }: { embedded?: 
                     setItemTypeRaw(event.target.value as ItemType | "");
                     setFieldErrors((current) => ({ ...current, itemType: undefined }));
                   }}
-                  disabled={saving}
+                  disabled={saving || loadingImplement}
                 >
                   <option value="">Seleccionar...</option>
                   {ITEM_TYPE_OPTIONS.map((option) => (
@@ -365,7 +492,7 @@ export function InventoryImplementCreatePage({ embedded = false }: { embedded?: 
                   }}
                   placeholder="Ej. 5"
                   required
-                  disabled={saving}
+                  disabled={saving || loadingImplement}
                 />
                 {fieldErrors.minStock ? <p className="field-error">{fieldErrors.minStock}</p> : null}
               </div>
@@ -381,7 +508,7 @@ export function InventoryImplementCreatePage({ embedded = false }: { embedded?: 
                   }}
                   placeholder="Opcional"
                   maxLength={100}
-                  disabled={saving}
+                  disabled={saving || loadingImplement}
                 />
                 {fieldErrors.barcode ? <p className="field-error">{fieldErrors.barcode}</p> : null}
               </div>
@@ -399,7 +526,7 @@ export function InventoryImplementCreatePage({ embedded = false }: { embedded?: 
                     }}
                     placeholder="https://..."
                     maxLength={2000}
-                    disabled={saving}
+                    disabled={saving || loadingImplement}
                   />
                 </div>
                 {fieldErrors.imgUrl ? <p className="field-error">{fieldErrors.imgUrl}</p> : null}
@@ -417,7 +544,7 @@ export function InventoryImplementCreatePage({ embedded = false }: { embedded?: 
                   placeholder="Breve descripcion tecnica..."
                   rows={3}
                   maxLength={2000}
-                  disabled={saving}
+                  disabled={saving || loadingImplement}
                 />
                 {fieldErrors.description ? <p className="field-error">{fieldErrors.description}</p> : null}
               </div>
@@ -434,14 +561,16 @@ export function InventoryImplementCreatePage({ embedded = false }: { embedded?: 
                   placeholder="Notas adicionales..."
                   rows={3}
                   maxLength={500}
-                  disabled={saving}
+                  disabled={saving || loadingImplement}
                 />
                 {fieldErrors.observations ? <p className="field-error">{fieldErrors.observations}</p> : null}
               </div>
             </div>
 
             <p className="field-hint">
-              Los implementos nuevos quedan con stock inicial 0 hasta registrar su primer ingreso en movimientos.
+              {isEditMode
+                ? "Revisa categoria, ubicacion, stock minimo y datos descriptivos antes de guardar."
+                : "Los implementos nuevos quedan con stock inicial 0 hasta registrar su primer ingreso en movimientos."}
             </p>
 
             <div className="implement-create-form__actions">
@@ -449,15 +578,28 @@ export function InventoryImplementCreatePage({ embedded = false }: { embedded?: 
                 type="button"
                 className="button button--ghost button--lg"
                 onClick={() => {
-                  window.location.hash = "#/inventory/implementos";
+                  window.location.hash = cancelHash;
                 }}
                 disabled={saving}
               >
                 Cancelar
               </button>
-              <button type="submit" className="button button--primary button--lg" disabled={saving}>
+              <button
+                type="submit"
+                className="button button--primary button--lg"
+                disabled={
+                  saving ||
+                  loadingImplement ||
+                  name.trim().length === 0 ||
+                  categoryUuidRaw.trim().length === 0 ||
+                  itemTypeRaw.trim().length === 0 ||
+                  locationUuidRaw.trim().length === 0 ||
+                  minStockRaw.trim().length === 0 ||
+                  (currentCategoryInactive && isUsingInactiveCategory)
+                }
+              >
                 <Save size={16} />
-                {saving ? "Guardando..." : "Guardar Implemento"}
+                {saving ? "Guardando..." : isEditMode ? "Guardar cambios" : "Guardar Implemento"}
               </button>
             </div>
           </form>
@@ -488,7 +630,9 @@ export function InventoryImplementCreatePage({ embedded = false }: { embedded?: 
               <strong>Recordatorio</strong>
             </header>
             <p>
-              Todos los implementos nuevos se registran con estado sin stock hasta que se ingrese la primera entrada de almacen.
+              {isEditMode
+                ? "Si cambias categoria o ubicacion, valida que sigan alineadas con la operacion real del panol."
+                : "Todos los implementos nuevos se registran con estado sin stock hasta que se ingrese la primera entrada de almacen."}
             </p>
           </article>
         </aside>

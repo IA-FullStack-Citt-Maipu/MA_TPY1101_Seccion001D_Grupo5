@@ -251,7 +251,7 @@ export function InventoryHealthDashboardPage({ embedded = false }: { embedded?: 
     <div className="stock-health-page">
       <section className="stock-health-header">
         <div>
-          <h1>Dashboard de Salud de Inventario</h1>
+          <h1>Panel de salud de inventario</h1>
           <p>Monitoreo de bajo stock, estado operacional y actividad reciente.</p>
         </div>
         <div className="stock-health-header__actions">
