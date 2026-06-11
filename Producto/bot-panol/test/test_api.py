@@ -69,6 +69,22 @@ def test_chat_without_authorization_returns_401() -> None:
     }
 
 
+def test_chat_preflight_returns_cors_headers() -> None:
+    client = TestClient(app)
+    response = client.options(
+        "/api/v1/chat",
+        headers={
+            "Origin": "http://localhost:18081",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "authorization,content-type",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:18081"
+    assert "POST" in response.headers["access-control-allow-methods"]
+
+
 def test_chat_with_invalid_token_returns_401(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     _configure_jwt_settings(monkeypatch)
     client = TestClient(app)
