@@ -26,6 +26,13 @@ Frontend para gestion operativa de inventario consumiendo API v2 del backend.
 
 ## Flujos vigentes relevantes
 
+### Asistente IA
+
+- Widget disponible para roles `COORDINADOR` y `DIRECTOR`.
+- El frontend consume `POST /api/v1/chat` del microservicio `bot-panol`.
+- La base del bot se configura con `VITE_BOT_API_BASE_URL`.
+- Si `VITE_BOT_API_BASE_URL` no existe, el cliente usa `VITE_API_BASE_URL` como fallback.
+
 ### CRUD de categorias
 
 1. `GET /api/v2/categories/gestion`
@@ -71,6 +78,10 @@ El frontend consume payload uniforme:
 - `VITE_API_BASE_URL`
   - local: `http://localhost:18080`
   - dev desplegado: `https://api.dev.panol.cl`
+- `VITE_BOT_API_BASE_URL`
+  - opcional
+  - usar cuando `bot-panol` no comparte la misma base publica que `VITE_API_BASE_URL`
+  - si se omite, el frontend usa `VITE_API_BASE_URL`
 
 ## Despliegue local recomendado
 
@@ -79,4 +90,14 @@ Desde `Producto/`:
 docker compose up --build
 ```
 
-Este compose levanta frontend + backend.
+Este compose levanta `frontend`, `backend` y `bot-panol`.
+
+### Requisitos para chat IA operativo
+
+- `VITE_BOT_API_BASE_URL` debe apuntar a la base publica del bot.
+- En local, el compose lo publica por defecto en `http://localhost:18082`.
+- Las credenciales runtime del bot se leen desde `Producto/bot-panol/.env` y pueden
+  complementarse desde `Producto/.env`.
+- `bot-panol` requiere `GOOGLE_API_KEY` valida para responder consultas reales.
+- Si `GOOGLE_API_KEY` falta o es invalida, el widget puede abrir y enviar mensajes,
+  pero el backend del bot respondera `503` y el chat no se considera operativo.
