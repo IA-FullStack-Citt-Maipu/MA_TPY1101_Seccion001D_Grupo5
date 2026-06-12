@@ -18,6 +18,10 @@ variable "backend_image" {
   type = string
 }
 
+variable "bot_image" {
+  type = string
+}
+
 variable "frontend_image" {
   type = string
 }
@@ -76,6 +80,10 @@ variable "backend_domain" {
   type = string
 }
 
+variable "bot_domain" {
+  type = string
+}
+
 variable "backend_min_instances" {
   type    = number
   default = 0
@@ -94,6 +102,26 @@ variable "backend_timeout_seconds" {
 variable "backend_concurrency" {
   type    = number
   default = 80
+}
+
+variable "bot_min_instances" {
+  type    = number
+  default = 0
+}
+
+variable "bot_max_instances" {
+  type    = number
+  default = 2
+}
+
+variable "bot_timeout_seconds" {
+  type    = number
+  default = 120
+}
+
+variable "bot_concurrency" {
+  type    = number
+  default = 10
 }
 
 variable "frontend_min_instances" {
@@ -133,10 +161,42 @@ variable "app_auth_jwt_secret_value" {
   sensitive = true
 }
 
+variable "app_security_ai_agent_secret_value" {
+  type      = string
+  default   = ""
+  sensitive = true
+}
+
+variable "google_api_key_secret_value" {
+  type      = string
+  default   = ""
+  sensitive = true
+}
+
 variable "jwt_issuer_uri" {
   type = string
 }
 
 variable "vite_supabase_publishable_key" {
   type = string
+}
+
+variable "gemini_model" {
+  type    = string
+  default = "gemini-2.5-flash-lite"
+}
+
+variable "bot_llm_timeout_seconds" {
+  type    = number
+  default = 20
+}
+
+variable "bot_backend_timeout_seconds" {
+  type    = number
+  default = 10
+}
+
+variable "bot_backend_retry_count" {
+  type    = number
+  default = 0
 }
