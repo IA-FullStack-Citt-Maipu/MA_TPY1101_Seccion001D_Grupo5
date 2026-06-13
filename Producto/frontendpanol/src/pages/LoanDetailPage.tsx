@@ -10,6 +10,7 @@ import {
   Edit3,
   Info,
   MapPin,
+  Minus,
   Package2,
   Plus,
   ShieldAlert,
@@ -17,8 +18,10 @@ import {
   TimerReset,
   Trash2,
   User,
+  XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { LoanApprovalModal, type LoanApprovalSubmission } from "../components/loans/LoanApprovalModal";
 import { getErrorMessage } from "../services/apiClient";
 import {
   cancelLoan,
@@ -26,16 +29,29 @@ import {
   fetchLoanByUuid,
   fetchLoanStateDates,
   fetchLoanStatusTimeline,
+  reviewLoan,
+  returnLoan,
 } from "../services/loanService";
+import { fetchImplementStock } from "../services/stockService";
 import {
   clearLastCreatedLoan,
   loadLastCreatedLoan,
 } from "../services/loanSessionService";
 import type { LoanStateDates, LoanStatusTimelineEntry, LoanSummary } from "../types/loan";
+import type { StockDetail } from "../types/stock";
 import { getUserRoleFromToken } from "../utils/auth";
 import { canStartDelivery } from "../utils/loanSchedule";
 
 const DELETE_CONFIRM_TEXT = "eliminar";
+
+interface ReturnItemState {
+  implementUuid: string;
+  implementName: string;
+  deliveredQuantity: number;
+  returnedQuantity: number;
+  itemType: NonNullable<StockDetail["item_type"]> | "unknown";
+  stockError: string | null;
+}
 
 function parseDate(value: string): Date | null {
   const date = new Date(value);
@@ -102,25 +118,39 @@ function statusClassName(status: string): string {
   return "teacher-loans-status teacher-loans-status--completed";
 }
 
-function itemStatusLabel(item: LoanSummary["items"][number]): string {
-  if (item.delivered_quantity >= item.requested_quantity && item.requested_quantity > 0) {
+function itemStatusLabel(item: LoanSummary["items"][number], loanStatus: LoanSummary["status"]): string {
+  const plannedQuantity = item.reserved_quantity > 0 || loanStatus !== "pending"
+    ? item.reserved_quantity
+    : item.requested_quantity;
+
+  if (item.delivered_quantity >= plannedQuantity && plannedQuantity > 0) {
     return "Entregado";
   }
   if (item.delivered_quantity > 0) {
     return "Parcial";
   }
   if (item.reserved_quantity > 0) {
-    return "Reservado";
+    return item.reserved_quantity < item.requested_quantity ? "Reservado parcial" : "Reservado";
+  }
+  if (loanStatus !== "pending" && item.requested_quantity > 0) {
+    return "Sin reserva";
   }
   return "Por procesar";
 }
 
-function itemStatusClassName(item: LoanSummary["items"][number]): string {
-  if (item.delivered_quantity >= item.requested_quantity && item.requested_quantity > 0) {
+function itemStatusClassName(item: LoanSummary["items"][number], loanStatus: LoanSummary["status"]): string {
+  const plannedQuantity = item.reserved_quantity > 0 || loanStatus !== "pending"
+    ? item.reserved_quantity
+    : item.requested_quantity;
+
+  if (item.delivered_quantity >= plannedQuantity && plannedQuantity > 0) {
     return "teacher-loan-item-status teacher-loan-item-status--delivered";
   }
   if (item.delivered_quantity > 0 || item.reserved_quantity > 0) {
     return "teacher-loan-item-status teacher-loan-item-status--partial";
+  }
+  if (loanStatus !== "pending" && item.requested_quantity > 0) {
+    return "teacher-loan-item-status teacher-loan-item-status--danger";
   }
   return "teacher-loan-item-status teacher-loan-item-status--pending";
 }
@@ -188,6 +218,14 @@ export function LoanDetailPage({
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmationInput, setDeleteConfirmationInput] = useState("");
+  const [deleteNotes, setDeleteNotes] = useState("");
+  const [reviewDecision, setReviewDecision] = useState<"APPROVE" | "REJECT" | null>(null);
+  const [reviewNotes, setReviewNotes] = useState("");
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [completionNotes, setCompletionNotes] = useState("");
+  const [returnItems, setReturnItems] = useState<ReturnItemState[]>([]);
+  const [loadingReturnItems, setLoadingReturnItems] = useState(false);
+  const [returnVariationConfirm, setReturnVariationConfirm] = useState(false);
 
   useEffect(() => {
     const cached = loadLastCreatedLoan(loanUuid);
@@ -270,6 +308,20 @@ export function LoanDetailPage({
   );
 
   const canConfirmDeletion = deleteConfirmationInput.trim().toLowerCase() === DELETE_CONFIRM_TEXT;
+  const canSubmitRejectionReview = reviewDecision === "REJECT" && reviewNotes.trim().length >= 4;
+  const returnableFungibleItems = useMemo(
+    () =>
+      returnItems.filter(
+        (item) =>
+          item.deliveredQuantity > 0 &&
+          (item.itemType === "consumable" || item.itemType === "reusable"),
+      ),
+    [returnItems],
+  );
+  const hasReturnVariation = useMemo(
+    () => returnableFungibleItems.some((item) => item.returnedQuantity !== item.deliveredQuantity),
+    [returnableFungibleItems],
+  );
 
   function goBackToList() {
     window.location.hash = "#/inventory/prestamos";
@@ -283,6 +335,16 @@ export function LoanDetailPage({
     window.location.hash = `#/inventory/prestamos/${loanUuid}/entrega`;
   }
 
+  function openReviewModal(decision: "APPROVE" | "REJECT") {
+    setReviewDecision(decision);
+    setReviewNotes("");
+  }
+
+  function closeReviewModal() {
+    setReviewDecision(null);
+    setReviewNotes("");
+  }
+
   async function refreshTraceability(loanId: string) {
     const [resolvedStateDates, resolvedTimeline] = await Promise.all([
       fetchLoanStateDates(loanId),
@@ -292,17 +354,156 @@ export function LoanDetailPage({
     setTimeline(resolvedTimeline);
   }
 
-  async function handleCompleteLoan() {
-    if (!loan || (loan.status !== "delivered" && loan.status !== "overdue")) {
+  async function loadReturnItems(currentLoan: LoanSummary) {
+    setLoadingReturnItems(true);
+    try {
+      const rows: ReturnItemState[] = await Promise.all(
+        currentLoan.items.map(async (item) => {
+          if (item.delivered_quantity <= 0) {
+            return {
+              implementUuid: item.implement_uuid,
+              implementName: item.implement_name,
+              deliveredQuantity: item.delivered_quantity,
+              returnedQuantity: 0,
+              itemType: "unknown" as const,
+              stockError: null,
+            };
+          }
+
+          try {
+            const stock = await fetchImplementStock(item.implement_uuid);
+            return {
+              implementUuid: item.implement_uuid,
+              implementName: item.implement_name,
+              deliveredQuantity: item.delivered_quantity,
+              returnedQuantity: item.delivered_quantity,
+              itemType: (stock.item_type ?? "unknown") as ReturnItemState["itemType"],
+              stockError: null,
+            };
+          } catch (requestError) {
+            return {
+              implementUuid: item.implement_uuid,
+              implementName: item.implement_name,
+              deliveredQuantity: item.delivered_quantity,
+              returnedQuantity: item.delivered_quantity,
+              itemType: "unknown" as const,
+              stockError: getErrorMessage(requestError, "No se pudo consultar el tipo de implemento."),
+            };
+          }
+        }),
+      );
+      setReturnItems(rows);
+    } finally {
+      setLoadingReturnItems(false);
+    }
+  }
+
+  async function submitApprovalReview(payload: LoanApprovalSubmission) {
+    if (!loan || reviewDecision !== "APPROVE") {
       return;
     }
+
     setError(null);
     setProcessingLoan(true);
     try {
-      const updated = await completeLoan(loan.uuid);
+      const updated = await reviewLoan(loan.uuid, {
+        decision: "APPROVE",
+        notes: payload.notes,
+        items: payload.items,
+      });
       setLoan(updated);
       onLoanChanged?.(updated);
       await refreshTraceability(updated.uuid);
+      closeReviewModal();
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, "No se pudo aprobar la solicitud."));
+    } finally {
+      setProcessingLoan(false);
+    }
+  }
+
+  async function submitRejectReview() {
+    if (!loan || reviewDecision !== "REJECT" || !canSubmitRejectionReview) {
+      return;
+    }
+
+    setError(null);
+    setProcessingLoan(true);
+    try {
+      const updated = await reviewLoan(loan.uuid, {
+        decision: "REJECT",
+        notes: reviewNotes.trim(),
+      });
+      setLoan(updated);
+      onLoanChanged?.(updated);
+      await refreshTraceability(updated.uuid);
+      closeReviewModal();
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, "No se pudo rechazar la solicitud."));
+    } finally {
+      setProcessingLoan(false);
+    }
+  }
+
+  function openCompleteModal() {
+    if (!loan || (loan.status !== "delivered" && loan.status !== "overdue")) {
+      return;
+    }
+    setCompletionNotes("");
+    setReturnVariationConfirm(false);
+    setShowCompleteModal(true);
+    void loadReturnItems(loan);
+  }
+
+  function closeCompleteModal() {
+    setShowCompleteModal(false);
+    setCompletionNotes("");
+    setReturnItems([]);
+    setReturnVariationConfirm(false);
+  }
+
+  function adjustReturnQuantity(implementUuid: string, delta: number) {
+    setReturnVariationConfirm(false);
+    setReturnItems((previous) =>
+      previous.map((item) => {
+        if (item.implementUuid !== implementUuid) {
+          return item;
+        }
+        const next = Math.max(0, Math.min(item.deliveredQuantity, item.returnedQuantity + delta));
+        return { ...item, returnedQuantity: next };
+      }),
+    );
+  }
+
+  async function handleCompleteLoan(confirmedVariation = false) {
+    if (!loan || (loan.status !== "delivered" && loan.status !== "overdue")) {
+      return;
+    }
+    if (loadingReturnItems) {
+      return;
+    }
+    if (hasReturnVariation && !confirmedVariation) {
+      setReturnVariationConfirm(true);
+      return;
+    }
+
+    setError(null);
+    setProcessingLoan(true);
+    try {
+      const notes = completionNotes.trim() || null;
+      const updated = hasReturnVariation
+        ? await returnLoan(loan.uuid, {
+            notes,
+            consumable_returns: returnableFungibleItems.map((item) => ({
+              implement_uuid: item.implementUuid,
+              quantity: item.returnedQuantity,
+            })),
+          })
+        : await completeLoan(loan.uuid, { notes });
+      setLoan(updated);
+      onLoanChanged?.(updated);
+      await refreshTraceability(updated.uuid);
+      closeCompleteModal();
     } catch (requestError) {
       setError(getErrorMessage(requestError, "No se pudo completar el prestamo."));
     } finally {
@@ -327,11 +528,13 @@ export function LoanDetailPage({
 
   function openDeleteModal() {
     setDeleteConfirmationInput("");
+    setDeleteNotes("");
     setShowDeleteModal(true);
   }
 
   function closeDeleteModal() {
     setDeleteConfirmationInput("");
+    setDeleteNotes("");
     setShowDeleteModal(false);
   }
 
@@ -345,7 +548,7 @@ export function LoanDetailPage({
     setError(null);
     setProcessingLoan(true);
     try {
-      const cancelled = await cancelLoan(loan.uuid, { notes: "Cancelado por docente desde detalle" });
+      const cancelled = await cancelLoan(loan.uuid, { notes: deleteNotes.trim() || null });
       setLoan(cancelled);
       onLoanChanged?.(cancelled);
       await refreshTraceability(cancelled.uuid);
@@ -464,6 +667,28 @@ export function LoanDetailPage({
               </article>
 
               <article className="teacher-loan-detail-card teacher-loan-detail-card--actions">
+                {isCoordinator && loan.status === "pending" ? (
+                  <>
+                    <button
+                      type="button"
+                      className="teacher-loan-detail-action-btn teacher-loan-detail-action-btn--complete"
+                      onClick={() => openReviewModal("APPROVE")}
+                      disabled={processingLoan}
+                    >
+                      <CheckCircle2 size={16} />
+                      Aprobar solicitud
+                    </button>
+                    <button
+                      type="button"
+                      className="teacher-loan-detail-action-btn teacher-loan-detail-action-btn--danger"
+                      onClick={() => openReviewModal("REJECT")}
+                      disabled={processingLoan}
+                    >
+                      <XCircle size={16} />
+                      Rechazar solicitud
+                    </button>
+                  </>
+                ) : null}
                 {canModifyLoan ? (
                   <button type="button" className="teacher-loan-detail-action-btn" onClick={goToLoanEdit}>
                     <Edit3 size={16} />
@@ -486,7 +711,7 @@ export function LoanDetailPage({
                   <button
                     type="button"
                     className="teacher-loan-detail-action-btn teacher-loan-detail-action-btn--complete"
-                    onClick={() => void handleCompleteLoan()}
+                    onClick={openCompleteModal}
                     disabled={processingLoan}
                   >
                     <CheckCircle2 size={16} />
@@ -550,7 +775,7 @@ export function LoanDetailPage({
                           <td>{item.reserved_quantity}</td>
                           <td>{item.delivered_quantity}</td>
                           <td>
-                            <span className={itemStatusClassName(item)}>{itemStatusLabel(item)}</span>
+                            <span className={itemStatusClassName(item, loan.status)}>{itemStatusLabel(item, loan.status)}</span>
                           </td>
                         </tr>
                       ))
@@ -657,6 +882,15 @@ export function LoanDetailPage({
               onChange={(event) => setDeleteConfirmationInput(event.target.value)}
               placeholder={DELETE_CONFIRM_TEXT}
             />
+            <label htmlFor="loan-delete-detail-notes">Notas (opcional)</label>
+            <textarea
+              id="loan-delete-detail-notes"
+              rows={3}
+              value={deleteNotes}
+              maxLength={1000}
+              onChange={(event) => setDeleteNotes(event.target.value)}
+              placeholder="Motivo u observacion de cancelacion..."
+            />
             <div className="modal-actions">
               <button type="button" className="button button--ghost" onClick={closeDeleteModal}>
                 Cancelar
@@ -669,6 +903,138 @@ export function LoanDetailPage({
               >
                 <Trash2 size={16} />
                 {processingLoan ? "Cancelando..." : "Cancelar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {reviewDecision === "APPROVE" && loan ? (
+        <LoanApprovalModal
+          loan={loan}
+          processing={processingLoan}
+          onClose={closeReviewModal}
+          onSubmit={submitApprovalReview}
+        />
+      ) : null}
+
+      {reviewDecision === "REJECT" ? (
+        <div className="modal-overlay">
+          <div className="modal teacher-loans-review-modal">
+            <h3>Rechazar solicitud</h3>
+            <p>Escribe una nota para dejar registrado el motivo del rechazo.</p>
+            <label htmlFor="loan-review-notes">Notas</label>
+            <textarea
+              id="loan-review-notes"
+              rows={4}
+              value={reviewNotes}
+              maxLength={1000}
+              onChange={(event) => setReviewNotes(event.target.value)}
+              placeholder="Motivo del rechazo..."
+            />
+            {reviewNotes.trim().length > 0 && reviewNotes.trim().length < 4 ? (
+              <small className="field-error">La nota de rechazo debe tener al menos 4 caracteres.</small>
+            ) : null}
+            <div className="modal-actions">
+              <button type="button" className="button button--ghost" onClick={closeReviewModal} disabled={processingLoan}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="button button--danger"
+                disabled={!canSubmitRejectionReview || processingLoan}
+                onClick={() => void submitRejectReview()}
+              >
+                <XCircle size={16} />
+                {processingLoan ? "Rechazando..." : "Rechazar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showCompleteModal ? (
+        <div className="modal-overlay">
+          <div className="modal teacher-loans-return-modal">
+            <h3>Completar prestamo</h3>
+            <p>Registra notas opcionales y confirma las cantidades devueltas antes de cerrar el prestamo.</p>
+
+            <label htmlFor="loan-complete-notes">Notas (opcional)</label>
+            <textarea
+              id="loan-complete-notes"
+              rows={3}
+              value={completionNotes}
+              maxLength={1000}
+              onChange={(event) => setCompletionNotes(event.target.value)}
+              placeholder="Observaciones del cierre o devolucion..."
+            />
+
+            {loadingReturnItems ? (
+              <p className="text-muted">Cargando cantidades entregadas...</p>
+            ) : null}
+
+            {!loadingReturnItems && returnableFungibleItems.length > 0 ? (
+              <div className="loan-return-list">
+                {returnableFungibleItems.map((item) => {
+                  const consumedQuantity = item.deliveredQuantity - item.returnedQuantity;
+                  return (
+                    <article key={item.implementUuid} className="loan-return-row">
+                      <div>
+                        <strong>{item.implementName}</strong>
+                        <p>Entregado: {item.deliveredQuantity} | Devuelto: {item.returnedQuantity} | Usado/gastado: {consumedQuantity}</p>
+                        {item.stockError ? <small className="field-error">{item.stockError}</small> : null}
+                      </div>
+                      <div className="loan-stepper">
+                        <button
+                          type="button"
+                          onClick={() => adjustReturnQuantity(item.implementUuid, -1)}
+                          disabled={item.returnedQuantity <= 0 || processingLoan}
+                        >
+                          <Minus size={14} />
+                        </button>
+                        <span className="loan-stepper__value">{item.returnedQuantity}</span>
+                        <button
+                          type="button"
+                          onClick={() => adjustReturnQuantity(item.implementUuid, 1)}
+                          disabled={item.returnedQuantity >= item.deliveredQuantity || processingLoan}
+                        >
+                          <Plus size={14} />
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            {!loadingReturnItems && returnableFungibleItems.length === 0 ? (
+              <p className="text-muted">
+                No hay consumibles o reutilizables entregados para ajustar. Los individuales se cerraran como devueltos en buen estado.
+              </p>
+            ) : null}
+
+            {returnVariationConfirm ? (
+              <div className="loan-return-warning">
+                Se esta cerrando con diferencias entre lo entregado y lo devuelto. Seguro que quieres seguir?
+              </div>
+            ) : null}
+
+            <div className="modal-actions">
+              <button type="button" className="button button--ghost" onClick={closeCompleteModal} disabled={processingLoan}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="button"
+                disabled={processingLoan || loadingReturnItems}
+                onClick={() => void handleCompleteLoan(returnVariationConfirm)}
+              >
+                <CheckCircle2 size={16} />
+                {processingLoan
+                  ? "Completando..."
+                  : returnVariationConfirm
+                    ? "Si, cerrar con variacion"
+                    : "Completar prestamo"}
               </button>
             </div>
           </div>

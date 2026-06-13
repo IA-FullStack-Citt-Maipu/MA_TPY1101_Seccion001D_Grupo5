@@ -7,6 +7,7 @@ import static com.panol_project.backendpanol.jooq.tables.LoanDetail.LOAN_DETAIL;
 import static com.panol_project.backendpanol.jooq.tables.LoanDetailIndividual.LOAN_DETAIL_INDIVIDUAL;
 import static com.panol_project.backendpanol.jooq.tables.LoanStatusHistory.LOAN_STATUS_HISTORY;
 import static com.panol_project.backendpanol.jooq.tables.Room.ROOM;
+import static com.panol_project.backendpanol.jooq.tables.Stock.STOCK;
 import static com.panol_project.backendpanol.jooq.tables.Subject.SUBJECT;
 import static com.panol_project.backendpanol.jooq.tables.User.USER;
 import static com.panol_project.backendpanol.jooq.tables.VLoanStateDates.V_LOAN_STATE_DATES;
@@ -36,6 +37,7 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanReturnIndividual;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReturnResult;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReviewCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReviewDecision;
+import com.panol_project.backendpanol.modules.loan.domain.LoanReviewItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStateDatesView;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStatus;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStatusTimelineEntry;
@@ -266,7 +268,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 .set(LOAN_STATUS_HISTORY.ACTOR_USER_ID, requesterId)
                 .set(LOAN_STATUS_HISTORY.FROM_STATUS, (LoanStatusEnum) null)
                 .set(LOAN_STATUS_HISTORY.TO_STATUS, LoanStatusEnum.pending)
-                .set(LOAN_STATUS_HISTORY.NOTES, "Solicitud creada")
+                .set(LOAN_STATUS_HISTORY.NOTES, resolveStatusNotes("Solicitud creada", command.notes()))
                 .set(LOAN_STATUS_HISTORY.CHANGED_AT, now)
                 .execute();
 
@@ -320,7 +322,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 .set(LOAN_STATUS_HISTORY.ACTOR_USER_ID, requireUserIdByUuid(command.requesterUuid()))
                 .set(LOAN_STATUS_HISTORY.FROM_STATUS, LoanStatusEnum.pending)
                 .set(LOAN_STATUS_HISTORY.TO_STATUS, LoanStatusEnum.pending)
-                .set(LOAN_STATUS_HISTORY.NOTES, "Solicitud modificada por docente")
+                .set(LOAN_STATUS_HISTORY.NOTES, resolveStatusNotes("Solicitud modificada por docente", command.notes()))
                 .set(LOAN_STATUS_HISTORY.CHANGED_AT, OffsetDateTime.now())
                 .execute();
 
@@ -397,7 +399,11 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
         String notes = normalizeOptionalText(command.notes());
 
         if (command.decision() == LoanReviewDecision.APPROVE) {
-            callApproveLoanFunction(current.loanId(), actorUserId, notes);
+            if (command.items() == null || command.items().isEmpty()) {
+                callApproveLoanFunction(current.loanId(), actorUserId, notes);
+            } else {
+                approveLoanWithAdjustedQuantities(current, actorUserId, notes, command.items());
+            }
         } else if (command.decision() == LoanReviewDecision.REJECT) {
             if (notes == null) {
                 throw new BadRequestException("LOAN_REJECTION_NOTES_REQUIRED", "notes es obligatorio al rechazar");
@@ -408,6 +414,71 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
         }
 
         return loadLoanAggregateById(current.loanId());
+    }
+
+    private void approveLoanWithAdjustedQuantities(
+            LoanRow current,
+            Long actorUserId,
+            String notes,
+            List<LoanReviewItem> requestedItems
+    ) {
+        dsl.fetch(
+                "select 1 from public.stock s join public.loan_detail ld on ld.implement_id = s.implement_id where ld.loan_id = ?::bigint for update of s",
+                current.loanId()
+        );
+
+        Map<UUID, LoanDetailContext> detailByImplementUuid = fetchLoanDetailContextByImplementUuid(current.loanId());
+        Map<UUID, LoanReviewItem> requestedByImplementUuid = toReviewItemMap(requestedItems);
+        int totalApprovedQuantity = 0;
+
+        for (LoanReviewItem item : requestedByImplementUuid.values()) {
+            if (!detailByImplementUuid.containsKey(item.implementUuid())) {
+                throw new BadRequestException(
+                        "LOAN_REVIEW_IMPLEMENT_INVALID",
+                        "Solo puedes aprobar cantidades para implementos incluidos en la solicitud"
+                );
+            }
+        }
+
+        for (LoanDetailContext detail : detailByImplementUuid.values()) {
+            LoanReviewItem requestedItem = requestedByImplementUuid.get(detail.implementUuid());
+            int approvedQuantity = requestedItem == null
+                    ? detail.requestedQuantity()
+                    : requestedItem.approvedQuantity();
+
+            if (approvedQuantity > detail.requestedQuantity()) {
+                throw new BadRequestException(
+                        "LOAN_REVIEW_QUANTITY_EXCEEDS_REQUESTED",
+                        "La cantidad aprobada no puede superar la cantidad solicitada"
+                );
+            }
+
+            validateApprovalAvailability(current, detail, approvedQuantity);
+
+            dsl.update(LOAN_DETAIL)
+                    .set(LOAN_DETAIL.RESERVED_QUANTITY, approvedQuantity)
+                    .where(
+                            LOAN_DETAIL.LOAN_ID.eq(current.loanId())
+                                    .and(LOAN_DETAIL.IMPLEMENT_ID.eq(detail.implementId()))
+                    )
+                    .execute();
+
+            totalApprovedQuantity += approvedQuantity;
+        }
+
+        if (totalApprovedQuantity <= 0) {
+            throw new BadRequestException(
+                    "LOAN_REVIEW_EMPTY_APPROVAL",
+                    "Debes aprobar al menos una unidad para continuar"
+            );
+        }
+
+        callLoanStatusChangeFunction(
+                current.loanId(),
+                actorUserId,
+                LoanStatusEnum.approved,
+                resolveStatusNotes("Solicitud aprobada por disponibilidad.", notes)
+        );
     }
 
     @Override
@@ -437,39 +508,28 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
 
         Long actorUserId = requireUserIdByUuid(command.actorUuid());
         Map<UUID, LoanDetailContext> detailByImplementUuid = fetchLoanDetailContextByImplementUuid(current.loanId());
-        Map<UUID, LoanDeliveryItem> requestedItems = toDeliveryItemMap(command.items(), detailByImplementUuid);
+        Map<UUID, LoanDeliveryItem> requestedItems = toDeliveryItemMap(command.items());
+        addAdditionalDeliveryDetails(current.loanId(), requestedItems, detailByImplementUuid);
 
         for (LoanDetailContext detailContext : detailByImplementUuid.values()) {
-            int requiredQuantity = resolveRequiredDeliveryQuantity(detailContext);
-            if (requiredQuantity <= 0) {
-                throw new BadRequestException(
-                        "LOAN_DELIVERY_QUANTITY_INVALID",
-                        "Todas las lineas del prestamo deben tener cantidad reservada para preparar/entregar"
-                );
-            }
-
             LoanDeliveryItem requestedItem = requestedItems.get(detailContext.implementUuid());
-            if (requestedItem == null) {
-                throw new BadRequestException(
-                        "LOAN_DELIVERY_IMPLEMENT_MISSING",
-                        "Debes incluir todos los implementos solicitados para la entrega"
-                );
-            }
+            int deliveryQuantity = resolveRequestedDeliveryQuantity(detailContext, requestedItem);
 
             if (detailContext.itemType() == ItemTypeEnum.individual) {
-                assignIndividualsForDelivery(current.loanId(), detailContext, requestedItem, requiredQuantity);
-            } else if (requestedItem.quantity() != null && !requestedItem.quantity().equals(requiredQuantity)) {
-                throw new BadRequestException(
-                        "LOAN_DELIVERY_QUANTITY_MISMATCH",
-                        "La cantidad indicada no coincide con la cantidad reservada para el implemento"
-                );
+                assignIndividualsForDelivery(current.loanId(), detailContext, requestedItem, deliveryQuantity);
             }
+
+            if (current.status() == LoanStatus.PREPARED) {
+                syncPreparedReservationDifference(detailContext, deliveryQuantity);
+            }
+
+            updateLoanDetailQuantitiesForDelivery(current.loanId(), detailContext, deliveryQuantity);
         }
 
         if (current.status() == LoanStatus.APPROVED) {
             callPrepareLoanFunction(current.loanId(), actorUserId, "Preparado para entrega");
         }
-        callDeliverLoanFunction(current.loanId(), actorUserId, "Entrega registrada en panol");
+        callDeliverLoanFunction(current.loanId(), actorUserId, resolveStatusNotes("Entrega registrada en panol", command.notes()));
 
         return new LoanDeliveryResult(loadLoanAggregateById(current.loanId()));
     }
@@ -486,7 +546,12 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
 
         Long actorUserId = requireUserIdByUuid(command.actorUuid());
         List<LoanReturnPayloadItem> payloadItems = buildFullReturnAsGoodPayload(current.loanId());
-        callCompleteLoanFunction(current.loanId(), actorUserId, "Prestamo completado por coordinador", payloadItems);
+        callCompleteLoanFunction(
+                current.loanId(),
+                actorUserId,
+                resolveStatusNotes("Prestamo completado por coordinador", command.notes()),
+                payloadItems
+        );
 
         return new LoanReturnResult(loadLoanAggregateById(current.loanId()));
     }
@@ -524,7 +589,12 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
 
         Long actorUserId = requireUserIdByUuid(command.actorUuid());
         List<LoanReturnPayloadItem> payloadItems = buildReturnPayloadFromCommand(current.loanId(), command);
-        callCompleteLoanFunction(current.loanId(), actorUserId, "Retorno completo registrado", payloadItems);
+        callCompleteLoanFunction(
+                current.loanId(),
+                actorUserId,
+                resolveStatusNotes("Retorno completo registrado", command.notes()),
+                payloadItems
+        );
 
         return new LoanReturnResult(loadLoanAggregateById(current.loanId()));
     }
@@ -895,6 +965,20 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
         return contexts;
     }
 
+    private ImplementContext requireImplementContextByUuid(UUID implementUuid) {
+        return dsl.select(IMPLEMENT.ID, IMPLEMENT.ITEM_TYPE)
+                .from(IMPLEMENT)
+                .where(IMPLEMENT.UUID.eq(implementUuid).and(IMPLEMENT.ACTIVE.isTrue()))
+                .fetchOptional(record -> new ImplementContext(
+                        record.get(IMPLEMENT.ID),
+                        record.get(IMPLEMENT.ITEM_TYPE)
+                ))
+                .orElseThrow(() -> new NotFoundException(
+                        "IMPLEMENT_NOT_FOUND",
+                        "Implemento no encontrado"
+                ));
+    }
+
     private List<IndividualSelection> fetchAvailableIndividualsByAssetCodes(Long implementId, List<String> normalizedAssetCodes) {
         if (normalizedAssetCodes.isEmpty()) {
             return List.of();
@@ -936,17 +1020,11 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 ));
     }
 
-    private Map<UUID, LoanDeliveryItem> toDeliveryItemMap(
-            List<LoanDeliveryItem> items,
-            Map<UUID, LoanDetailContext> detailByImplementUuid
-    ) {
+    private Map<UUID, LoanDeliveryItem> toDeliveryItemMap(List<LoanDeliveryItem> items) {
         Map<UUID, LoanDeliveryItem> mapped = new LinkedHashMap<>();
         for (LoanDeliveryItem item : items) {
             if (item == null || item.implementUuid() == null) {
                 throw new BadRequestException("LOAN_DELIVERY_IMPLEMENT_REQUIRED", "Cada item de entrega requiere implement_uuid");
-            }
-            if (!detailByImplementUuid.containsKey(item.implementUuid())) {
-                throw new BadRequestException("LOAN_DELIVERY_IMPLEMENT_NOT_REQUESTED", "El implemento no forma parte del prestamo");
             }
             if (mapped.putIfAbsent(item.implementUuid(), item) != null) {
                 throw new BadRequestException("LOAN_DELIVERY_DUPLICATE_IMPLEMENT", "No puedes repetir implementos en la misma entrega");
@@ -955,47 +1033,200 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
         return mapped;
     }
 
-    private int resolveRequiredDeliveryQuantity(LoanDetailContext detailContext) {
-        int reserved = detailContext.reservedQuantity();
-        if (reserved > 0) {
-            return reserved;
+    private Map<UUID, LoanReviewItem> toReviewItemMap(List<LoanReviewItem> items) {
+        Map<UUID, LoanReviewItem> mapped = new LinkedHashMap<>();
+        for (LoanReviewItem item : items) {
+            if (item == null || item.implementUuid() == null) {
+                throw new BadRequestException("LOAN_REVIEW_IMPLEMENT_REQUIRED", "Cada item de aprobacion requiere implement_uuid");
+            }
+            if (item.approvedQuantity() < 0) {
+                throw new BadRequestException("LOAN_REVIEW_QUANTITY_INVALID", "approved_quantity debe ser mayor o igual a cero");
+            }
+            if (mapped.putIfAbsent(item.implementUuid(), item) != null) {
+                throw new BadRequestException("LOAN_REVIEW_DUPLICATE_IMPLEMENT", "No puedes repetir implementos al aprobar la solicitud");
+            }
         }
-        return detailContext.requestedQuantity();
+        return mapped;
+    }
+
+    private void validateApprovalAvailability(LoanRow current, LoanDetailContext detail, int approvedQuantity) {
+        if (approvedQuantity <= 0) {
+            return;
+        }
+
+        Record availabilityRecord = dsl.fetchOne(
+                "select * from public.fn_get_implement_availability(?::bigint, ?::timestamptz, ?::timestamptz, false, ?::bigint)",
+                detail.implementId(),
+                current.scheduledAt(),
+                resolveExpectedReturnAt(current.scheduledAt(), current.expectedReturnAt()),
+                current.loanId()
+        );
+
+        int availableQuantity = 0;
+        if (availabilityRecord != null) {
+            Integer rawAvailable = availabilityRecord.get("available_quantity", Integer.class);
+            if (rawAvailable != null) {
+                availableQuantity = rawAvailable;
+            }
+        }
+
+        if (availableQuantity < approvedQuantity) {
+            throw new ConflictException(
+                    "LOAN_STOCK_CONFLICT",
+                    "Esta solicitud excede el stock disponible de uno o mas implementos."
+            );
+        }
+    }
+
+    private void addAdditionalDeliveryDetails(
+            Long loanId,
+            Map<UUID, LoanDeliveryItem> requestedItems,
+            Map<UUID, LoanDetailContext> detailByImplementUuid
+    ) {
+        for (LoanDeliveryItem item : requestedItems.values()) {
+            if (detailByImplementUuid.containsKey(item.implementUuid())) {
+                continue;
+            }
+
+            ImplementContext implement = requireImplementContextByUuid(item.implementUuid());
+            int requestedQuantity = resolveDeliveryPayloadQuantity(implement.itemType(), item);
+
+            dsl.insertInto(LOAN_DETAIL)
+                    .set(LOAN_DETAIL.LOAN_ID, loanId)
+                    .set(LOAN_DETAIL.IMPLEMENT_ID, implement.implementId())
+                    .set(LOAN_DETAIL.REQUESTED_QUANTITY, requestedQuantity)
+                    .set(LOAN_DETAIL.RESERVED_QUANTITY, 0)
+                    .set(LOAN_DETAIL.DELIVERED_QUANTITY, 0)
+                    .execute();
+
+            detailByImplementUuid.put(item.implementUuid(), new LoanDetailContext(
+                    implement.implementId(),
+                    item.implementUuid(),
+                    implement.itemType(),
+                    requestedQuantity,
+                    0,
+                    0
+            ));
+        }
+    }
+
+    private int resolveDeliveryPayloadQuantity(ItemTypeEnum itemType, LoanDeliveryItem item) {
+        int deliveryQuantity;
+        if (itemType == ItemTypeEnum.individual && item.assetCodes() != null && !item.assetCodes().isEmpty()) {
+            deliveryQuantity = normalizeAssetCodes(item.assetCodes()).size();
+            if (item.quantity() != null && item.quantity() != deliveryQuantity) {
+                throw new BadRequestException(
+                        "LOAN_DELIVERY_ASSET_CODES_QUANTITY_MISMATCH",
+                        "quantity debe coincidir con la cantidad de asset_codes seleccionados"
+                );
+            }
+        } else {
+            if (item.quantity() == null) {
+                throw new BadRequestException(
+                        "LOAN_DELIVERY_QUANTITY_REQUIRED",
+                        "quantity es obligatorio para registrar la entrega"
+                );
+            }
+            deliveryQuantity = item.quantity();
+        }
+
+        if (deliveryQuantity <= 0) {
+            throw new BadRequestException(
+                    "LOAN_DELIVERY_QUANTITY_INVALID",
+                    "La cantidad a entregar debe ser mayor a cero"
+            );
+        }
+        return deliveryQuantity;
+    }
+
+    private int resolveRequestedDeliveryQuantity(
+            LoanDetailContext detailContext,
+            LoanDeliveryItem requestedItem
+    ) {
+        if (requestedItem == null) {
+            return 0;
+        }
+
+        int deliveryQuantity;
+        if (detailContext.itemType() == ItemTypeEnum.individual
+                && requestedItem.assetCodes() != null
+                && !requestedItem.assetCodes().isEmpty()) {
+            deliveryQuantity = normalizeAssetCodes(requestedItem.assetCodes()).size();
+            if (requestedItem.quantity() != null && requestedItem.quantity() != deliveryQuantity) {
+                throw new BadRequestException(
+                        "LOAN_DELIVERY_ASSET_CODES_QUANTITY_MISMATCH",
+                        "quantity debe coincidir con la cantidad de asset_codes seleccionados"
+                );
+            }
+        } else {
+            if (requestedItem.quantity() == null) {
+                throw new BadRequestException(
+                        "LOAN_DELIVERY_QUANTITY_REQUIRED",
+                        "quantity es obligatorio para registrar la entrega"
+                );
+            }
+            deliveryQuantity = requestedItem.quantity();
+        }
+
+        if (deliveryQuantity <= 0) {
+            throw new BadRequestException(
+                    "LOAN_DELIVERY_QUANTITY_INVALID",
+                    "La cantidad a entregar debe ser mayor a cero"
+            );
+        }
+        return deliveryQuantity;
+    }
+
+    private void updateLoanDetailQuantitiesForDelivery(
+            Long loanId,
+            LoanDetailContext detailContext,
+            int deliveryQuantity
+    ) {
+        dsl.update(LOAN_DETAIL)
+                .set(LOAN_DETAIL.RESERVED_QUANTITY, deliveryQuantity)
+                .set(LOAN_DETAIL.REQUESTED_QUANTITY, Math.max(detailContext.requestedQuantity(), deliveryQuantity))
+                .where(LOAN_DETAIL.LOAN_ID.eq(loanId).and(LOAN_DETAIL.IMPLEMENT_ID.eq(detailContext.implementId())))
+                .execute();
+    }
+
+    private void syncPreparedReservationDifference(LoanDetailContext detailContext, int deliveryQuantity) {
+        int quantityDifference = deliveryQuantity - detailContext.reservedQuantity();
+        if (quantityDifference == 0) {
+            return;
+        }
+
+        int updated;
+        if (quantityDifference > 0) {
+            updated = dsl.update(STOCK)
+                    .set(STOCK.AVAILABLE, STOCK.AVAILABLE.add(-quantityDifference))
+                    .set(STOCK.RESERVED, STOCK.RESERVED.add(quantityDifference))
+                    .set(STOCK.UPDATED_AT, OffsetDateTime.now())
+                    .where(STOCK.IMPLEMENT_ID.eq(detailContext.implementId()).and(STOCK.AVAILABLE.ge(quantityDifference)))
+                    .execute();
+        } else {
+            int quantityToRelease = Math.abs(quantityDifference);
+            updated = dsl.update(STOCK)
+                    .set(STOCK.RESERVED, STOCK.RESERVED.add(-quantityToRelease))
+                    .set(STOCK.AVAILABLE, STOCK.AVAILABLE.add(quantityToRelease))
+                    .set(STOCK.UPDATED_AT, OffsetDateTime.now())
+                    .where(STOCK.IMPLEMENT_ID.eq(detailContext.implementId()).and(STOCK.RESERVED.ge(quantityToRelease)))
+                    .execute();
+        }
+
+        if (updated == 0) {
+            throw new ConflictException(
+                    "LOAN_STOCK_CONFLICT",
+                    "No fue posible ajustar la reserva para la entrega modificada"
+            );
+        }
     }
 
     private void assignIndividualsForDelivery(
             Long loanId,
             LoanDetailContext detailContext,
             LoanDeliveryItem requestedItem,
-            int requiredQuantity
+            int deliveryQuantity
     ) {
-        List<IndividualSelection> selectedIndividuals;
-
-        if (requestedItem.assetCodes() != null && !requestedItem.assetCodes().isEmpty()) {
-            List<String> normalizedAssetCodes = normalizeAssetCodes(requestedItem.assetCodes());
-            if (normalizedAssetCodes.size() != requiredQuantity) {
-                throw new BadRequestException(
-                        "LOAN_DELIVERY_ASSET_CODES_QUANTITY_MISMATCH",
-                        "La cantidad de asset_codes debe coincidir con la cantidad requerida del implemento"
-                );
-            }
-            selectedIndividuals = fetchAvailableIndividualsByAssetCodes(detailContext.implementId(), normalizedAssetCodes);
-            if (selectedIndividuals.size() != normalizedAssetCodes.size()) {
-                throw new BadRequestException(
-                        "LOAN_DELIVERY_INDIVIDUAL_INVALID",
-                        "Algunos asset_codes no existen, no pertenecen al implemento o no estan disponibles"
-                );
-            }
-        } else {
-            selectedIndividuals = fetchAvailableIndividuals(detailContext.implementId(), requiredQuantity);
-            if (selectedIndividuals.size() != requiredQuantity) {
-                throw new BadRequestException(
-                        "LOAN_DELIVERY_INDIVIDUAL_SHORTAGE",
-                        "No hay suficientes individuales disponibles para completar la entrega"
-                );
-            }
-        }
-
         dsl.deleteFrom(LOAN_DETAIL_INDIVIDUAL)
                 .where(
                         LOAN_DETAIL_INDIVIDUAL.LOAN_ID.eq(loanId)
@@ -1006,6 +1237,43 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                                 ))
                 )
                 .execute();
+
+        if (deliveryQuantity == 0) {
+            return;
+        }
+        if (requestedItem == null) {
+            throw new BadRequestException(
+                    "LOAN_DELIVERY_INDIVIDUAL_REQUIRED",
+                    "Debes seleccionar individuales para registrar la entrega"
+            );
+        }
+
+        List<IndividualSelection> selectedIndividuals;
+
+        if (requestedItem.assetCodes() != null && !requestedItem.assetCodes().isEmpty()) {
+            List<String> normalizedAssetCodes = normalizeAssetCodes(requestedItem.assetCodes());
+            if (normalizedAssetCodes.size() != deliveryQuantity) {
+                throw new BadRequestException(
+                        "LOAN_DELIVERY_ASSET_CODES_QUANTITY_MISMATCH",
+                        "La cantidad de asset_codes debe coincidir con la cantidad a entregar del implemento"
+                );
+            }
+            selectedIndividuals = fetchAvailableIndividualsByAssetCodes(detailContext.implementId(), normalizedAssetCodes);
+            if (selectedIndividuals.size() != normalizedAssetCodes.size()) {
+                throw new BadRequestException(
+                        "LOAN_DELIVERY_INDIVIDUAL_INVALID",
+                        "Algunos asset_codes no existen, no pertenecen al implemento o no estan disponibles"
+                );
+            }
+        } else {
+            selectedIndividuals = fetchAvailableIndividuals(detailContext.implementId(), deliveryQuantity);
+            if (selectedIndividuals.size() != deliveryQuantity) {
+                throw new BadRequestException(
+                    "LOAN_DELIVERY_INDIVIDUAL_SHORTAGE",
+                    "No hay suficientes individuales disponibles para registrar la entrega"
+                );
+            }
+        }
 
         int insertedLinks = 0;
         for (IndividualSelection selected : selectedIndividuals) {
@@ -1285,6 +1553,10 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                         detail.implementUuid(),
                         new MutableReturnBreakdown()
                 );
+
+                if (breakdown.total() == 0 && returnedIndividuals.isEmpty()) {
+                    breakdown.good = deliveredQuantity;
+                }
 
                 if (breakdown.total() != deliveredQuantity) {
                     throw new BadRequestException(
@@ -1643,6 +1915,11 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
         return normalized.isEmpty() ? null : normalized;
     }
 
+    private String resolveStatusNotes(String defaultNotes, String rawNotes) {
+        String normalized = normalizeOptionalText(rawNotes);
+        return normalized == null ? defaultNotes : normalized;
+    }
+
     private OffsetDateTime resolveExpectedReturnAt(OffsetDateTime scheduledAt, OffsetDateTime expectedReturnAt) {
         if (expectedReturnAt != null) {
             return expectedReturnAt;
@@ -1688,6 +1965,12 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
             int requestedQuantity,
             int reservedQuantity,
             int deliveredQuantity
+    ) {
+    }
+
+    private record ImplementContext(
+            Long implementId,
+            ItemTypeEnum itemType
     ) {
     }
 

@@ -10,3 +10,4 @@
 \ir ./V34__auth_find_user_by_rut_support_normalized_input.sql
 \ir ./V35__drop_legacy_varchar_auth_lookup_function.sql
 \ir ./V36__ensure_loan_lifecycle_system_user.sql
+\ir ./V37__allow_partial_loan_delivery.sql

@@ -17,6 +17,7 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanReturnIndividual;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReturnResult;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReviewCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReviewDecision;
+import com.panol_project.backendpanol.modules.loan.domain.LoanReviewItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStateDatesView;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStatusTimelineEntry;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
@@ -31,6 +32,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class GestionPrestamoUseCase {
+
+    private static final int MAX_NOTES_LENGTH = 1000;
 
     private final LoanRepositoryPort loanRepositoryPort;
 
@@ -59,10 +62,19 @@ public class GestionPrestamoUseCase {
                 .orElseThrow(() -> new BadRequestException("LOAN_REVIEW_DECISION_INVALID", "decision debe ser APPROVE o REJECT"));
 
         String notes = normalizeOptionalText(command.notes());
+        validateNotes(notes);
+        List<LoanReviewItem> reviewItems = command.items() == null
+                ? List.of()
+                : command.items().stream()
+                        .map(item -> new LoanReviewItem(item.implementUuid(), item.approvedQuantity()))
+                        .toList();
 
         if (decision == LoanReviewDecision.REJECT) {
             if (notes == null) {
                 throw new BadRequestException("LOAN_REJECTION_NOTES_REQUIRED", "notes es obligatorio al rechazar");
+            }
+            if (!reviewItems.isEmpty()) {
+                throw new BadRequestException("LOAN_REJECTION_ITEMS_NOT_ALLOWED", "items solo aplica al aprobar");
             }
         }
 
@@ -71,7 +83,8 @@ public class GestionPrestamoUseCase {
                         command.loanUuid(),
                         command.actorUuid(),
                         decision,
-                        notes
+                        notes,
+                        reviewItems
                 )
         );
 
@@ -92,10 +105,12 @@ public class GestionPrestamoUseCase {
 
     @Transactional
     public LoanSummaryView entregar(EntregarPrestamoCommand command) {
+        validateNotes(command.notes());
         LoanDeliveryResult delivery = loanRepositoryPort.deliverLoan(
                 new LoanDeliveryCommand(
                         command.loanUuid(),
                         command.actorUuid(),
+                        normalizeOptionalText(command.notes()),
                         command.items().stream().map(item -> new LoanDeliveryItem(
                                 item.implementUuid(),
                                 item.quantity(),
@@ -109,6 +124,7 @@ public class GestionPrestamoUseCase {
 
     @Transactional
     public LoanSummaryView devolver(DevolverPrestamoCommand command) {
+        validateNotes(command.notes());
         boolean hasIndividuals = command.returnedIndividuals() != null && !command.returnedIndividuals().isEmpty();
         boolean hasConsumable = command.consumableReturns() != null && !command.consumableReturns().isEmpty();
         if (!hasIndividuals && !hasConsumable) {
@@ -119,6 +135,7 @@ public class GestionPrestamoUseCase {
                 new LoanReturnCommand(
                         command.loanUuid(),
                         command.actorUuid(),
+                        normalizeOptionalText(command.notes()),
                         command.returnedIndividuals() == null
                                 ? List.of()
                                 : command.returnedIndividuals().stream()
@@ -137,10 +154,12 @@ public class GestionPrestamoUseCase {
 
     @Transactional
     public LoanSummaryView completar(CompletarPrestamoCommand command) {
+        validateNotes(command.notes());
         LoanReturnResult completed = loanRepositoryPort.completeLoan(
                 new com.panol_project.backendpanol.modules.loan.domain.LoanCompleteCommand(
                         command.loanUuid(),
-                        command.actorUuid()
+                        command.actorUuid(),
+                        normalizeOptionalText(command.notes())
                 )
         );
 
@@ -175,6 +194,12 @@ public class GestionPrestamoUseCase {
         }
         String normalized = raw.trim();
         return normalized.isEmpty() ? null : normalized;
+    }
+
+    private void validateNotes(String notes) {
+        if (notes != null && notes.trim().length() > MAX_NOTES_LENGTH) {
+            throw new BadRequestException("LOAN_NOTES_TOO_LONG", "notes no puede superar 1000 caracteres");
+        }
     }
 
     private LoanSummaryView findVisibleLoanSummaryOrThrow(java.util.UUID loanUuid) {

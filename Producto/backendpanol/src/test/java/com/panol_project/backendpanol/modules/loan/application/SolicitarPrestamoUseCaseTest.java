@@ -48,6 +48,7 @@ class SolicitarPrestamoUseCaseTest {
                 null,
                 OffsetDateTime.now().minusMinutes(5),
                 null,
+                null,
                 List.of(new SolicitarPrestamoItemCommand(UUID.randomUUID(), 1))
         );
 
@@ -68,6 +69,7 @@ class SolicitarPrestamoUseCaseTest {
                 null,
                 scheduledAt,
                 scheduledAt.minusMinutes(15),
+                null,
                 List.of(new SolicitarPrestamoItemCommand(UUID.randomUUID(), 1))
         );
 
@@ -93,6 +95,7 @@ class SolicitarPrestamoUseCaseTest {
                 roomUuid,
                 subjectUuid,
                 scheduledAt,
+                null,
                 null,
                 List.of(new SolicitarPrestamoItemCommand(implementUuid, 2))
         );
@@ -172,6 +175,7 @@ class SolicitarPrestamoUseCaseTest {
                 null,
                 OffsetDateTime.parse("2026-06-12T10:30:00-04:00"),
                 null,
+                null,
                 List.of(
                         new SolicitarPrestamoItemCommand(implementUuid, 1),
                         new SolicitarPrestamoItemCommand(implementUuid, 2)
@@ -196,6 +200,7 @@ class SolicitarPrestamoUseCaseTest {
                 roomUuid,
                 null,
                 OffsetDateTime.parse("2026-06-12T10:30:00-04:00"),
+                null,
                 null,
                 List.of(new SolicitarPrestamoItemCommand(UUID.randomUUID(), 1))
         );
@@ -224,6 +229,7 @@ class SolicitarPrestamoUseCaseTest {
                 roomUuid,
                 subjectUuid,
                 OffsetDateTime.parse("2026-06-12T10:30:00-04:00"),
+                null,
                 null,
                 List.of(new SolicitarPrestamoItemCommand(UUID.randomUUID(), 1))
         );
@@ -254,6 +260,7 @@ class SolicitarPrestamoUseCaseTest {
                 roomUuid,
                 null,
                 OffsetDateTime.parse("2026-06-12T10:30:00-04:00"),
+                null,
                 null,
                 List.of(new SolicitarPrestamoItemCommand(implementUuid, 1))
         );
@@ -286,6 +293,7 @@ class SolicitarPrestamoUseCaseTest {
                 roomUuid,
                 null,
                 OffsetDateTime.parse("2026-06-12T10:30:00-04:00"),
+                null,
                 null,
                 List.of(new SolicitarPrestamoItemCommand(implementUuid, 1))
         );
@@ -320,6 +328,7 @@ class SolicitarPrestamoUseCaseTest {
                 roomUuid,
                 null,
                 scheduledAt,
+                null,
                 null,
                 List.of(new SolicitarPrestamoItemCommand(implementUuid, 1))
         );
@@ -368,6 +377,7 @@ class SolicitarPrestamoUseCaseTest {
                 null,
                 scheduledAt,
                 null,
+                null,
                 List.of(new SolicitarPrestamoItemCommand(UUID.randomUUID(), 1))
         );
 
@@ -388,6 +398,7 @@ class SolicitarPrestamoUseCaseTest {
                 UUID.randomUUID(),
                 null,
                 scheduledAt,
+                null,
                 null,
                 List.of(new SolicitarPrestamoItemCommand(UUID.randomUUID(), 1))
         );
@@ -412,6 +423,7 @@ class SolicitarPrestamoUseCaseTest {
                 roomUuid,
                 null,
                 scheduledAt,
+                null,
                 null,
                 List.of(new SolicitarPrestamoItemCommand(implementUuid, 7))
         );
@@ -451,6 +463,7 @@ class SolicitarPrestamoUseCaseTest {
                 null,
                 scheduledAt,
                 null,
+                null,
                 List.of(new SolicitarPrestamoItemCommand(UUID.randomUUID(), 1))
         );
 
@@ -475,6 +488,7 @@ class SolicitarPrestamoUseCaseTest {
                 null,
                 OffsetDateTime.parse("2026-06-19T21:30:00-04:00"),
                 OffsetDateTime.parse("2026-06-19T23:30:00-04:00"),
+                null,
                 List.of(new SolicitarPrestamoItemCommand(implementUuid, 1))
         );
 

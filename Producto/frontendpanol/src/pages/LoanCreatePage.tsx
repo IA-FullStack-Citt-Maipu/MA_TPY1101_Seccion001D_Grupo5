@@ -4,6 +4,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
+  FileText,
   Minus,
   PackageSearch,
   Plus,
@@ -313,6 +314,7 @@ export function LoanCreatePage({
   const [timeValue, setTimeValue] = useState("");
   const [returnDateValue, setReturnDateValue] = useState("");
   const [returnTimeValue, setReturnTimeValue] = useState("");
+  const [notes, setNotes] = useState("");
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -371,6 +373,7 @@ export function LoanCreatePage({
             setTimeValue(formatScheduledTimeForInput(editingLoanResponse.scheduled_at));
             setReturnDateValue(formatScheduledDateForInput(editingLoanResponse.expected_return_at));
             setReturnTimeValue(formatScheduledTimeForInput(editingLoanResponse.expected_return_at));
+            setNotes("");
             setCart(
               editingLoanResponse.items.map((item) => {
                 return {
@@ -384,6 +387,7 @@ export function LoanCreatePage({
           }
         } else {
           setEditingLoan(null);
+          setNotes("");
         }
       } catch (requestError) {
         setGlobalError(getErrorMessage(requestError, "No se pudieron cargar las opciones del formulario."));
@@ -826,6 +830,7 @@ export function LoanCreatePage({
       subject_uuid: subjectUuid || null,
       scheduled_at: scheduledAt,
       expected_return_at: hasCustomExpectedReturn ? expectedReturnAt : null,
+      notes: notes.trim() || null,
       items: cart.map((item) => ({
         implement_uuid: item.implement_uuid,
         requested_quantity: item.requested_quantity,
@@ -1015,6 +1020,21 @@ export function LoanCreatePage({
                   max={LOAN_MAX_TIME}
                   disabled={saving}
                   onChange={(event) => handleReturnTimeChange(event.target.value)}
+                />
+              </div>
+
+              <div className="loan-create-field loan-create-field--full">
+                <label htmlFor="loan-notes">
+                  <FileText size={14} /> Notas (opcional)
+                </label>
+                <textarea
+                  id="loan-notes"
+                  rows={3}
+                  value={notes}
+                  maxLength={1000}
+                  disabled={saving}
+                  onChange={(event) => setNotes(event.target.value)}
+                  placeholder="Observaciones para el panol..."
                 />
               </div>
 

@@ -2,11 +2,13 @@ import { apiClient } from "./apiClient";
 import { AxiosError } from "axios";
 import type {
   CreateLoanPayload,
+  CompleteLoanPayload,
   DeliverLoanPayload,
   LoanPage,
   LoanStateDates,
   LoanStatusTimelineEntry,
   LoanSummary,
+  ReturnLoanPayload,
 } from "../types/loan";
 
 export interface FetchLoansQuery {
@@ -15,9 +17,15 @@ export interface FetchLoansQuery {
   mine?: boolean;
 }
 
+export interface ReviewLoanItemPayload {
+  implement_uuid: string;
+  approved_quantity: number;
+}
+
 export interface ReviewLoanPayload {
   decision: "APPROVE" | "REJECT";
   notes?: string | null;
+  items?: ReviewLoanItemPayload[] | null;
 }
 
 export interface CancelLoanPayload {
@@ -72,8 +80,13 @@ export async function deliverLoan(loanUuid: string, payload: DeliverLoanPayload)
   return response.data;
 }
 
-export async function completeLoan(loanUuid: string): Promise<LoanSummary> {
-  const response = await apiClient.post<LoanSummary>(`/api/v2/loans/${loanUuid}/complete`);
+export async function completeLoan(loanUuid: string, payload: CompleteLoanPayload = {}): Promise<LoanSummary> {
+  const response = await apiClient.post<LoanSummary>(`/api/v2/loans/${loanUuid}/complete`, payload);
+  return response.data;
+}
+
+export async function returnLoan(loanUuid: string, payload: ReturnLoanPayload): Promise<LoanSummary> {
+  const response = await apiClient.post<LoanSummary>(`/api/v2/loans/${loanUuid}/return`, payload);
   return response.data;
 }
 

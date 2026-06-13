@@ -5,12 +5,14 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import java.util.UUID;
 
-public record ReturnLoanConsumableV2Request(
+public record ReviewLoanItemV2Request(
         @JsonProperty("implement_uuid")
         @NotNull(message = "implement_uuid es obligatorio")
         UUID implementUuid,
 
-        @PositiveOrZero(message = "quantity debe ser mayor o igual a cero")
-        Integer quantity
+        @JsonProperty("approved_quantity")
+        @NotNull(message = "approved_quantity es obligatorio")
+        @PositiveOrZero(message = "approved_quantity debe ser mayor o igual a cero")
+        Integer approvedQuantity
 ) {
 }

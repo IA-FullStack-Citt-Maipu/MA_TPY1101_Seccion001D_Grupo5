@@ -1,6 +1,7 @@
 package com.panol_project.backendpanol.modules.loan.api;
 
 import com.panol_project.backendpanol.modules.loan.api.dto.CancelLoanV2Request;
+import com.panol_project.backendpanol.modules.loan.api.dto.CompleteLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.api.dto.CreateLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.api.dto.DeliverLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanItemV2Response;
@@ -22,6 +23,7 @@ import com.panol_project.backendpanol.modules.loan.application.dto.DevolverPrest
 import com.panol_project.backendpanol.modules.loan.application.dto.EntregarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.EntregarPrestamoItemCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.RevisarPrestamoCommand;
+import com.panol_project.backendpanol.modules.loan.application.dto.RevisarPrestamoItemCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.SolicitarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.SolicitarPrestamoItemCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStateDatesView;
@@ -89,6 +91,7 @@ public class LoanV2Controller {
                         request.subjectUuid(),
                         request.scheduledAt(),
                         request.expectedReturnAt(),
+                        request.notes(),
                         items
                 )
         );
@@ -118,6 +121,7 @@ public class LoanV2Controller {
                         request.subjectUuid(),
                         request.scheduledAt(),
                         request.expectedReturnAt(),
+                        request.notes(),
                         items
                 )
         );
@@ -192,7 +196,15 @@ public class LoanV2Controller {
                         loanUuid,
                         actorUuid,
                         request.decision(),
-                        request.notes()
+                        request.notes(),
+                        request.items() == null
+                                ? List.of()
+                                : request.items().stream()
+                                        .map(item -> new RevisarPrestamoItemCommand(
+                                                item.implementUuid(),
+                                                item.approvedQuantity()
+                                        ))
+                                        .toList()
                 )
         );
         return toResponse(reviewed);
@@ -210,6 +222,7 @@ public class LoanV2Controller {
                 new EntregarPrestamoCommand(
                         loanUuid,
                         actorUuid,
+                        request.notes(),
                         request.items().stream().map(item -> new EntregarPrestamoItemCommand(
                                 item.implementUuid(),
                                 item.quantity(),
@@ -224,11 +237,16 @@ public class LoanV2Controller {
     @PreAuthorize("hasRole('COORDINADOR')")
     public LoanV2Response completarPrestamo(
             @PathVariable UUID loanUuid,
+            @Valid @RequestBody(required = false) CompleteLoanV2Request request,
             Authentication authentication
     ) {
         UUID actorUuid = resolveCurrentUserUuid(authentication);
         LoanSummaryView completed = gestionPrestamoUseCase.completar(
-                new CompletarPrestamoCommand(loanUuid, actorUuid)
+                new CompletarPrestamoCommand(
+                        loanUuid,
+                        actorUuid,
+                        request == null ? null : request.notes()
+                )
         );
         return toResponse(completed);
     }
@@ -254,6 +272,7 @@ public class LoanV2Controller {
     }
 
     @PostMapping("/{loanUuid}/return")
+    @PreAuthorize("hasRole('COORDINADOR')")
     public LoanV2Response devolverPrestamo(
             @PathVariable UUID loanUuid,
             @Valid @RequestBody ReturnLoanV2Request request,
@@ -264,6 +283,7 @@ public class LoanV2Controller {
                 new DevolverPrestamoCommand(
                         loanUuid,
                         actorUuid,
+                        request.notes(),
                         request.returnedIndividuals() == null
                                 ? List.of()
                                 : request.returnedIndividuals().stream()

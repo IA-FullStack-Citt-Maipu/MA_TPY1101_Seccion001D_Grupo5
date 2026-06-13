@@ -48,6 +48,7 @@ export interface CreateLoanPayload {
   subject_uuid?: string | null;
   scheduled_at: string;
   expected_return_at?: string | null;
+  notes?: string | null;
   items: CreateLoanItemPayload[];
 }
 
@@ -59,6 +60,27 @@ export interface DeliverLoanItemPayload {
 
 export interface DeliverLoanPayload {
   items: DeliverLoanItemPayload[];
+  notes?: string | null;
+}
+
+export interface CompleteLoanPayload {
+  notes?: string | null;
+}
+
+export interface ReturnLoanIndividualPayload {
+  individual_uuid: string;
+  return_condition: "good" | "damaged" | "lost" | "discarded";
+}
+
+export interface ReturnLoanConsumablePayload {
+  implement_uuid: string;
+  quantity: number;
+}
+
+export interface ReturnLoanPayload {
+  returned_individuals?: ReturnLoanIndividualPayload[];
+  consumable_returns?: ReturnLoanConsumablePayload[];
+  notes?: string | null;
 }
 
 export type LoanStatus =

@@ -9,6 +9,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { LoanApprovalModal, type LoanApprovalSubmission } from "../components/loans/LoanApprovalModal";
 import { PresencePollingModal } from "../components/ui/PresencePollingModal";
 import { useInactivityPollingGate } from "../hooks/useInactivityPollingGate";
 import { getApiErrorPayload, getErrorMessage } from "../services/apiClient";
@@ -117,6 +118,9 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
 
   const [rejectingLoan, setRejectingLoan] = useState<LoanSummary | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
+  const [approvingLoan, setApprovingLoan] = useState<LoanSummary | null>(null);
+  const [completingLoan, setCompletingLoan] = useState<LoanSummary | null>(null);
+  const [completionNotes, setCompletionNotes] = useState("");
 
   const loadLoans = useCallback(async (showLoading = true) => {
     if (showLoading) {
@@ -286,15 +290,28 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
     );
   }
 
-  async function approveLoan(loan: LoanSummary) {
-    setProcessingLoanUuid(loan.uuid);
+  function openApproveModal(loan: LoanSummary) {
+    setApprovingLoan(loan);
+  }
+
+  function closeApproveModal() {
+    setApprovingLoan(null);
+  }
+
+  async function approveLoan(payload: LoanApprovalSubmission) {
+    if (!approvingLoan) {
+      return;
+    }
+    setProcessingLoanUuid(approvingLoan.uuid);
     setError(null);
     try {
-      const updated = await reviewLoan(loan.uuid, {
+      const updated = await reviewLoan(approvingLoan.uuid, {
         decision: "APPROVE",
-        notes: "Aprobado por coordinador",
+        notes: payload.notes,
+        items: payload.items,
       });
       updateLoanInState(updated);
+      closeApproveModal();
     } catch (requestError) {
       const payloadError = getApiErrorPayload(requestError);
       if (payloadError?.code === "LOAN_STOCK_CONFLICT") {
@@ -311,8 +328,9 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
     setProcessingLoanUuid(loan.uuid);
     setError(null);
     try {
-      const updated = await completeLoan(loan.uuid);
+      const updated = await completeLoan(loan.uuid, { notes: completionNotes.trim() || null });
       updateLoanInState(updated);
+      closeCompleteModal();
     } catch (requestError) {
       setError(getErrorMessage(requestError, "No se pudo completar el prestamo."));
     } finally {
@@ -327,6 +345,16 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
   function openRejectModal(loan: LoanSummary) {
     setRejectingLoan(loan);
     setRejectionReason("");
+  }
+
+  function openCompleteModal(loan: LoanSummary) {
+    setCompletingLoan(loan);
+    setCompletionNotes("");
+  }
+
+  function closeCompleteModal() {
+    setCompletingLoan(null);
+    setCompletionNotes("");
   }
 
   function closeRejectModal() {
@@ -533,7 +561,7 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
                                 type="button"
                                 className="coordinator-loans-action-btn coordinator-loans-action-btn--approve"
                                 disabled={isProcessing}
-                                onClick={() => void approveLoan(loan)}
+                                onClick={() => openApproveModal(loan)}
                               >
                                 Aceptar
                               </button>
@@ -561,7 +589,7 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
                               type="button"
                               className="coordinator-loans-action-btn coordinator-loans-action-btn--complete"
                               disabled={isProcessing}
-                              onClick={() => void markLoanCompleted(loan)}
+                              onClick={() => openCompleteModal(loan)}
                             >
                               Completar
                             </button>
@@ -645,6 +673,46 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
                 disabled={rejectionReason.trim().length < 4 || processingLoanUuid === rejectingLoan.uuid}
               >
                 Rechazar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {approvingLoan ? (
+        <LoanApprovalModal
+          loan={approvingLoan}
+          processing={processingLoanUuid === approvingLoan.uuid}
+          onClose={closeApproveModal}
+          onSubmit={approveLoan}
+        />
+      ) : null}
+      {completingLoan ? (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h3>Completar prestamo</h3>
+            <p>
+              Puedes agregar una nota opcional antes de cerrar la solicitud <strong>{buildLoanCode(completingLoan.uuid)}</strong>.
+            </p>
+            <label htmlFor="completion-notes">Notas</label>
+            <textarea
+              id="completion-notes"
+              rows={3}
+              value={completionNotes}
+              maxLength={1000}
+              onChange={(event) => setCompletionNotes(event.target.value)}
+              placeholder="Observaciones de cierre..."
+            />
+            <div className="modal-actions">
+              <button type="button" className="button button--ghost" onClick={closeCompleteModal}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="coordinator-loans-action-btn coordinator-loans-action-btn--complete"
+                onClick={() => void markLoanCompleted(completingLoan)}
+                disabled={processingLoanUuid === completingLoan.uuid}
+              >
+                Completar
               </button>
             </div>
           </div>
