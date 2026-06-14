@@ -1,5 +1,6 @@
 package com.panol_project.backendpanol.modules.auth.api;
 
+import com.panol_project.backendpanol.shared.security.AuthCookieNames;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Duration;
@@ -12,8 +13,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class AuthCookieService {
 
-    public static final String ACCESS_COOKIE_NAME = "panol_access_token";
-    public static final String REFRESH_COOKIE_NAME = "panol_refresh_token";
+    public static final String ACCESS_COOKIE_NAME = AuthCookieNames.ACCESS_COOKIE_NAME;
+    public static final String REFRESH_COOKIE_NAME = AuthCookieNames.REFRESH_COOKIE_NAME;
 
     private final long accessExpirationSeconds;
     private final long refreshExpirationSeconds;

@@ -37,6 +37,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class SolicitarPrestamoUseCaseTest {
 
+    private static final OffsetDateTime FUTURE_SCHEDULED_AT = OffsetDateTime.parse("2099-06-12T10:30:00-04:00");
+    private static final OffsetDateTime FUTURE_EXPECTED_RETURN_BASE = OffsetDateTime.parse("2099-06-12T10:00:00-04:00");
+    private static final OffsetDateTime FUTURE_SUNDAY_SCHEDULED_AT = OffsetDateTime.parse("2099-06-14T10:30:00-04:00");
+    private static final OffsetDateTime FUTURE_OUT_OF_RANGE_SCHEDULED_AT = OffsetDateTime.parse("2099-06-12T07:30:00-04:00");
+    private static final OffsetDateTime FUTURE_INVALID_UPDATE_SCHEDULED_AT = OffsetDateTime.parse("2099-06-19T21:30:00-04:00");
+    private static final OffsetDateTime FUTURE_INVALID_UPDATE_RETURN_AT = OffsetDateTime.parse("2099-06-19T23:30:00-04:00");
+
     @Mock
     private LoanRepositoryPort loanRepositoryPort;
 
@@ -62,7 +69,7 @@ class SolicitarPrestamoUseCaseTest {
 
     @Test
     void solicitarDebeRechazarFechaDevolucionNoPosteriorALaProgramada() {
-        OffsetDateTime scheduledAt = OffsetDateTime.parse("2026-06-12T10:00:00-04:00");
+        OffsetDateTime scheduledAt = FUTURE_EXPECTED_RETURN_BASE;
         SolicitarPrestamoCommand command = new SolicitarPrestamoCommand(
                 UUID.randomUUID(),
                 UUID.randomUUID(),
@@ -88,7 +95,7 @@ class SolicitarPrestamoUseCaseTest {
         UUID subjectUuid = UUID.randomUUID();
         UUID implementUuid = UUID.randomUUID();
         UUID loanUuid = UUID.randomUUID();
-        OffsetDateTime scheduledAt = OffsetDateTime.parse("2026-06-12T10:30:00-04:00");
+        OffsetDateTime scheduledAt = FUTURE_SCHEDULED_AT;
 
         SolicitarPrestamoCommand command = new SolicitarPrestamoCommand(
                 requesterUuid,
@@ -173,7 +180,7 @@ class SolicitarPrestamoUseCaseTest {
                 requesterUuid,
                 roomUuid,
                 null,
-                OffsetDateTime.parse("2026-06-12T10:30:00-04:00"),
+                FUTURE_SCHEDULED_AT,
                 null,
                 null,
                 List.of(
@@ -199,7 +206,7 @@ class SolicitarPrestamoUseCaseTest {
                 requesterUuid,
                 roomUuid,
                 null,
-                OffsetDateTime.parse("2026-06-12T10:30:00-04:00"),
+                FUTURE_SCHEDULED_AT,
                 null,
                 null,
                 List.of(new SolicitarPrestamoItemCommand(UUID.randomUUID(), 1))
@@ -228,7 +235,7 @@ class SolicitarPrestamoUseCaseTest {
                 requesterUuid,
                 roomUuid,
                 subjectUuid,
-                OffsetDateTime.parse("2026-06-12T10:30:00-04:00"),
+                FUTURE_SCHEDULED_AT,
                 null,
                 null,
                 List.of(new SolicitarPrestamoItemCommand(UUID.randomUUID(), 1))
@@ -259,7 +266,7 @@ class SolicitarPrestamoUseCaseTest {
                 requesterUuid,
                 roomUuid,
                 null,
-                OffsetDateTime.parse("2026-06-12T10:30:00-04:00"),
+                FUTURE_SCHEDULED_AT,
                 null,
                 null,
                 List.of(new SolicitarPrestamoItemCommand(implementUuid, 1))
@@ -292,7 +299,7 @@ class SolicitarPrestamoUseCaseTest {
                 requesterUuid,
                 roomUuid,
                 null,
-                OffsetDateTime.parse("2026-06-12T10:30:00-04:00"),
+                FUTURE_SCHEDULED_AT,
                 null,
                 null,
                 List.of(new SolicitarPrestamoItemCommand(implementUuid, 1))
@@ -321,7 +328,7 @@ class SolicitarPrestamoUseCaseTest {
         UUID requesterUuid = UUID.randomUUID();
         UUID roomUuid = UUID.randomUUID();
         UUID implementUuid = UUID.randomUUID();
-        OffsetDateTime scheduledAt = OffsetDateTime.parse("2026-06-12T10:30:00-04:00");
+        OffsetDateTime scheduledAt = FUTURE_SCHEDULED_AT;
 
         SolicitarPrestamoCommand command = new SolicitarPrestamoCommand(
                 requesterUuid,
@@ -369,7 +376,7 @@ class SolicitarPrestamoUseCaseTest {
 
     @Test
     void solicitarDebeRechazarDomingos() {
-        OffsetDateTime scheduledAt = OffsetDateTime.parse("2026-06-14T10:30:00-04:00");
+        OffsetDateTime scheduledAt = FUTURE_SUNDAY_SCHEDULED_AT;
 
         SolicitarPrestamoCommand command = new SolicitarPrestamoCommand(
                 UUID.randomUUID(),
@@ -391,7 +398,7 @@ class SolicitarPrestamoUseCaseTest {
 
     @Test
     void solicitarDebeRechazarHorasFueraDeRango() {
-        OffsetDateTime scheduledAt = OffsetDateTime.parse("2026-06-12T07:30:00-04:00");
+        OffsetDateTime scheduledAt = FUTURE_OUT_OF_RANGE_SCHEDULED_AT;
 
         SolicitarPrestamoCommand command = new SolicitarPrestamoCommand(
                 UUID.randomUUID(),
@@ -416,7 +423,7 @@ class SolicitarPrestamoUseCaseTest {
         UUID requesterUuid = UUID.randomUUID();
         UUID roomUuid = UUID.randomUUID();
         UUID implementUuid = UUID.randomUUID();
-        OffsetDateTime scheduledAt = OffsetDateTime.parse("2026-06-12T10:30:00-04:00");
+        OffsetDateTime scheduledAt = FUTURE_SCHEDULED_AT;
 
         SolicitarPrestamoCommand command = new SolicitarPrestamoCommand(
                 requesterUuid,
@@ -486,8 +493,8 @@ class SolicitarPrestamoUseCaseTest {
                 requesterUuid,
                 roomUuid,
                 null,
-                OffsetDateTime.parse("2026-06-19T21:30:00-04:00"),
-                OffsetDateTime.parse("2026-06-19T23:30:00-04:00"),
+                FUTURE_INVALID_UPDATE_SCHEDULED_AT,
+                FUTURE_INVALID_UPDATE_RETURN_AT,
                 null,
                 List.of(new SolicitarPrestamoItemCommand(implementUuid, 1))
         );

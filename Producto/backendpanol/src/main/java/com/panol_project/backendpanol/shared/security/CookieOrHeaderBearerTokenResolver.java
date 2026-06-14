@@ -1,7 +1,9 @@
 package com.panol_project.backendpanol.shared.security;
 
-import com.panol_project.backendpanol.modules.auth.api.AuthCookieService;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.Arrays;
+import java.util.Optional;
 import java.util.Set;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
@@ -17,11 +19,6 @@ public class CookieOrHeaderBearerTokenResolver implements BearerTokenResolver {
     );
 
     private final DefaultBearerTokenResolver headerResolver = new DefaultBearerTokenResolver();
-    private final AuthCookieService authCookieService;
-
-    public CookieOrHeaderBearerTokenResolver(AuthCookieService authCookieService) {
-        this.authCookieService = authCookieService;
-    }
 
     @Override
     public String resolve(HttpServletRequest request) {
@@ -35,6 +32,18 @@ public class CookieOrHeaderBearerTokenResolver implements BearerTokenResolver {
             return headerToken;
         }
 
-        return authCookieService.getAccessToken(request).orElse(null);
+        return getCookieValue(request, AuthCookieNames.ACCESS_COOKIE_NAME).orElse(null);
+    }
+
+    private Optional<String> getCookieValue(HttpServletRequest request, String name) {
+        Cookie[] cookies = request.getCookies();
+        if (cookies == null || cookies.length == 0) {
+            return Optional.empty();
+        }
+        return Arrays.stream(cookies)
+                .filter(cookie -> name.equals(cookie.getName()))
+                .map(Cookie::getValue)
+                .filter(value -> value != null && !value.isBlank())
+                .findFirst();
     }
 }
