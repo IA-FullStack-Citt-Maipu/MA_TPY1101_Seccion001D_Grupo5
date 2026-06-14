@@ -5,14 +5,17 @@ import {
   Minus,
   PackageSearch,
   Plus,
+  Search,
   SendHorizontal,
   Square,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getApiErrorPayload, getErrorMessage } from "../services/apiClient";
+import { fetchImplements } from "../services/implementService";
 import { fetchLoanByUuid, deliverLoan } from "../services/loanService";
 import { fetchImplementStock } from "../services/stockService";
 import type { DeliverLoanPayload, LoanSummary } from "../types/loan";
+import type { ImplementSummary } from "../types/implement";
 import type { IndividualItem, StockDetail } from "../types/stock";
 
 interface DeliveryIndividualOption {
@@ -25,6 +28,7 @@ interface DeliveryItemState {
   implementUuid: string;
   implementName: string;
   requested: number;
+  approved: number;
   delivered: number;
   outstanding: number;
   requiredQuantity: number;
@@ -39,6 +43,7 @@ interface DeliveryItemState {
   individualOptions: DeliveryIndividualOption[];
   selectedAssetCodes: string[];
   stockError: string | null;
+  isAdditional: boolean;
 }
 
 function parseDate(value: string): Date | null {
@@ -112,15 +117,18 @@ function buildIndividualOptions(individuals: IndividualItem[], suggestedAssetCod
 }
 
 function isItemReadyForDelivery(item: DeliveryItemState): boolean {
-  if (!item.selected || item.stockError || item.requiredQuantity <= 0) {
+  if (!item.selected || item.stockError) {
+    return false;
+  }
+  if (!item.isAdditional && item.requiredQuantity <= 0) {
     return false;
   }
 
   if (item.itemType === "individual") {
-    return item.selectedAssetCodes.length === item.requiredQuantity;
+    return item.selectedAssetCodes.length > 0 && item.selectedAssetCodes.length <= item.maxQuantity;
   }
 
-  return item.quantity === item.requiredQuantity;
+  return item.quantity > 0 && item.quantity <= item.maxQuantity;
 }
 
 export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: string; embedded?: boolean }) {
@@ -130,7 +138,13 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
   const [items, setItems] = useState<DeliveryItemState[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showModificationModal, setShowModificationModal] = useState(false);
+  const [showDeliveryVariationModal, setShowDeliveryVariationModal] = useState(false);
   const [modificationTargetName, setModificationTargetName] = useState<string | null>(null);
+  const [deliveryNotes, setDeliveryNotes] = useState("");
+  const [additionalOptions, setAdditionalOptions] = useState<ImplementSummary[]>([]);
+  const [additionalSearch, setAdditionalSearch] = useState("");
+  const [selectedAdditionalUuid, setSelectedAdditionalUuid] = useState("");
+  const [addingImplement, setAddingImplement] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -153,11 +167,13 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
         setLoan(detail);
 
         const baseRows = detail.items.map((item) => {
-          const outstanding = Math.max(0, item.requested_quantity - item.delivered_quantity);
+          const approved = item.reserved_quantity;
+          const outstanding = Math.max(0, approved - item.delivered_quantity);
           return {
             implementUuid: item.implement_uuid,
             implementName: item.implement_name,
             requested: item.requested_quantity,
+            approved,
             delivered: item.delivered_quantity,
             outstanding,
             requiredQuantity: outstanding,
@@ -190,6 +206,7 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
               implementUuid: row.implementUuid,
               implementName: row.implementName,
               requested: row.requested,
+              approved: row.approved,
               delivered: row.delivered,
               outstanding: row.outstanding,
               requiredQuantity: row.requiredQuantity,
@@ -204,6 +221,7 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
               individualOptions: [],
               selectedAssetCodes: [],
               stockError: errorMessage,
+              isAdditional: false,
             };
           }
 
@@ -213,14 +231,16 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
               .filter(isIndividualSelectable)
               .map((individual) => individual.asset_code)
               .filter((value): value is string => typeof value === "string" && value.trim().length > 0);
-            const maxQuantity = Math.min(row.outstanding, availableAssetCodes.length);
-            const suggestedAssetCodes = availableAssetCodes.slice(0, maxQuantity);
+            const maxQuantity = availableAssetCodes.length;
+            const suggestedQuantity = Math.min(row.outstanding, maxQuantity);
+            const suggestedAssetCodes = availableAssetCodes.slice(0, suggestedQuantity);
             const selectedAssetCodes = suggestedAssetCodes;
             const individualOptions = buildIndividualOptions(stock.individuals ?? [], suggestedAssetCodes);
             return {
               implementUuid: row.implementUuid,
               implementName: row.implementName,
               requested: row.requested,
+              approved: row.approved,
               delivered: row.delivered,
               outstanding: row.outstanding,
               requiredQuantity: row.requiredQuantity,
@@ -235,24 +255,26 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
               individualOptions,
               selectedAssetCodes,
               stockError: null,
+              isAdditional: false,
             };
           }
 
           const availableStock = stock.stock?.available ?? null;
           const maxQuantity = availableStock == null
             ? row.outstanding
-            : Math.max(0, Math.min(row.outstanding, availableStock));
-          const quantity = maxQuantity > 0 ? maxQuantity : 0;
+            : Math.max(0, availableStock);
+          const quantity = row.outstanding > 0 ? Math.min(row.outstanding, maxQuantity) : 0;
           return {
             implementUuid: row.implementUuid,
-              implementName: row.implementName,
-              requested: row.requested,
-              delivered: row.delivered,
-              outstanding: row.outstanding,
-              requiredQuantity: row.requiredQuantity,
-              selected: quantity > 0,
-              itemType,
-              quantity,
+            implementName: row.implementName,
+            requested: row.requested,
+            approved: row.approved,
+            delivered: row.delivered,
+            outstanding: row.outstanding,
+            requiredQuantity: row.requiredQuantity,
+            selected: quantity > 0,
+            itemType,
+            quantity,
             maxQuantity,
             maxSelectableQuantity: availableStock == null ? maxQuantity : Math.max(0, availableStock),
             availableStock,
@@ -261,10 +283,30 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
             individualOptions: [],
             selectedAssetCodes: [],
             stockError: null,
+            isAdditional: false,
           };
         });
 
         setItems(hydratedRows);
+        const excludedUuids = new Set(detail.items.map((item) => item.implement_uuid));
+        try {
+          const implementOptions = await fetchImplements({
+            stockStatus: "available",
+          });
+          if (!cancelled) {
+            setAdditionalOptions(
+              implementOptions.filter((implement) =>
+                !excludedUuids.has(implement.uuid) &&
+                implement.active !== false &&
+                (implement.stock?.available ?? 0) > 0,
+              ),
+            );
+          }
+        } catch {
+          if (!cancelled) {
+            setAdditionalOptions([]);
+          }
+        }
       } catch (requestError) {
         if (cancelled) {
           return;
@@ -300,18 +342,55 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
     });
   }, [items]);
 
+  const additionalCandidates = useMemo(() => {
+    const selectedUuids = new Set(items.map((item) => item.implementUuid));
+    const normalizedSearch = additionalSearch.trim().toLowerCase();
+    return additionalOptions
+      .filter((implement) => !selectedUuids.has(implement.uuid))
+      .filter((implement) => {
+        if (!normalizedSearch) {
+          return true;
+        }
+        return [
+          implement.name,
+          implement.category?.name ?? "",
+          implement.location?.name ?? "",
+          implement.barcode ?? "",
+        ].join(" ").toLowerCase().includes(normalizedSearch);
+      })
+      .slice(0, 25);
+  }, [additionalOptions, additionalSearch, items]);
+
   const summaryCount = useMemo(
     () => selectedItems.reduce((total, item) => total + (item.itemType === "individual" ? item.selectedAssetCodes.length : item.quantity), 0),
     [selectedItems],
   );
 
   const itemsReadyForDelivery = useMemo(
-    () => items.filter((item) => item.outstanding > 0 && isItemReadyForDelivery(item)),
-    [items],
+    () => selectedItems.filter(isItemReadyForDelivery),
+    [selectedItems],
   );
 
   const itemsBlockingDelivery = useMemo(
-    () => items.filter((item) => item.outstanding > 0 && !isItemReadyForDelivery(item)),
+    () => selectedItems.filter((item) => !isItemReadyForDelivery(item)),
+    [selectedItems],
+  );
+
+  const hasDeliveryVariation = useMemo(
+    () => items.some((item) => {
+      if (item.isAdditional) {
+        const selectedQuantity = item.itemType === "individual" ? item.selectedAssetCodes.length : item.quantity;
+        return item.selected && selectedQuantity > 0;
+      }
+      if (item.outstanding <= 0) {
+        return false;
+      }
+      if (!item.selected) {
+        return true;
+      }
+      const selectedQuantity = item.itemType === "individual" ? item.selectedAssetCodes.length : item.quantity;
+      return selectedQuantity !== item.requiredQuantity;
+    }),
     [items],
   );
 
@@ -322,8 +401,8 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
     if (loan.status !== "approved" && loan.status !== "prepared") {
       return false;
     }
-    return items.length > 0 && itemsBlockingDelivery.length === 0 && itemsReadyForDelivery.length === items.filter((item) => item.outstanding > 0).length;
-  }, [deliveryAllowed, items, itemsBlockingDelivery.length, itemsReadyForDelivery.length, loan, submitting]);
+    return selectedItems.length > 0 && itemsBlockingDelivery.length === 0 && itemsReadyForDelivery.length === selectedItems.length;
+  }, [deliveryAllowed, itemsBlockingDelivery.length, itemsReadyForDelivery.length, loan, selectedItems.length, submitting]);
 
   function goBack() {
     if (window.history.length > 1) {
@@ -376,14 +455,9 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
   }
 
   function adjustFungibleQuantity(implementUuid: string, delta: number) {
-    let modalItemName: string | null = null;
     setItems((previous) =>
       previous.map((item) => {
         if (item.implementUuid !== implementUuid || item.itemType === "individual") {
-          return item;
-        }
-        if (delta > 0 && item.quantity >= item.maxQuantity && item.maxSelectableQuantity > item.maxQuantity) {
-          modalItemName = item.implementName;
           return item;
         }
         const next = Math.max(0, Math.min(item.maxQuantity, item.quantity + delta));
@@ -394,9 +468,6 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
         };
       }),
     );
-    if (modalItemName) {
-      openModificationModal(modalItemName);
-    }
   }
 
   function toggleAssetCode(implementUuid: string, assetCode: string) {
@@ -434,7 +505,86 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
     }
   }
 
-  async function submitDelivery() {
+  async function addAdditionalImplement() {
+    const selected = additionalOptions.find((implement) => implement.uuid === selectedAdditionalUuid);
+    if (!selected) {
+      return;
+    }
+
+    setAddingImplement(true);
+    setError(null);
+    try {
+      const stock = await fetchImplementStock(selected.uuid);
+      const itemType = mapItemType(stock);
+      let nextItem: DeliveryItemState;
+
+      if (itemType === "individual") {
+        const availableAssetCodes = (stock.individuals ?? [])
+          .filter(isIndividualSelectable)
+          .map((individual) => individual.asset_code)
+          .filter((value): value is string => typeof value === "string" && value.trim().length > 0);
+        const selectedAssetCodes = availableAssetCodes.slice(0, 1);
+        nextItem = {
+          implementUuid: selected.uuid,
+          implementName: selected.name,
+          requested: 0,
+          approved: 0,
+          delivered: 0,
+          outstanding: 0,
+          requiredQuantity: 0,
+          selected: selectedAssetCodes.length > 0,
+          itemType,
+          quantity: selectedAssetCodes.length,
+          maxQuantity: availableAssetCodes.length,
+          maxSelectableQuantity: availableAssetCodes.length,
+          availableStock: availableAssetCodes.length,
+          availableAssetCodes,
+          suggestedAssetCodes: selectedAssetCodes,
+          individualOptions: buildIndividualOptions(stock.individuals ?? [], selectedAssetCodes),
+          selectedAssetCodes,
+          stockError: availableAssetCodes.length > 0 ? null : "No hay unidades individuales disponibles.",
+          isAdditional: true,
+        };
+      } else {
+        const availableStock = stock.stock?.available ?? selected.stock?.available ?? 0;
+        nextItem = {
+          implementUuid: selected.uuid,
+          implementName: selected.name,
+          requested: 0,
+          approved: 0,
+          delivered: 0,
+          outstanding: 0,
+          requiredQuantity: 0,
+          selected: availableStock > 0,
+          itemType,
+          quantity: availableStock > 0 ? 1 : 0,
+          maxQuantity: Math.max(0, availableStock),
+          maxSelectableQuantity: Math.max(0, availableStock),
+          availableStock,
+          availableAssetCodes: [],
+          suggestedAssetCodes: [],
+          individualOptions: [],
+          selectedAssetCodes: [],
+          stockError: availableStock > 0 ? null : "No hay stock disponible para agregar este implemento.",
+          isAdditional: true,
+        };
+      }
+
+      setItems((previous) => [...previous, nextItem]);
+      setSelectedAdditionalUuid("");
+      setAdditionalSearch("");
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, "No se pudo agregar el implemento adicional."));
+    } finally {
+      setAddingImplement(false);
+    }
+  }
+
+  function closeDeliveryVariationModal() {
+    setShowDeliveryVariationModal(false);
+  }
+
+  async function submitDelivery(confirmedVariation = false) {
     setError(null);
     if (!loan) {
       setError("No hay datos de prestamo para registrar la entrega.");
@@ -472,15 +622,24 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
       return;
     }
 
-    const invalidItem = items.find((item) => item.outstanding > 0 && !isItemReadyForDelivery(item));
+    const invalidItem = selectedItems.find((item) => !isItemReadyForDelivery(item));
     if (invalidItem) {
-      setError(`La entrega de ${invalidItem.implementName} debe coincidir con la cantidad solicitada y solo puede usar unidades disponibles.`);
+      setError(`La entrega de ${invalidItem.implementName} debe tener al menos una unidad disponible y no superar lo pendiente.`);
       return;
     }
 
+    if (hasDeliveryVariation && !confirmedVariation) {
+      setShowDeliveryVariationModal(true);
+      return;
+    }
+
+    setShowDeliveryVariationModal(false);
     setSubmitting(true);
     try {
-      const updated = await deliverLoan(loan.uuid, { items: payloadItems });
+      const updated = await deliverLoan(loan.uuid, {
+        items: payloadItems,
+        notes: deliveryNotes.trim() || null,
+      });
       window.location.hash = `#/inventory/prestamos/${updated.uuid}`;
     } catch (requestError) {
       const apiError = getApiErrorPayload(requestError);
@@ -542,19 +701,19 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
                       </button>
                       <div className="loan-delivery-item-card__copy">
                         <strong>{item.implementName}</strong>
-                        <p>
-                          Solicitado: {item.requested} | Ya entregado: {item.delivered} | Pendiente: {item.outstanding}
-                        </p>
+                        {item.isAdditional ? (
+                          <p>Adicional no solicitado | Se agregara a esta entrega</p>
+                        ) : (
+                          <p>
+                            Solicitado: {item.requested} | Aprobado: {item.approved} | Ya entregado: {item.delivered} | Pendiente: {item.outstanding}
+                          </p>
+                        )}
                         {item.availableStock != null ? (
                           <small>Disponibles actuales: {item.availableStock}</small>
                         ) : null}
                         {item.stockError ? <small className="field-error">{item.stockError}</small> : null}
-                        {!item.stockError && item.outstanding > 0 && !isItemReadyForDelivery(item) ? (
-                          <small className="field-error">
-                            {item.availableStock != null && item.availableStock < item.requiredQuantity
-                              ? `No hay disponibilidad suficiente para completar la entrega (${item.availableStock}/${item.requiredQuantity}).`
-                              : `La entrega debe incluir exactamente ${item.requiredQuantity} unidad(es) disponibles.`}
-                          </small>
+                        {!item.stockError && item.selected && item.outstanding > 0 && !isItemReadyForDelivery(item) ? (
+                          <small className="field-error">Selecciona al menos una unidad disponible para incluirla en esta entrega.</small>
                         ) : null}
                       </div>
                     </div>
@@ -627,6 +786,50 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
                 ))
               )}
             </div>
+
+            <div className="loan-delivery-additional">
+              <div className="loan-delivery-additional__header">
+                <div>
+                  <strong>Agregar implemento adicional</strong>
+                  <p>Usa esto cuando durante la entrega se solicita algo que no estaba en el formulario.</p>
+                </div>
+              </div>
+              <label className="loan-delivery-additional__search">
+                <Search size={15} />
+                <input
+                  type="search"
+                  value={additionalSearch}
+                  onChange={(event) => setAdditionalSearch(event.target.value)}
+                  placeholder="Buscar implemento disponible..."
+                />
+              </label>
+              <div className="loan-delivery-additional__controls">
+                <select
+                  value={selectedAdditionalUuid}
+                  onChange={(event) => setSelectedAdditionalUuid(event.target.value)}
+                  disabled={additionalCandidates.length === 0 || addingImplement}
+                >
+                  <option value="">Selecciona un implemento</option>
+                  {additionalCandidates.map((implement) => (
+                    <option key={implement.uuid} value={implement.uuid}>
+                      {implement.name} ({implement.stock?.available ?? 0} disp.)
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="loan-secondary-btn"
+                  onClick={() => void addAdditionalImplement()}
+                  disabled={!selectedAdditionalUuid || addingImplement}
+                >
+                  <Plus size={15} />
+                  {addingImplement ? "Agregando..." : "Agregar"}
+                </button>
+              </div>
+              {additionalCandidates.length === 0 ? (
+                <small className="field-hint">No hay implementos disponibles para agregar con el filtro actual.</small>
+              ) : null}
+            </div>
           </article>
 
           <aside className="loan-delivery-side">
@@ -637,11 +840,26 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
               </h3>
               <p>Items marcados: {selectedItems.length}</p>
               <p>Unidades a entregar: {summaryCount}</p>
-              {itemsBlockingDelivery.length > 0 ? (
-                <p className="field-error">
-                  Debes dejar listas todas las lineas del prestamo antes de confirmar la entrega.
+              {hasDeliveryVariation ? (
+                <p className="field-hint">
+                  Hay diferencias entre lo solicitado y lo que se entregara. Se pedira confirmacion antes de guardar.
                 </p>
               ) : null}
+              {itemsBlockingDelivery.length > 0 ? (
+                <p className="field-error">
+                  Revisa los items marcados antes de confirmar la entrega.
+                </p>
+              ) : null}
+
+              <label htmlFor="loan-delivery-notes">Notas de entrega (opcional)</label>
+              <textarea
+                id="loan-delivery-notes"
+                rows={4}
+                value={deliveryNotes}
+                maxLength={1000}
+                onChange={(event) => setDeliveryNotes(event.target.value)}
+                placeholder="Ej: Se entregan menos unidades por disponibilidad real."
+              />
 
               <div className="loan-delivery-side__actions">
                 <button type="button" className="loan-secondary-btn" onClick={goBack} disabled={submitting}>
@@ -676,6 +894,30 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
               </button>
               <button type="button" className="loan-primary-btn" onClick={goToLoanDetail}>
                 Revisar solicitud
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showDeliveryVariationModal ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal">
+            <h3>Estas modificando la solicitud</h3>
+            <p>
+              Se esta registrando una entrega distinta a lo solicitado o pendiente. Seguro que quieres seguir?
+            </p>
+            <div className="modal-actions">
+              <button type="button" className="loan-secondary-btn" onClick={closeDeliveryVariationModal}>
+                Volver a revisar
+              </button>
+              <button
+                type="button"
+                className="loan-primary-btn"
+                onClick={() => void submitDelivery(true)}
+                disabled={submitting}
+              >
+                Si, continuar
               </button>
             </div>
           </div>

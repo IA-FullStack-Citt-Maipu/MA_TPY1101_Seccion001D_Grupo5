@@ -31,6 +31,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class SolicitarPrestamoUseCase {
 
+    private static final int MAX_NOTES_LENGTH = 1000;
+
     private final LoanRepositoryPort loanRepositoryPort;
 
     public SolicitarPrestamoUseCase(LoanRepositoryPort loanRepositoryPort) {
@@ -93,6 +95,7 @@ public class SolicitarPrestamoUseCase {
                         subjectUuid,
                         command.scheduledAt(),
                         command.expectedReturnAt(),
+                        normalizeOptionalText(command.notes()),
                         requestedItems
                 )
         );
@@ -165,6 +168,7 @@ public class SolicitarPrestamoUseCase {
                         subjectUuid,
                         command.scheduledAt(),
                         command.expectedReturnAt(),
+                        normalizeOptionalText(command.notes()),
                         requestedItems
                 )
         );
@@ -177,6 +181,7 @@ public class SolicitarPrestamoUseCase {
         validateCommandEnvelope(command);
         validateScheduledAt(command.scheduledAt());
         validateExpectedReturnAt(command.scheduledAt(), command.expectedReturnAt());
+        validateNotes(command.notes());
 
         List<SolicitarPrestamoItemCommand> items = command.requestedItems();
         if (items == null || items.isEmpty()) {
@@ -207,6 +212,20 @@ public class SolicitarPrestamoUseCase {
         if (command.roomUuid() == null) {
             throw new BadRequestException("LOAN_ROOM_REQUIRED", "room_uuid es obligatorio");
         }
+    }
+
+    private void validateNotes(String notes) {
+        if (notes != null && notes.trim().length() > MAX_NOTES_LENGTH) {
+            throw new BadRequestException("LOAN_NOTES_TOO_LONG", "notes no puede superar 1000 caracteres");
+        }
+    }
+
+    private String normalizeOptionalText(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String normalized = raw.trim();
+        return normalized.isEmpty() ? null : normalized;
     }
 
     private LoanSummaryView requireEditablePendingLoan(UUID loanUuid, UUID requesterUuid) {

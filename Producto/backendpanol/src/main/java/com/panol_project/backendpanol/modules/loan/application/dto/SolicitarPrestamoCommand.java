@@ -10,6 +10,7 @@ public record SolicitarPrestamoCommand(
         UUID subjectUuid,
         OffsetDateTime scheduledAt,
         OffsetDateTime expectedReturnAt,
+        String notes,
         List<SolicitarPrestamoItemCommand> requestedItems
 ) {
 }

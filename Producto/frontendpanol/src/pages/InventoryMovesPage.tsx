@@ -10,7 +10,7 @@ import {
   type ManualMovementType,
 } from "../services/movementService";
 import type { ImplementSummary, InventoryMovementDetail } from "../types/implement";
-import { getUserRoleFromToken } from "../utils/auth";
+import { getSessionUserRole } from "../utils/auth";
 import { Button } from "../components/ui/Button";
 import { Select } from "../components/ui/Select";
 import { Input } from "../components/ui/Input";
@@ -62,7 +62,7 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
   const [quantity, setQuantity] = useState("1");
   const [notes, setNotes] = useState("");
 
-  const role = getUserRoleFromToken();
+  const role = getSessionUserRole();
   const canCreateMovement = role === "COORDINADOR";
 
   const reloadMovements = useCallback(async () => {

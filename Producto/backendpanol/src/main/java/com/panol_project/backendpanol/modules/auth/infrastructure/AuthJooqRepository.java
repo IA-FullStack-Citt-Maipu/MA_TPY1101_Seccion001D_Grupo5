@@ -8,6 +8,7 @@ import com.panol_project.backendpanol.modules.auth.domain.AuthUser;
 import com.panol_project.backendpanol.modules.auth.domain.TokenRevocationPort;
 import com.panol_project.backendpanol.modules.auth.domain.UserAuthPort;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jooq.DSLContext;
@@ -135,11 +136,34 @@ public class AuthJooqRepository implements UserAuthPort, TokenRevocationPort {
         if (jti == null || jti.isBlank()) {
             return false;
         }
-        Integer count = dsl.selectCount()
+        return dsl.fetchExists(
+                dsl.selectOne()
+                        .from(TOKEN_REVOCATION)
+                        .where(TOKEN_REVOCATION.JTI.eq(jti))
+        );
+    }
+
+    @Override
+    public int deleteExpiredRevocations(OffsetDateTime now, int limit) {
+        if (now == null) {
+            throw new IllegalArgumentException("now es obligatorio");
+        }
+
+        int normalizedLimit = limit > 0 ? limit : 500;
+        List<Long> revocationIds = dsl.select(TOKEN_REVOCATION.ID)
                 .from(TOKEN_REVOCATION)
-                .where(TOKEN_REVOCATION.JTI.eq(jti))
-                .fetchOne(0, Integer.class);
-        return count != null && count > 0;
+                .where(TOKEN_REVOCATION.EXPIRES_AT.lt(now))
+                .orderBy(TOKEN_REVOCATION.EXPIRES_AT.asc(), TOKEN_REVOCATION.ID.asc())
+                .limit(normalizedLimit)
+                .fetch(TOKEN_REVOCATION.ID);
+
+        if (revocationIds.isEmpty()) {
+            return 0;
+        }
+
+        return dsl.deleteFrom(TOKEN_REVOCATION)
+                .where(TOKEN_REVOCATION.ID.in(revocationIds))
+                .execute();
     }
 
     private Long findUserIdByUuid(UUID userUuid) {

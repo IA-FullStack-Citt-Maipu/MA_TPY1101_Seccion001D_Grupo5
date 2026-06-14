@@ -6,6 +6,7 @@ import java.util.UUID;
 public record DevolverPrestamoCommand(
         UUID loanUuid,
         UUID actorUuid,
+        String notes,
         List<DevolverPrestamoIndividualCommand> returnedIndividuals,
         List<DevolverPrestamoConsumableCommand> consumableReturns
 ) {

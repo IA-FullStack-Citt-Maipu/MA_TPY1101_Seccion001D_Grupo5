@@ -6,6 +6,7 @@ import java.util.UUID;
 public record EntregarPrestamoCommand(
         UUID loanUuid,
         UUID actorUuid,
+        String notes,
         List<EntregarPrestamoItemCommand> items
 ) {
 }

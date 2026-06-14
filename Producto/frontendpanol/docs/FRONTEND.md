@@ -38,9 +38,28 @@ Frontend para gestion operativa de inventario consumiendo API v2 del backend.
 ### Configuracion de usuario
 
 1. `GET /api/v2/auth/me`
-2. `PATCH /api/v2/auth/me/email`
-3. `PATCH /api/v2/auth/me/password`
-4. Preferencia visual persistida en `localStorage` mediante `utils/theme.ts`
+2. `POST /api/v2/auth/refresh`
+3. `POST /api/v2/auth/logout`
+4. `GET /api/v2/auth/me/sessions`
+5. `DELETE /api/v2/auth/me/sessions/{sessionId}`
+6. `PATCH /api/v2/auth/me/email`
+7. `PATCH /api/v2/auth/me/password`
+8. Preferencia visual persistida en `localStorage` mediante `utils/theme.ts`
+
+- `SettingsPage.tsx` muestra una tarjeta full-width de sesiones activas.
+- La identificacion de dispositivo (`PC`, `Celular`, `Tablet`) se resuelve en
+  frontend con heuristica liviana sobre `userAgent`.
+- Si el usuario cierra su sesion actual desde Configuracion, el frontend limpia
+  `auth_user` y redirige a `#/login`.
+
+### Sesion web
+
+- El frontend ya no guarda JWT en `localStorage` ni `sessionStorage`.
+- El backend setea `panol_access_token` y `panol_refresh_token` como cookies
+  HTTP-only.
+- `utils/auth.ts` conserva solo `auth_user` como snapshot no sensible.
+- `services/apiClient.ts` usa `withCredentials: true` y hace refresh silencioso
+  ante `401`.
 
 ### Implementos
 
@@ -71,6 +90,8 @@ El frontend consume payload uniforme:
 - `VITE_API_BASE_URL`
   - local: `http://localhost:18080`
   - dev desplegado: `https://api.dev.panol.cl`
+- En local, mantener frontend y backend en el mismo host visible (`localhost`
+  o `127.0.0.1`) para no romper envio de cookies.
 
 ## Despliegue local recomendado
 

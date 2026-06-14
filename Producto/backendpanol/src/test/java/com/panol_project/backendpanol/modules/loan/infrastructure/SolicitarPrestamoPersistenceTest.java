@@ -123,6 +123,7 @@ class SolicitarPrestamoPersistenceTest {
                 subjectUuid,
                 OffsetDateTime.parse("2026-06-22T10:15:00-04:00"),
                 null,
+                null,
                 List.of(new SolicitarPrestamoItemCommand(implementUuid, 3))
         ));
         loanUuidsToCleanup.add(created.uuid());
@@ -209,6 +210,7 @@ class SolicitarPrestamoPersistenceTest {
                             subjectUuid,
                             OffsetDateTime.parse("2026-06-23T11:00:00-04:00"),
                             null,
+                            null,
                             List.of(new SolicitarPrestamoItemCommand(implementUuid, 1))
                     ));
                     createdLoanUuid[0] = created.uuid();
@@ -253,6 +255,7 @@ class SolicitarPrestamoPersistenceTest {
                 subjectUuid,
                 OffsetDateTime.parse("2026-06-24T09:30:00-04:00"),
                 null,
+                null,
                 List.of(new SolicitarPrestamoItemCommand(implementUuid, 2))
         ));
         loanUuidsToCleanup.add(created.uuid());
@@ -276,6 +279,7 @@ class SolicitarPrestamoPersistenceTest {
                 subjectUuid,
                 OffsetDateTime.parse("2026-06-25T10:00:00-04:00"),
                 OffsetDateTime.parse("2026-06-25T12:00:00-04:00"),
+                null,
                 List.of(new SolicitarPrestamoItemCommand(implementUuid, 1))
         ));
         loanUuidsToCleanup.add(firstLoan.uuid());
@@ -286,6 +290,7 @@ class SolicitarPrestamoPersistenceTest {
                 subjectUuid,
                 OffsetDateTime.parse("2026-06-25T15:00:00-04:00"),
                 OffsetDateTime.parse("2026-06-25T17:00:00-04:00"),
+                null,
                 List.of(new SolicitarPrestamoItemCommand(implementUuid, 1))
         ));
         loanUuidsToCleanup.add(secondLoan.uuid());
@@ -310,6 +315,7 @@ class SolicitarPrestamoPersistenceTest {
                 subjectUuid,
                 OffsetDateTime.parse("2026-06-26T10:00:00-04:00"),
                 OffsetDateTime.parse("2026-06-26T12:00:00-04:00"),
+                null,
                 List.of(new SolicitarPrestamoItemCommand(implementUuid, 1))
         ));
         loanUuidsToCleanup.add(firstLoan.uuid());
@@ -320,6 +326,7 @@ class SolicitarPrestamoPersistenceTest {
                 subjectUuid,
                 OffsetDateTime.parse("2026-06-26T11:00:00-04:00"),
                 OffsetDateTime.parse("2026-06-26T13:00:00-04:00"),
+                null,
                 List.of(new SolicitarPrestamoItemCommand(implementUuid, 1))
         )));
         SecurityContextHolder.clearContext();

@@ -6,7 +6,7 @@ import { fetchActiveCategories } from "../services/activeCategoryService";
 import { getErrorMessage } from "../services/apiClient";
 import type { ActiveCategoryOption } from "../types/categoryActive";
 import type { ImplementSummary } from "../types/implement";
-import { getUserRoleFromToken, type UserRole } from "../utils/auth";
+import { getSessionUserRole, type UserRole } from "../utils/auth";
 
 type StockHealth = "healthy" | "low" | "critical" | "unknown";
 type FilterTagKey = "name" | "categoryUuid" | "stockStatus";
@@ -72,7 +72,7 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
   const [totalImplements, setTotalImplements] = useState(0);
   const [categoryOptions, setCategoryOptions] = useState<ActiveCategoryOption[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
-  const [userRole, setUserRole] = useState<UserRole>("UNKNOWN");
+  const userRole: UserRole = getSessionUserRole();
   const [searchFilter, setSearchFilter] = useState("");
   const [selectedCategoryUuids, setSelectedCategoryUuids] = useState<string[]>([]);
   const [selectedStockStatuses, setSelectedStockStatuses] = useState<StockFilterOption[]>([]);
@@ -132,11 +132,6 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
     }
 
     loadActiveCategories();
-  }, []);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setUserRole(getUserRoleFromToken());
   }, []);
 
   useEffect(() => {
