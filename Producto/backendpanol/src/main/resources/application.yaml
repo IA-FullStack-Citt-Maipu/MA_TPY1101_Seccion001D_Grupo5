@@ -29,6 +29,16 @@ app:
   auth:
     max-failed-attempts: ${APP_AUTH_MAX_FAILED_ATTEMPTS:5}
     lock-minutes: ${APP_AUTH_LOCK_MINUTES:15}
+    refresh:
+      expiration-seconds: ${APP_AUTH_REFRESH_EXPIRATION_SECONDS:604800}
+    cookies:
+      secure: ${APP_AUTH_COOKIE_SECURE:false}
+      same-site: ${APP_AUTH_COOKIE_SAME_SITE:Lax}
+    token-revocation-cleanup:
+      enabled: ${APP_AUTH_TOKEN_REVOCATION_CLEANUP_ENABLED:true}
+      initial-delay-ms: ${APP_AUTH_TOKEN_REVOCATION_CLEANUP_INITIAL_DELAY_MS:300000}
+      delay-ms: ${APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS:1800000}
+      batch-size: ${APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE:500}
     jwt:
       issuer: ${APP_AUTH_JWT_ISSUER:panol-backend}
       secret: ${APP_AUTH_JWT_SECRET:panol-secret-key-change-in-prod-1234567890123}

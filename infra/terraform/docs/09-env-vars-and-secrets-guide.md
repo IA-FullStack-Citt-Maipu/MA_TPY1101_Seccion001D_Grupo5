@@ -25,7 +25,14 @@ Variables no sensibles (env vars Terraform / Cloud Run):
 - `JWT_ISSUER_URI`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
 - `DB_SUPABASE_HOST`, `DB_SUPABASE_PORT`, `DB_SUPABASE_NAME`, `DB_SUPABASE_USER`
-- `APP_SECURITY_ENABLED`, `APP_AUTH_MAX_FAILED_ATTEMPTS`, `APP_AUTH_LOCK_MINUTES`, `APP_AUTH_JWT_ISSUER`, `APP_AUTH_JWT_EXPIRATION_SECONDS`
+- `APP_SECURITY_ENABLED`, `APP_AUTH_MAX_FAILED_ATTEMPTS`, `APP_AUTH_LOCK_MINUTES`
+- `APP_AUTH_JWT_ISSUER`, `APP_AUTH_JWT_EXPIRATION_SECONDS`
+- `APP_AUTH_REFRESH_EXPIRATION_SECONDS`
+- `APP_AUTH_COOKIE_SECURE`, `APP_AUTH_COOKIE_SAME_SITE`
+- `APP_AUTH_TOKEN_REVOCATION_CLEANUP_ENABLED`
+- `APP_AUTH_TOKEN_REVOCATION_CLEANUP_INITIAL_DELAY_MS`
+- `APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS`
+- `APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE`
 
 ## Estandar de nombres
 
@@ -77,3 +84,6 @@ Resultado esperado:
 - Evitar guardar secretos en `terraform.tfvars` versionados.
 - Usar GitHub Secrets + `TF_VAR_*` para valores sensibles.
 - Aplicar politicas de aprobacion para `prod`.
+- Para el flujo actual de cookies HTTP-only, mantener `APP_AUTH_COOKIE_SECURE=true`
+  en entornos desplegados y alinear `CORS_ALLOWED_ORIGINS`/`FRONTEND_ORIGIN`
+  con el host real del frontend.

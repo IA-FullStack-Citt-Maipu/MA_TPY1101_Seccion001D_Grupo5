@@ -9140,7 +9140,8 @@ a:focus-visible {
 }
 
 .settings-card--summary,
-.settings-card--preferences {
+.settings-card--preferences,
+.settings-card--sessions {
   grid-column: 1 / -1;
 }
 
@@ -9326,13 +9327,134 @@ a:focus-visible {
   font-weight: 600;
 }
 
+.settings-sessions__list {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-sessions__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(181, 201, 235, 0.9);
+  background: linear-gradient(180deg, #fbfcff 0%, #f2f6ff 100%);
+}
+
+.settings-sessions__info {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.settings-sessions__identity {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.settings-sessions__device-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: rgba(12, 47, 117, 0.08);
+  color: #0c2f75;
+  flex-shrink: 0;
+}
+
+.settings-sessions__identity-copy {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.settings-sessions__title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-sessions__title-row strong {
+  color: #10274f;
+  font-size: 1rem;
+}
+
+.settings-sessions__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-sessions__detail {
+  color: #60708e;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.settings-sessions__times {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.settings-sessions__times span {
+  display: grid;
+  gap: 4px;
+  color: #55627d;
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.settings-sessions__times strong {
+  color: #10274f;
+  font-size: 0.96rem;
+  text-transform: none;
+}
+
+.settings-sessions__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.settings-sessions__action {
+  min-width: 144px;
+  justify-content: center;
+}
+
+.settings-sessions__empty {
+  display: grid;
+  gap: 6px;
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px dashed rgba(181, 201, 235, 0.9);
+  background: rgba(242, 246, 255, 0.72);
+}
+
+.settings-sessions__empty strong {
+  color: #10274f;
+}
+
+.settings-sessions__empty span {
+  color: #60708e;
+  line-height: 1.5;
+}
+
 @media (max-width: 980px) {
   .settings-page__grid {
     grid-template-columns: 1fr;
   }
 
   .settings-card--summary,
-  .settings-card--preferences {
+  .settings-card--preferences,
+  .settings-card--sessions {
     grid-column: auto;
   }
 
@@ -9344,6 +9466,14 @@ a:focus-visible {
   .settings-switch {
     justify-content: center;
   }
+
+  .settings-sessions__row {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-sessions__actions {
+    justify-content: flex-start;
+  }
 }
 
 @media (max-width: 680px) {
@@ -9353,6 +9483,14 @@ a:focus-visible {
 
   .settings-page__hero h1 {
     font-size: 2rem;
+  }
+
+  .settings-sessions__times {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-sessions__action {
+    width: 100%;
   }
 }
 
@@ -9443,6 +9581,10 @@ a:focus-visible {
   color: #edf3ff;
 }
 
+:root[data-theme="dark"] .login-field input::placeholder {
+  color: #7f93b7;
+}
+
 :root[data-theme="dark"] .loan-return-row {
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(143, 184, 255, 0.12);
@@ -9462,6 +9604,11 @@ a:focus-visible {
   color: #b6c6e1;
 }
 
+:root[data-theme="dark"] .login-field__password-toggle:hover {
+  background: rgba(143, 184, 255, 0.12);
+  color: #edf3ff;
+}
+
 :root[data-theme="dark"] .topbar__avatar {
   background: linear-gradient(135deg, #1a3158 0%, #244a8f 100%);
   color: #eef3ff;
@@ -9476,6 +9623,7 @@ a:focus-visible {
 :root[data-theme="dark"] .support-page__mail-card,
 :root[data-theme="dark"] .settings-summary-list__row,
 :root[data-theme="dark"] .settings-theme-row,
+:root[data-theme="dark"] .settings-sessions__row,
 :root[data-theme="dark"] .settings-switch,
 :root[data-theme="dark"] .login-card {
   background: linear-gradient(180deg, rgba(18, 29, 48, 0.96) 0%, rgba(12, 22, 38, 0.98) 100%);
@@ -9483,7 +9631,8 @@ a:focus-visible {
   box-shadow: var(--shadow);
 }
 
-:root[data-theme="dark"] .settings-card__icon {
+:root[data-theme="dark"] .settings-card__icon,
+:root[data-theme="dark"] .settings-sessions__device-icon {
   background: linear-gradient(180deg, rgba(44, 194, 223, 0.14), rgba(31, 95, 224, 0.22));
   color: #8bdcff;
 }
@@ -9497,6 +9646,8 @@ a:focus-visible {
 :root[data-theme="dark"] .settings-theme-copy span,
 :root[data-theme="dark"] .settings-card__header p,
 :root[data-theme="dark"] .settings-field span,
+:root[data-theme="dark"] .settings-sessions__detail,
+:root[data-theme="dark"] .settings-sessions__empty span,
 :root[data-theme="dark"] .table-hint,
 :root[data-theme="dark"] .category-table th,
 :root[data-theme="dark"] .catalog-filters__summary p,
@@ -9506,10 +9657,36 @@ a:focus-visible {
   color: #97aac8;
 }
 
+:root[data-theme="dark"] .login-card__copy p,
+:root[data-theme="dark"] .login-form__footnote {
+  color: #b4c4de;
+}
+
+:root[data-theme="dark"] .login-field label,
+:root[data-theme="dark"] .login-check {
+  color: #c9d8f1;
+}
+
+:root[data-theme="dark"] .login-check input {
+  color-scheme: dark;
+  accent-color: #4c8fff;
+}
+
+:root[data-theme="dark"] .login-form__link {
+  color: #a7c6ff;
+}
+
+:root[data-theme="dark"] .login-form__link:hover {
+  color: #d3e2ff;
+}
+
 :root[data-theme="dark"] .settings-page__hero h1,
 :root[data-theme="dark"] .settings-summary-list__row dd,
 :root[data-theme="dark"] .settings-card__header h2,
 :root[data-theme="dark"] .settings-theme-copy strong,
+:root[data-theme="dark"] .settings-sessions__title-row strong,
+:root[data-theme="dark"] .settings-sessions__times strong,
+:root[data-theme="dark"] .settings-sessions__empty strong,
 :root[data-theme="dark"] .settings-switch__label,
 :root[data-theme="dark"] .inventory-items-header h1,
 :root[data-theme="dark"] .support-page__content h1,
@@ -9570,6 +9747,19 @@ a:focus-visible {
 
 :root[data-theme="dark"] .login-card {
   border-color: rgba(143, 184, 255, 0.12);
+}
+
+:root[data-theme="dark"] .settings-sessions__times span {
+  color: #aab9d3;
+}
+
+:root[data-theme="dark"] .settings-sessions__empty {
+  background: rgba(14, 22, 36, 0.84);
+  border-color: rgba(143, 184, 255, 0.16);
+}
+
+:root[data-theme="dark"] .login-form__footnote {
+  border-top-color: rgba(143, 184, 255, 0.18);
 }
 
 :root[data-theme="dark"] .error-banner {

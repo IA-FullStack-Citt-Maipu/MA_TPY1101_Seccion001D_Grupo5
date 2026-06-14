@@ -4,7 +4,8 @@ import jakarta.validation.constraints.NotBlank;
 
 public record LoginRequest(
         @NotBlank String rut,
-        @NotBlank String password
+        @NotBlank String password,
+        Boolean rememberMe
 ) {
 }
 

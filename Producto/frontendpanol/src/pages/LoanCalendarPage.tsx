@@ -15,7 +15,7 @@ import { LoanDetailPage } from "./LoanDetailPage";
 import { getErrorMessage } from "../services/apiClient";
 import { fetchLoansPage } from "../services/loanService";
 import type { LoanSummary } from "../types/loan";
-import { getUserRoleFromToken } from "../utils/auth";
+import { getSessionUserRole } from "../utils/auth";
 
 const WEEKDAY_LABELS = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"] as const;
 
@@ -212,7 +212,7 @@ function LoanCalendarDayDrawer({
 }
 
 export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
-  const currentRole = getUserRoleFromToken();
+  const currentRole = getSessionUserRole();
   const canCreateLoan = currentRole === "DOCENTE";
   const todayKey = useMemo(() => toDateKey(new Date()), []);
   const [monthAnchor, setMonthAnchor] = useState(() => {

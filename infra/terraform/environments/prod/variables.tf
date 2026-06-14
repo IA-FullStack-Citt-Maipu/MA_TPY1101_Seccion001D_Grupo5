@@ -68,6 +68,41 @@ variable "app_auth_jwt_expiration_seconds" {
   default = 3600
 }
 
+variable "app_auth_refresh_expiration_seconds" {
+  type    = number
+  default = 604800
+}
+
+variable "app_auth_cookie_secure" {
+  type    = bool
+  default = true
+}
+
+variable "app_auth_cookie_same_site" {
+  type    = string
+  default = "Lax"
+}
+
+variable "app_auth_token_revocation_cleanup_enabled" {
+  type    = bool
+  default = true
+}
+
+variable "app_auth_token_revocation_cleanup_initial_delay_ms" {
+  type    = number
+  default = 300000
+}
+
+variable "app_auth_token_revocation_cleanup_delay_ms" {
+  type    = number
+  default = 1800000
+}
+
+variable "app_auth_token_revocation_cleanup_batch_size" {
+  type    = number
+  default = 500
+}
+
 variable "frontend_domain" {
   type = string
 }

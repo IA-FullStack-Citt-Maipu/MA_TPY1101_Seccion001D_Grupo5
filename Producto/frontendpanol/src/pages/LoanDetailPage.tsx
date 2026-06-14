@@ -39,7 +39,7 @@ import {
 } from "../services/loanSessionService";
 import type { LoanStateDates, LoanStatusTimelineEntry, LoanSummary } from "../types/loan";
 import type { StockDetail } from "../types/stock";
-import { getUserRoleFromToken } from "../utils/auth";
+import { getSessionUserRole } from "../utils/auth";
 import { canStartDelivery } from "../utils/loanSchedule";
 
 const DELETE_CONFIRM_TEXT = "eliminar";
@@ -202,7 +202,7 @@ export function LoanDetailPage({
   hideBackNav?: boolean;
   onLoanChanged?: (loan: LoanSummary) => void;
 }) {
-  const currentRole = getUserRoleFromToken();
+  const currentRole = getSessionUserRole();
   const isCoordinator = currentRole === "COORDINADOR";
   const [loan, setLoan] = useState<LoanSummary | null>(null);
   const canModifyLoan = currentRole === "DOCENTE" && loan?.status === "pending";

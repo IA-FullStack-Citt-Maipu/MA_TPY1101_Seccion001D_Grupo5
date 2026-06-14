@@ -16,6 +16,13 @@ locals {
     APP_AUTH_LOCK_MINUTES           = tostring(var.app_auth_lock_minutes)
     APP_AUTH_JWT_ISSUER             = var.app_auth_jwt_issuer
     APP_AUTH_JWT_EXPIRATION_SECONDS = tostring(var.app_auth_jwt_expiration_seconds)
+    APP_AUTH_REFRESH_EXPIRATION_SECONDS = tostring(var.app_auth_refresh_expiration_seconds)
+    APP_AUTH_COOKIE_SECURE          = tostring(var.app_auth_cookie_secure)
+    APP_AUTH_COOKIE_SAME_SITE       = var.app_auth_cookie_same_site
+    APP_AUTH_TOKEN_REVOCATION_CLEANUP_ENABLED          = tostring(var.app_auth_token_revocation_cleanup_enabled)
+    APP_AUTH_TOKEN_REVOCATION_CLEANUP_INITIAL_DELAY_MS = tostring(var.app_auth_token_revocation_cleanup_initial_delay_ms)
+    APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS         = tostring(var.app_auth_token_revocation_cleanup_delay_ms)
+    APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE       = tostring(var.app_auth_token_revocation_cleanup_batch_size)
     JWT_ISSUER_URI                  = var.jwt_issuer_uri
     FRONTEND_ORIGIN                 = local.frontend_origin
     CORS_ALLOWED_ORIGINS            = local.frontend_origin

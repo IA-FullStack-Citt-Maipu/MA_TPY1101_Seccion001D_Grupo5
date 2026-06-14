@@ -1,12 +1,25 @@
-import { KeyRound, Mail, MoonStar, ShieldCheck, UserRound } from "lucide-react";
+import {
+  KeyRound,
+  Laptop,
+  Mail,
+  MonitorSmartphone,
+  MoonStar,
+  ShieldCheck,
+  Smartphone,
+  Tablet,
+  UserRound,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { getErrorMessage } from "../services/apiClient";
 import {
+  fetchCurrentUserSessions,
   fetchCurrentUserProfile,
+  revokeCurrentUserSession,
+  type CurrentUserSession,
   updateCurrentUserEmail,
   updateCurrentUserPassword,
 } from "../services/profileService";
-import { getRoleDisplayLabel, type SessionUserSummary } from "../utils/auth";
+import { clearSession, getRoleDisplayLabel, type SessionUserSummary } from "../utils/auth";
 import type { ThemeMode } from "../utils/theme";
 
 interface SettingsPageProps {
@@ -15,6 +28,103 @@ interface SettingsPageProps {
   onSessionUserChange: (user: SessionUserSummary) => void;
   themeMode: ThemeMode;
   onThemeModeChange: (mode: ThemeMode) => void;
+}
+
+type SessionDeviceKind = "pc" | "phone" | "tablet" | "unknown";
+
+const sessionDateTimeFormatter = new Intl.DateTimeFormat("es-CL", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
+function formatSessionTimestamp(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return sessionDateTimeFormatter.format(parsed);
+}
+
+function detectDeviceKind(userAgent: string): SessionDeviceKind {
+  const normalized = userAgent.toLowerCase();
+  if (/ipad|tablet|sm-t|kindle|playbook/.test(normalized)) {
+    return "tablet";
+  }
+  if (/iphone|ipod|android.*mobile|windows phone|mobile/.test(normalized)) {
+    return "phone";
+  }
+  if (/windows|macintosh|mac os x|linux|x11|cros/.test(normalized)) {
+    return "pc";
+  }
+  return "unknown";
+}
+
+function detectBrowser(userAgent: string): string | null {
+  const normalized = userAgent.toLowerCase();
+  if (normalized.includes("edg/")) return "Edge";
+  if (normalized.includes("opr/") || normalized.includes("opera")) return "Opera";
+  if (normalized.includes("samsungbrowser/")) return "Samsung Internet";
+  if (normalized.includes("firefox/")) return "Firefox";
+  if (normalized.includes("chrome/") && !normalized.includes("edg/")) return "Chrome";
+  if (normalized.includes("safari/") && !normalized.includes("chrome/")) return "Safari";
+  return null;
+}
+
+function detectOs(userAgent: string): string | null {
+  const normalized = userAgent.toLowerCase();
+  if (normalized.includes("windows")) return "Windows";
+  if (normalized.includes("android")) return "Android";
+  if (normalized.includes("iphone") || normalized.includes("ipad") || normalized.includes("ios")) return "iOS";
+  if (normalized.includes("mac os x") || normalized.includes("macintosh")) return "macOS";
+  if (normalized.includes("cros")) return "ChromeOS";
+  if (normalized.includes("linux") || normalized.includes("x11")) return "Linux";
+  return null;
+}
+
+function describeSessionDevice(userAgent: string | null): {
+  kind: SessionDeviceKind;
+  label: string;
+  detail: string;
+} {
+  const rawValue = userAgent?.trim() ?? "";
+  if (!rawValue) {
+    return {
+      kind: "unknown",
+      label: "Dispositivo desconocido",
+      detail: "Sin metadata de navegador disponible.",
+    };
+  }
+
+  const kind = detectDeviceKind(rawValue);
+  const browser = detectBrowser(rawValue);
+  const os = detectOs(rawValue);
+  const detail = [browser, os].filter(Boolean).join(" · ") || rawValue;
+
+  return {
+    kind,
+    label:
+      kind === "pc"
+        ? "PC"
+        : kind === "phone"
+          ? "Celular"
+          : kind === "tablet"
+            ? "Tablet"
+            : "Dispositivo desconocido",
+    detail,
+  };
+}
+
+function renderSessionDeviceIcon(kind: SessionDeviceKind) {
+  if (kind === "pc") {
+    return <Laptop size={18} />;
+  }
+  if (kind === "phone") {
+    return <Smartphone size={18} />;
+  }
+  if (kind === "tablet") {
+    return <Tablet size={18} />;
+  }
+  return <MonitorSmartphone size={18} />;
 }
 
 export function SettingsPage({
@@ -39,6 +149,12 @@ export function SettingsPage({
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+
+  const [sessions, setSessions] = useState<CurrentUserSession[]>([]);
+  const [loadingSessions, setLoadingSessions] = useState(true);
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
+  const [sessionsSuccess, setSessionsSuccess] = useState<string | null>(null);
+  const [closingSessionId, setClosingSessionId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,6 +181,30 @@ export function SettingsPage({
       cancelled = true;
     };
   }, [onSessionUserChange]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingSessions(true);
+    setSessionsError(null);
+
+    fetchCurrentUserSessions()
+      .then((nextSessions) => {
+        if (cancelled) return;
+        setSessions(nextSessions);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setSessionsError(getErrorMessage(error, "No fue posible cargar las sesiones activas."));
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoadingSessions(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleEmailSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -124,6 +264,29 @@ export function SettingsPage({
       setPasswordError(getErrorMessage(error, "No fue posible actualizar la contrasena."));
     } finally {
       setPasswordSaving(false);
+    }
+  }
+
+  async function handleRevokeSession(session: CurrentUserSession) {
+    setSessionsError(null);
+    setSessionsSuccess(null);
+    setClosingSessionId(session.id);
+
+    try {
+      await revokeCurrentUserSession(session.id);
+
+      if (session.current) {
+        clearSession();
+        window.location.hash = "#/login";
+        return;
+      }
+
+      setSessions((currentSessions) => currentSessions.filter((item) => item.id !== session.id));
+      setSessionsSuccess("La sesion seleccionada se cerro correctamente.");
+    } catch (error) {
+      setSessionsError(getErrorMessage(error, "No fue posible cerrar la sesion seleccionada."));
+    } finally {
+      setClosingSessionId(null);
     }
   }
 
@@ -311,6 +474,85 @@ export function SettingsPage({
             <ShieldCheck size={18} />
             <span>La preferencia se aplica a toda la interfaz en futuras visitas.</span>
           </div>
+        </article>
+
+        <article className="panel settings-card settings-card--sessions">
+          <div className="settings-card__header">
+            <div className="settings-card__icon">
+              <MonitorSmartphone size={20} />
+            </div>
+            <div>
+              <h2>Sesiones activas</h2>
+              <p>Revisa los dispositivos abiertos y cierra sesiones especificas cuando lo necesites.</p>
+            </div>
+          </div>
+
+          {sessionsError ? <div className="error-banner">{sessionsError}</div> : null}
+          {sessionsSuccess ? <div className="success-banner">{sessionsSuccess}</div> : null}
+
+          {loadingSessions ? <p className="field-hint">Cargando sesiones activas...</p> : null}
+
+          {!loadingSessions && sessions.length === 0 ? (
+            <div className="settings-sessions__empty">
+              <strong>No hay sesiones activas registradas.</strong>
+              <span>La lista se actualizara cuando vuelvas a iniciar sesion en un dispositivo.</span>
+            </div>
+          ) : null}
+
+          {!loadingSessions && sessions.length > 0 ? (
+            <div className="settings-sessions__list">
+              {sessions.map((session) => {
+                const device = describeSessionDevice(session.userAgent);
+                const isClosing = closingSessionId === session.id;
+
+                return (
+                  <div key={session.id} className="settings-sessions__row">
+                    <div className="settings-sessions__info">
+                      <div className="settings-sessions__identity">
+                        <div className="settings-sessions__device-icon">
+                          {renderSessionDeviceIcon(device.kind)}
+                        </div>
+                        <div className="settings-sessions__identity-copy">
+                          <div className="settings-sessions__title-row">
+                            <strong>{device.label}</strong>
+                            <div className="settings-sessions__badges">
+                              {session.current ? <span className="badge badge--active">Este dispositivo</span> : null}
+                              <span className={session.persistentLogin ? "badge badge--warn" : "badge badge--inactive"}>
+                                {session.persistentLogin ? "Recordarme" : "Sesion temporal"}
+                              </span>
+                            </div>
+                          </div>
+                          <span className="settings-sessions__detail">{device.detail}</span>
+                        </div>
+                      </div>
+
+                      <div className="settings-sessions__times">
+                        <span>
+                          Inicio
+                          <strong>{formatSessionTimestamp(session.createdAt)}</strong>
+                        </span>
+                        <span>
+                          Expira
+                          <strong>{formatSessionTimestamp(session.expiresAt)}</strong>
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="settings-sessions__actions">
+                      <button
+                        type="button"
+                        className="button button--ghost settings-sessions__action"
+                        onClick={() => void handleRevokeSession(session)}
+                        disabled={closingSessionId !== null}
+                      >
+                        {isClosing ? "Cerrando..." : "Cerrar sesion"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
         </article>
       </div>
     </section>

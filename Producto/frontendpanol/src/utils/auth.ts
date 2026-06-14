@@ -1,4 +1,4 @@
-﻿export type UserRole = "COORDINADOR" | "DIRECTOR" | "DOCENTE" | "UNKNOWN";
+export type UserRole = "COORDINADOR" | "DIRECTOR" | "DOCENTE" | "UNKNOWN";
 
 export interface SessionUserSummary {
   id: string;
@@ -7,18 +7,18 @@ export interface SessionUserSummary {
   role: UserRole;
 }
 
-interface TokenPayload {
-  exp?: number;
-  sub?: string;
-  role?: string;
-  user_role?: string;
-  roles?: string[];
-  app_metadata?: { role?: string; roles?: string[] };
-}
+export const AUTH_SESSION_CHANGED_EVENT = "panol:auth-session-changed";
 
 const ACCESS_TOKEN_KEY = "access_token";
 const LEGACY_TOKEN_KEY = "token";
 const AUTH_USER_KEY = "auth_user";
+
+function notifySessionChanged() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.dispatchEvent(new Event(AUTH_SESSION_CHANGED_EVENT));
+}
 
 function shouldPersistSessionInLocalStorage() {
   return (
@@ -26,6 +26,13 @@ function shouldPersistSessionInLocalStorage() {
     localStorage.getItem(ACCESS_TOKEN_KEY) !== null ||
     localStorage.getItem(LEGACY_TOKEN_KEY) !== null
   );
+}
+
+function removeLegacyTokenKeys() {
+  localStorage.removeItem(ACCESS_TOKEN_KEY);
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
+  sessionStorage.removeItem(ACCESS_TOKEN_KEY);
+  sessionStorage.removeItem(LEGACY_TOKEN_KEY);
 }
 
 export function normalizeUserRole(roleRaw: string | null | undefined): UserRole {
@@ -58,28 +65,17 @@ function getStorageValue(key: string): string | null {
   return localStorage.getItem(key) ?? sessionStorage.getItem(key);
 }
 
-export function getAccessToken(): string | null {
-  return getStorageValue(ACCESS_TOKEN_KEY) ?? getStorageValue(LEGACY_TOKEN_KEY);
-}
-
-export function setAccessToken(token: string, rememberMe: boolean) {
-  clearSession();
-  if (rememberMe) {
-    localStorage.setItem(ACCESS_TOKEN_KEY, token);
-    localStorage.setItem(LEGACY_TOKEN_KEY, token);
-    return;
-  }
-  sessionStorage.setItem(ACCESS_TOKEN_KEY, token);
-  sessionStorage.setItem(LEGACY_TOKEN_KEY, token);
-}
-
 export function setSessionUser(user: SessionUserSummary, rememberMe: boolean) {
   const payload = JSON.stringify(user);
   if (rememberMe) {
     localStorage.setItem(AUTH_USER_KEY, payload);
-    return;
+    sessionStorage.removeItem(AUTH_USER_KEY);
+  } else {
+    sessionStorage.setItem(AUTH_USER_KEY, payload);
+    localStorage.removeItem(AUTH_USER_KEY);
   }
-  sessionStorage.setItem(AUTH_USER_KEY, payload);
+  removeLegacyTokenKeys();
+  notifySessionChanged();
 }
 
 export function getSessionUser(): SessionUserSummary | null {
@@ -100,74 +96,26 @@ export function getSessionUser(): SessionUserSummary | null {
   }
 }
 
+export function getSessionUserRole(): UserRole {
+  return getSessionUser()?.role ?? "UNKNOWN";
+}
+
 export function replaceSessionUser(user: SessionUserSummary) {
   const payload = JSON.stringify(user);
   if (shouldPersistSessionInLocalStorage()) {
     localStorage.setItem(AUTH_USER_KEY, payload);
     sessionStorage.removeItem(AUTH_USER_KEY);
-    return;
+  } else {
+    sessionStorage.setItem(AUTH_USER_KEY, payload);
+    localStorage.removeItem(AUTH_USER_KEY);
   }
-  sessionStorage.setItem(AUTH_USER_KEY, payload);
-  localStorage.removeItem(AUTH_USER_KEY);
-}
-
-function parseTokenPayload(): TokenPayload | null {
-  try {
-    const rawToken = getAccessToken();
-    if (!rawToken) return null;
-    const payloadPart = rawToken.split(".")[1];
-    if (!payloadPart) return null;
-    const normalized = payloadPart.replace(/-/g, "+").replace(/_/g, "/");
-    const jsonPayload = decodeURIComponent(
-      atob(normalized)
-        .split("")
-        .map((char) => `%${(`00${char.charCodeAt(0).toString(16)}`).slice(-2)}`)
-        .join(""),
-    );
-    return JSON.parse(jsonPayload) as TokenPayload;
-  } catch {
-    return null;
-  }
-}
-
-export function getUserRoleFromToken(): UserRole {
-  const parsed = parseTokenPayload();
-  if (!parsed) return "UNKNOWN";
-
-  const roles = [
-    parsed.role,
-    parsed.user_role,
-    ...(parsed.roles ?? []),
-    parsed.app_metadata?.role,
-    ...(parsed.app_metadata?.roles ?? []),
-  ]
-    .filter(Boolean)
-    .map((role) => normalizeUserRole(String(role)));
-
-  if (roles.includes("COORDINADOR")) return "COORDINADOR";
-  if (roles.includes("DIRECTOR")) return "DIRECTOR";
-  if (roles.includes("DOCENTE")) return "DOCENTE";
-  return "UNKNOWN";
-}
-
-export function isAuthenticated(): boolean {
-  const payload = parseTokenPayload();
-  if (!payload?.exp) return false;
-  return payload.exp * 1000 > Date.now();
-}
-
-export function getUserUuidFromToken(): string | null {
-  const payload = parseTokenPayload();
-  if (typeof payload?.sub === "string" && payload.sub.length > 0) return payload.sub;
-  return null;
+  removeLegacyTokenKeys();
+  notifySessionChanged();
 }
 
 export function clearSession() {
-  localStorage.removeItem(ACCESS_TOKEN_KEY);
-  localStorage.removeItem(LEGACY_TOKEN_KEY);
   localStorage.removeItem(AUTH_USER_KEY);
-  sessionStorage.removeItem(ACCESS_TOKEN_KEY);
-  sessionStorage.removeItem(LEGACY_TOKEN_KEY);
   sessionStorage.removeItem(AUTH_USER_KEY);
+  removeLegacyTokenKeys();
+  notifySessionChanged();
 }
-

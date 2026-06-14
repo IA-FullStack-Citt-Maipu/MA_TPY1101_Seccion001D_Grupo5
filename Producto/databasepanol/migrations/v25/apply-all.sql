@@ -11,3 +11,4 @@
 \ir ./V35__drop_legacy_varchar_auth_lookup_function.sql
 \ir ./V36__ensure_loan_lifecycle_system_user.sql
 \ir ./V37__allow_partial_loan_delivery.sql
+\ir ./V38__token_revocation_cleanup_index.sql

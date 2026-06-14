@@ -4,6 +4,7 @@ import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import com.panol_project.backendpanol.modules.auth.infrastructure.TokenRevocationValidator;
 import com.panol_project.backendpanol.shared.error.security.RestAccessDeniedHandler;
 import com.panol_project.backendpanol.shared.error.security.RestAuthenticationEntryPoint;
+import com.panol_project.backendpanol.shared.security.CookieOrHeaderBearerTokenResolver;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.LinkedHashSet;
@@ -26,6 +27,7 @@ import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
@@ -36,6 +38,7 @@ public class SecurityConfig {
     @Bean
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
+            BearerTokenResolver bearerTokenResolver,
             RestAuthenticationEntryPoint authenticationEntryPoint,
             RestAccessDeniedHandler accessDeniedHandler
     ) throws Exception {
@@ -45,16 +48,22 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                        .requestMatchers("/api/v2/auth/login").permitAll()
+                        .requestMatchers("/api/v2/auth/login", "/api/v2/auth/logout", "/api/v2/auth/refresh").permitAll()
                         .requestMatchers("/internal/**", "/api/v1/**").denyAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler))
                 .oauth2ResourceServer(oauth2 -> oauth2
+                        .bearerTokenResolver(bearerTokenResolver)
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(
                                 token -> new JwtAuthenticationToken(token, extractAuthorities(token)))))
                 .build();
+    }
+
+    @Bean
+    BearerTokenResolver bearerTokenResolver(CookieOrHeaderBearerTokenResolver resolver) {
+        return resolver;
     }
 
     @Bean

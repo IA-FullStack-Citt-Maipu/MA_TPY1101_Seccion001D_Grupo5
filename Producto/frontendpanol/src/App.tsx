@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   InventoryLayout,
   type BreadcrumbPart,
@@ -25,14 +25,13 @@ import { NotFoundPage } from "./pages/NotFoundPage";
 import { SupportPage } from "./pages/SupportPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { logout } from "./services/authService";
-import { useCallback } from "react";
+import { fetchCurrentUserProfile } from "./services/profileService";
 import {
+  AUTH_SESSION_CHANGED_EVENT,
   clearSession,
   getDefaultHashByRole,
   getRoleDisplayLabel,
   getSessionUser,
-  getUserRoleFromToken,
-  isAuthenticated,
   replaceSessionUser,
   type SessionUserSummary,
   type UserRole,
@@ -50,6 +49,8 @@ interface RouteView {
   notFound?: boolean;
 }
 
+type AuthStatus = "bootstrapping" | "authenticated" | "unauthenticated";
+
 function isTeacher(role: UserRole): boolean {
   return role === "DOCENTE";
 }
@@ -61,7 +62,6 @@ function isCoordinator(role: UserRole): boolean {
 function isDirector(role: UserRole): boolean {
   return role === "DIRECTOR";
 }
-
 
 function renderAccessDenied(message: string) {
   return (
@@ -76,6 +76,7 @@ function App() {
   const [hash, setHash] = useState(() => window.location.hash || "#/login");
   const [routeTransitionKey, setRouteTransitionKey] = useState(0);
   const [sessionUser, setSessionUser] = useState<SessionUserSummary | null>(() => getSessionUser());
+  const [authStatus, setAuthStatus] = useState<AuthStatus>("bootstrapping");
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => getStoredThemeMode());
 
   useEffect(() => {
@@ -88,13 +89,54 @@ function App() {
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
 
+  useEffect(() => {
+    function handleSessionChanged() {
+      const nextSessionUser = getSessionUser();
+      setSessionUser(nextSessionUser);
+      setAuthStatus(nextSessionUser ? "authenticated" : "unauthenticated");
+    }
+
+    window.addEventListener(AUTH_SESSION_CHANGED_EVENT, handleSessionChanged);
+    return () => window.removeEventListener(AUTH_SESSION_CHANGED_EVENT, handleSessionChanged);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function bootstrapSession() {
+      setAuthStatus("bootstrapping");
+      try {
+        const currentUser = await fetchCurrentUserProfile();
+        if (cancelled) {
+          return;
+        }
+        replaceSessionUser(currentUser);
+        setSessionUser(currentUser);
+        setAuthStatus("authenticated");
+      } catch {
+        if (cancelled) {
+          return;
+        }
+        clearSession();
+        setSessionUser(null);
+        setAuthStatus("unauthenticated");
+      }
+    }
+
+    void bootstrapSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   async function handleLogout() {
     await logout();
     window.location.hash = "#/login";
   }
 
-  const role = getUserRoleFromToken();
-  const authenticated = isAuthenticated();
+  const role = sessionUser?.role ?? "UNKNOWN";
+  const authenticated = authStatus === "authenticated" && sessionUser != null;
   const normalizedHash = hash || "#/login";
   const defaultHash = getDefaultHashByRole(role);
   const effectiveHash = !authenticated
@@ -102,10 +144,6 @@ function App() {
     : normalizedHash === "#/login"
       ? defaultHash
       : normalizedHash;
-
-  useEffect(() => {
-    setSessionUser(getSessionUser());
-  }, [authenticated, normalizedHash]);
 
   useEffect(() => {
     applyThemeMode(themeMode);
@@ -122,8 +160,10 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (authStatus === "bootstrapping") {
+      return;
+    }
     if (!authenticated && normalizedHash !== "#/login") {
-      clearSession();
       window.location.hash = "#/login";
       return;
     }
@@ -139,7 +179,7 @@ function App() {
     if (authenticated && normalizedHash === "#/login") {
       window.location.hash = defaultHash;
     }
-  }, [authenticated, defaultHash, normalizedHash, role]);
+  }, [authStatus, authenticated, defaultHash, normalizedHash, role]);
 
   const routeView = useMemo<RouteView>(() => {
     const currentHash = effectiveHash;
@@ -465,7 +505,16 @@ function App() {
       content: <NotFoundPage />,
       notFound: true,
     };
-  }, [effectiveHash, role, sessionUser, themeMode]);
+  }, [effectiveHash, handleSessionUserChange, handleThemeModeChange, role, sessionUser, themeMode]);
+
+  if (authStatus === "bootstrapping") {
+    return (
+      <section className="panel" style={{ margin: "24px auto", maxWidth: 520 }}>
+        <div className="content-header"><h1>Validando sesion</h1></div>
+        <p className="text-muted">Cargando credenciales del usuario...</p>
+      </section>
+    );
+  }
 
   if (effectiveHash === "#/login") {
     return <LoginPage />;
@@ -495,8 +544,3 @@ function App() {
 }
 
 export default App;
-
-
-
-
-

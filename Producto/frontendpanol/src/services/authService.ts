@@ -1,5 +1,10 @@
-﻿import { apiClient } from "./apiClient";
-import { clearSession, normalizeUserRole, setAccessToken, setSessionUser, type SessionUserSummary } from "../utils/auth";
+import { apiClient } from "./apiClient";
+import {
+  clearSession,
+  normalizeUserRole,
+  setSessionUser,
+  type SessionUserSummary,
+} from "../utils/auth";
 
 export interface LoginPayload {
   rut: string;
@@ -8,15 +13,12 @@ export interface LoginPayload {
 }
 
 export interface LoginResult {
-  accessToken: string;
   role: string;
   expiresInSeconds: number;
   user: SessionUserSummary;
 }
 
 interface BackendLoginResponse {
-  accessToken?: string;
-  token?: string;
   role: string;
   expiresInSeconds: number;
   user?: {
@@ -29,11 +31,10 @@ interface BackendLoginResponse {
 
 export async function login(payload: LoginPayload): Promise<LoginResult> {
   const { rememberMe = true, ...requestPayload } = payload;
-  const { data } = await apiClient.post<BackendLoginResponse>("/api/v2/auth/login", requestPayload);
-  const token = data.accessToken ?? data.token;
-  if (!token) {
-    throw new Error("La respuesta de login no incluyo token");
-  }
+  const { data } = await apiClient.post<BackendLoginResponse>("/api/v2/auth/login", {
+    ...requestPayload,
+    rememberMe,
+  });
 
   const normalizedRole = normalizeUserRole(data.user?.role ?? data.role);
   const sessionUser: SessionUserSummary = {
@@ -43,11 +44,9 @@ export async function login(payload: LoginPayload): Promise<LoginResult> {
     role: normalizedRole,
   };
 
-  setAccessToken(token, rememberMe);
   setSessionUser(sessionUser, rememberMe);
 
   return {
-    accessToken: token,
     role: normalizedRole,
     expiresInSeconds: data.expiresInSeconds,
     user: sessionUser,
@@ -56,9 +55,8 @@ export async function login(payload: LoginPayload): Promise<LoginResult> {
 
 export async function logout(): Promise<void> {
   try {
-    await apiClient.post("/api/v2/auth/logout");
+    await apiClient.post("/api/v2/auth/logout", undefined, { skipAuthRefresh: true });
   } finally {
     clearSession();
   }
 }
-

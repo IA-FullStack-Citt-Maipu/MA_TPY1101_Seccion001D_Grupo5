@@ -30,7 +30,7 @@ import { addStockEntry, applyStockMovement, fetchImplementStock, updateIndividua
 import type { ImplementDetail, InventoryMovementDetail } from "../types/implement";
 import type { LocationOption } from "../types/location";
 import type { IndividualItem, StockDetail, StockMovementPayload, StockMovementType } from "../types/stock";
-import { getUserRoleFromToken, type UserRole } from "../utils/auth";
+import { getSessionUserRole, type UserRole } from "../utils/auth";
 
 const ITEM_TYPE_LABELS: Record<"consumable" | "reusable" | "individual", string> = {
   consumable: "Consumible",
@@ -184,7 +184,7 @@ export function InventoryItemDetailPage({
   const [isStockAdjustModalOpen, setIsStockAdjustModalOpen] = useState(false);
   const [isMovementModalOpen, setIsMovementModalOpen] = useState(false);
 
-  const [userRole, setUserRole] = useState<UserRole>("UNKNOWN");
+  const userRole: UserRole = getSessionUserRole();
   const isDocente = userRole === "DOCENTE";
   const isCoordinator = userRole === "COORDINADOR";
 
@@ -244,8 +244,6 @@ export function InventoryItemDetailPage({
     setLoading(true);
     setError(null);
     setSuccess(null);
-    setUserRole(getUserRoleFromToken());
-
     fetchImplementById(implementUuid)
       .then((detail) => {
         setImplement(detail);
