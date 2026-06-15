@@ -24,6 +24,7 @@ Base path: `/api/v2/auth`
 - `POST /refresh`
 - `POST /logout`
 - `GET /me`
+- `POST /me/bot-token`
 - `GET /me/sessions`
 - `DELETE /me/sessions/{sessionId}`
 - `PATCH /me/email`
@@ -38,6 +39,8 @@ Base path: `/api/v2/auth`
 - Refresh rota el refresh token y reemite ambas cookies.
 - Login devuelve `role`, `expiresInSeconds` y `user` para bootstrap de sesion
   del frontend; el JWT ya no se expone en el body.
+- `POST /me/bot-token` emite un JWT efimero para `bot-panol` con
+  `aud = bot-panol`; no reemplaza la sesion web basada en cookies.
 - `GET /me/sessions` devuelve solo las sesiones del usuario autenticado.
 - `DELETE /me/sessions/{sessionId}` revoca una sesion puntual del mismo usuario,
   revoca su `currentAccessJti` cuando existe y elimina la fila refresh.
@@ -227,7 +230,24 @@ Base path: `/api/v2/auth`
 4. Si refresh funciona, reintenta `/me`.
 5. Si refresh falla, limpia `auth_user` y redirige a `#/login`.
 
-### 8. Cleanup de revocaciones expiradas
+### 8. Token puente para `bot-panol`
+
+1. El frontend autenticado llama `POST /api/v2/auth/me/bot-token`.
+2. El backend valida que el usuario actual tenga rol `COORDINADOR` o
+   `DIRECTOR`.
+3. Si esta autorizado, emite un JWT efimero firmado con:
+   - `sub = user.uuid`
+   - `role`
+   - `jti`
+   - `aud = bot-panol`
+   - `token_use = bot-panol`
+4. El frontend guarda ese token solo en memoria.
+5. El frontend llama `POST /api/v1/chat` del bot usando
+   `Authorization: Bearer <token-puente>`.
+6. Si el bot responde `401`, el frontend solicita un nuevo token puente y
+   reintenta una sola vez.
+
+### 9. Cleanup de revocaciones expiradas
 
 1. Un worker programado del backend corre por `fixedDelay`.
 2. Toma un lote acotado de filas en `public.token_revocation` con

@@ -16,6 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.panol_project.backendpanol.modules.auth.application.AuthService;
 import com.panol_project.backendpanol.modules.auth.application.dto.AuthenticatedUserSummary;
+import com.panol_project.backendpanol.modules.auth.application.dto.BotAccessTokenResult;
 import com.panol_project.backendpanol.modules.auth.application.dto.ChangeCurrentPasswordCommand;
 import com.panol_project.backendpanol.modules.auth.application.dto.CurrentUserSessionSummary;
 import com.panol_project.backendpanol.modules.auth.application.dto.LoginResult;
@@ -148,6 +149,35 @@ class AuthV2ControllerTest {
                 .andExpect(jsonPath("$.role").value("DOCENTE"));
 
         verify(authService).getCurrentUser(userUuid);
+    }
+
+    @Test
+    void issueBotAccessTokenDebeRetornarPayloadEfimeroParaRolesPermitidos() throws Exception {
+        UUID userUuid = UUID.randomUUID();
+        when(authService.issueBotAccessToken(userUuid)).thenReturn(new BotAccessTokenResult(
+                "bridge-token",
+                300
+        ));
+
+        mockMvc.perform(post("/api/v2/auth/me/bot-token")
+                        .with(authentication(jwtAuthentication(userUuid, "COORDINADOR"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").value("bridge-token"))
+                .andExpect(jsonPath("$.expiresInSeconds").value(300));
+
+        verify(authService).issueBotAccessToken(userUuid);
+    }
+
+    @Test
+    void issueBotAccessTokenDebeRechazarDocente() throws Exception {
+        UUID userUuid = UUID.randomUUID();
+
+        mockMvc.perform(post("/api/v2/auth/me/bot-token")
+                        .with(authentication(jwtAuthentication(userUuid, "DOCENTE"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        verifyNoInteractions(authService);
     }
 
     @Test

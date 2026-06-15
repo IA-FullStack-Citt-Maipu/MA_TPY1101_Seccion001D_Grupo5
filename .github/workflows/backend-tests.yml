@@ -7,6 +7,8 @@ jobs:
   backend-tests:
     name: Run Backend Tests
     runs-on: ubuntu-latest
+    env:
+      APP_SECURITY_AI_AGENT_SECRET: panol-ci-ai-agent-secret
 
     services:
       postgres:
