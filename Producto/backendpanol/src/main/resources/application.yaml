@@ -62,6 +62,11 @@ spring:
     url: jdbc:postgresql://${DB_DOCKER_HOST:${DB_HOST:localhost}}:${DB_DOCKER_PORT:${DB_PORT:5432}}/${DB_DOCKER_NAME:${DB_NAME:panol}}?sslmode=${DB_DOCKER_SSL_MODE:${DB_SSL_MODE:disable}}
     username: ${DB_DOCKER_USER:${DB_USER:postgres}}
     password: ${DB_DOCKER_PASSWORD:${DB_PASSWORD:postgres}}
+    hikari:
+      max-lifetime: 600000
+      connection-timeout: 20000
+      idle-timeout: 300000
+      minimum-idle: 2
 
 ---
 spring:
