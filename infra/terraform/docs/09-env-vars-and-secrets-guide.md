@@ -36,6 +36,13 @@ Esta guia define el proceso estandar para agregar configuracion nueva al stack s
 - `APP_AUTH_LOCK_MINUTES`
 - `APP_AUTH_JWT_ISSUER`
 - `APP_AUTH_JWT_EXPIRATION_SECONDS`
+- `APP_AUTH_REFRESH_EXPIRATION_SECONDS`
+- `APP_AUTH_COOKIE_SECURE`
+- `APP_AUTH_COOKIE_SAME_SITE`
+- `APP_AUTH_TOKEN_REVOCATION_CLEANUP_ENABLED`
+- `APP_AUTH_TOKEN_REVOCATION_CLEANUP_INITIAL_DELAY_MS`
+- `APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS`
+- `APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE`
 - `GEMINI_MODEL`
 - `CORS_ALLOWED_ORIGINS`
 - `BOT_MIN_INSTANCES`
@@ -149,3 +156,6 @@ Resultado esperado:
 - Usar GitHub Secrets + `TF_VAR_*` para valores sensibles.
 - Mantener `GOOGLE_API_KEY` y secretos JWT solo en Secret Manager / GitHub Secrets.
 - Exigir aprobacion manual para `prod`.
+- Para el flujo actual de cookies HTTP-only, mantener `APP_AUTH_COOKIE_SECURE=true`
+  en entornos desplegados y alinear `CORS_ALLOWED_ORIGINS`/`FRONTEND_ORIGIN`
+  con el host real del frontend.

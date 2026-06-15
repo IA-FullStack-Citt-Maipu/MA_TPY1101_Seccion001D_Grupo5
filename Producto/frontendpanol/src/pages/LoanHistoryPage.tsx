@@ -176,6 +176,7 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
 
   const [loanToDelete, setLoanToDelete] = useState<LoanSummary | null>(null);
   const [deleteConfirmationInput, setDeleteConfirmationInput] = useState("");
+  const [deleteNotes, setDeleteNotes] = useState("");
 
   const loadHistory = useCallback(async (showLoading = true) => {
     if (showLoading) {
@@ -343,11 +344,13 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
   function requestDeletion(loan: LoanSummary) {
     setLoanToDelete(loan);
     setDeleteConfirmationInput("");
+    setDeleteNotes("");
   }
 
   function closeDeletionModal() {
     setLoanToDelete(null);
     setDeleteConfirmationInput("");
+    setDeleteNotes("");
   }
 
   async function confirmDeletion() {
@@ -358,7 +361,7 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
     setError(null);
     try {
       const cancelled = await cancelLoan(loanToDelete.uuid, {
-        notes: "Cancelado por docente desde historial",
+        notes: deleteNotes.trim() || null,
       });
       setAllLoans((previous) =>
         previous.map((loan) => (loan.uuid === cancelled.uuid ? cancelled : loan)),
@@ -626,6 +629,15 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
               value={deleteConfirmationInput}
               onChange={(event) => setDeleteConfirmationInput(event.target.value)}
               placeholder={DELETE_CONFIRM_TEXT}
+            />
+            <label htmlFor="loan-delete-notes">Notas (opcional)</label>
+            <textarea
+              id="loan-delete-notes"
+              rows={3}
+              value={deleteNotes}
+              maxLength={1000}
+              onChange={(event) => setDeleteNotes(event.target.value)}
+              placeholder="Motivo u observacion de cancelacion..."
             />
             <div className="modal-actions">
               <button type="button" className="button button--ghost" onClick={closeDeletionModal}>

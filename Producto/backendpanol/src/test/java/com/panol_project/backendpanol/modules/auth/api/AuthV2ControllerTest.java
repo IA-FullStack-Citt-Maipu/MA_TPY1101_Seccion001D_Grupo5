@@ -4,19 +4,29 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.panol_project.backendpanol.modules.auth.application.AuthService;
 import com.panol_project.backendpanol.modules.auth.application.dto.AuthenticatedUserSummary;
 import com.panol_project.backendpanol.modules.auth.application.dto.ChangeCurrentPasswordCommand;
+import com.panol_project.backendpanol.modules.auth.application.dto.CurrentUserSessionSummary;
+import com.panol_project.backendpanol.modules.auth.application.dto.LoginResult;
+import com.panol_project.backendpanol.modules.auth.application.dto.RefreshResult;
+import com.panol_project.backendpanol.modules.auth.application.dto.RevokeCurrentUserSessionResult;
 import com.panol_project.backendpanol.modules.auth.application.dto.UpdateCurrentEmailCommand;
 import com.panol_project.backendpanol.shared.error.security.RestAccessDeniedHandler;
 import com.panol_project.backendpanol.shared.error.security.RestAuthenticationEntryPoint;
 import com.panol_project.backendpanol.shared.security.CurrentUserUuidResolver;
+import jakarta.servlet.http.Cookie;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -52,6 +62,74 @@ class AuthV2ControllerTest {
     private AuthService authService;
 
     @Test
+    void loginDebeSetearCookiesHttpOnlyYRetornarPayloadPublico() throws Exception {
+        UUID userUuid = UUID.randomUUID();
+        when(authService.login(eq(new com.panol_project.backendpanol.modules.auth.application.dto.LoginCommand(
+                "22307980",
+                "Panol123",
+                true,
+                "JUnit"
+        )))).thenReturn(new LoginResult(
+                "access-token",
+                "refresh-token",
+                "DOCENTE",
+                3600,
+                new AuthenticatedUserSummary(userUuid, "Carla Soto", "carla.docente@panol.local", "DOCENTE"),
+                true
+        ));
+
+        mockMvc.perform(post("/api/v2/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("User-Agent", "JUnit")
+                        .content("""
+                                {
+                                  "rut": "22307980",
+                                  "password": "Panol123",
+                                  "rememberMe": true
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("DOCENTE"))
+                .andExpect(jsonPath("$.expiresInSeconds").value(3600))
+                .andExpect(jsonPath("$.user.id").value(userUuid.toString()))
+                .andExpect(jsonPath("$.accessToken").doesNotExist())
+                .andExpect(header().string("Set-Cookie", org.hamcrest.Matchers.containsString("panol_access_token=access-token")))
+                .andExpect(header().string("Set-Cookie", org.hamcrest.Matchers.containsString("HttpOnly")))
+                .andExpect(result -> org.junit.jupiter.api.Assertions.assertEquals(2, result.getResponse().getHeaders("Set-Cookie").size()));
+    }
+
+    @Test
+    void refreshDebeRotarCookiesYRetornar204() throws Exception {
+        when(authService.refresh("refresh-cookie", "JUnit")).thenReturn(new RefreshResult(
+                "new-access-token",
+                "new-refresh-token",
+                false
+        ));
+
+        mockMvc.perform(post("/api/v2/auth/refresh")
+                        .cookie(new Cookie(AuthCookieService.REFRESH_COOKIE_NAME, "refresh-cookie"))
+                        .header("User-Agent", "JUnit"))
+                .andExpect(status().isNoContent())
+                .andExpect(result -> org.junit.jupiter.api.Assertions.assertEquals(2, result.getResponse().getHeaders("Set-Cookie").size()));
+
+        verify(authService).refresh("refresh-cookie", "JUnit");
+    }
+
+    @Test
+    void logoutDebeExpirarCookiesYDelegarTokensCrudos() throws Exception {
+        mockMvc.perform(post("/api/v2/auth/logout")
+                        .cookie(
+                                new Cookie(AuthCookieService.ACCESS_COOKIE_NAME, "access-cookie"),
+                                new Cookie(AuthCookieService.REFRESH_COOKIE_NAME, "refresh-cookie")
+                        ))
+                .andExpect(status().isNoContent())
+                .andExpect(cookie().maxAge(AuthCookieService.ACCESS_COOKIE_NAME, 0))
+                .andExpect(cookie().maxAge(AuthCookieService.REFRESH_COOKIE_NAME, 0));
+
+        verify(authService).logout("access-cookie", "refresh-cookie");
+    }
+
+    @Test
     void getCurrentUserDebeRetornarResumenDelUsuarioAutenticado() throws Exception {
         UUID userUuid = UUID.randomUUID();
         when(authService.getCurrentUser(userUuid)).thenReturn(new AuthenticatedUserSummary(
@@ -70,6 +148,65 @@ class AuthV2ControllerTest {
                 .andExpect(jsonPath("$.role").value("DOCENTE"));
 
         verify(authService).getCurrentUser(userUuid);
+    }
+
+    @Test
+    void getCurrentUserSessionsDebeRetornarListaDelUsuarioActual() throws Exception {
+        UUID userUuid = UUID.randomUUID();
+        when(authService.getCurrentUserSessions(userUuid, "refresh-cookie")).thenReturn(List.of(
+                new CurrentUserSessionSummary(
+                        "41",
+                        true,
+                        true,
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+                        OffsetDateTime.parse("2026-06-13T15:00:00Z"),
+                        OffsetDateTime.parse("2026-06-20T15:00:00Z")
+                )
+        ));
+
+        mockMvc.perform(get("/api/v2/auth/me/sessions")
+                        .with(authentication(jwtAuthentication(userUuid, "DOCENTE")))
+                        .cookie(new Cookie(AuthCookieService.REFRESH_COOKIE_NAME, "refresh-cookie")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value("41"))
+                .andExpect(jsonPath("$[0].current").value(true))
+                .andExpect(jsonPath("$[0].persistentLogin").value(true))
+                .andExpect(jsonPath("$[0].userAgent").value("Mozilla/5.0 (Windows NT 10.0; Win64; x64)"));
+
+        verify(authService).getCurrentUserSessions(userUuid, "refresh-cookie");
+    }
+
+    @Test
+    void revokeCurrentUserSessionDebeExpirarCookiesSiEsLaSesionActual() throws Exception {
+        UUID userUuid = UUID.randomUUID();
+        when(authService.revokeCurrentUserSession(userUuid, 41L, "refresh-cookie"))
+                .thenReturn(new RevokeCurrentUserSessionResult(true));
+
+        mockMvc.perform(delete("/api/v2/auth/me/sessions/41")
+                        .with(authentication(jwtAuthentication(userUuid, "DOCENTE")))
+                        .cookie(new Cookie(AuthCookieService.REFRESH_COOKIE_NAME, "refresh-cookie")))
+                .andExpect(status().isNoContent())
+                .andExpect(cookie().maxAge(AuthCookieService.ACCESS_COOKIE_NAME, 0))
+                .andExpect(cookie().maxAge(AuthCookieService.REFRESH_COOKIE_NAME, 0));
+
+        verify(authService).revokeCurrentUserSession(userUuid, 41L, "refresh-cookie");
+    }
+
+    @Test
+    void revokeCurrentUserSessionRemotaDebeRetornar204SinExpirarCookies() throws Exception {
+        UUID userUuid = UUID.randomUUID();
+        when(authService.revokeCurrentUserSession(userUuid, 52L, "refresh-cookie"))
+                .thenReturn(new RevokeCurrentUserSessionResult(false));
+
+        mockMvc.perform(delete("/api/v2/auth/me/sessions/52")
+                        .with(authentication(jwtAuthentication(userUuid, "DOCENTE")))
+                        .cookie(new Cookie(AuthCookieService.REFRESH_COOKIE_NAME, "refresh-cookie")))
+                .andExpect(status().isNoContent())
+                .andExpect(result -> org.junit.jupiter.api.Assertions.assertTrue(
+                        result.getResponse().getHeaders("Set-Cookie").isEmpty()
+                ));
+
+        verify(authService).revokeCurrentUserSession(userUuid, 52L, "refresh-cookie");
     }
 
     @Test
@@ -145,6 +282,11 @@ class AuthV2ControllerTest {
         }
 
         @Bean
+        AuthCookieService authCookieService() {
+            return new AuthCookieService(3600, 604800, false, "Lax");
+        }
+
+        @Bean
         SecurityFilterChain securityFilterChain(
                 HttpSecurity http,
                 RestAuthenticationEntryPoint authenticationEntryPoint,
@@ -152,7 +294,9 @@ class AuthV2ControllerTest {
         ) throws Exception {
             return http
                     .csrf(AbstractHttpConfigurer::disable)
-                    .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+                    .authorizeHttpRequests(auth -> auth
+                            .requestMatchers("/api/v2/auth/login", "/api/v2/auth/logout", "/api/v2/auth/refresh").permitAll()
+                            .anyRequest().authenticated())
                     .exceptionHandling(ex -> ex
                             .authenticationEntryPoint(authenticationEntryPoint)
                             .accessDeniedHandler(accessDeniedHandler))

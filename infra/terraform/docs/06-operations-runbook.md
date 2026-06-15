@@ -3,10 +3,17 @@
 ## Flujo diario en dev
 
 1. Commit/push a `dev`.
-2. GitHub Actions despliega automaticamente.
-3. Validar outputs de job y dominio activo (`https://dev.panol.cl` /
+2. `Deploy GCP` ejecuta el despliegue real de `dev`.
+3. `Terraform Plan/Apply` en `push` a `dev` corre solo `fmt`, `validate` y `plan`; no hace `apply` automatico.
+4. Validar outputs de job y dominio activo (`https://dev.panol.cl` /
    `https://api.dev.panol.cl` en dev actual, o `run.app` si no hay dominio custom).
-4. Probar endpoints criticos (health, endpoints negocio).
+5. Probar endpoints criticos (health, endpoints negocio).
+
+## Terraform en dev
+
+- El `apply` real de aplicacion en `dev` lo gobierna `Deploy GCP`, usando imagenes taggeadas por SHA del commit.
+- `Terraform Plan/Apply` usa las imagenes actualmente desplegadas en Cloud Run para evitar drift por variables estaticas tipo `:latest`.
+- Si se necesita un `terraform apply` manual en `dev`, usar `workflow_dispatch` con `environment=dev` y `apply=true`.
 
 ## Promocion a prod
 
@@ -18,7 +25,8 @@
 
 Opcion recomendada:
 
-- redeploy con imagen anterior (`backend_image` / `frontend_image` tag previo) y `terraform apply`.
+- En `dev`, preferir re-ejecutar `Deploy GCP` desde el commit o revision que se quiere restaurar.
+- En `prod`, redeploy con imagen anterior (`backend_image` / `frontend_image` tag previo) y `terraform apply`.
 
 ## Validaciones post deploy
 

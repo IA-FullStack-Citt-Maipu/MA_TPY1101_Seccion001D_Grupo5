@@ -22,3 +22,6 @@ pnpm-debug.log*
 
 # Supabase local workspace (root-level CLI folder)
 /supabase/
+
+# Local test artifacts
+/test-results/

@@ -6,6 +6,7 @@ import com.panol_project.backendpanol.modules.auth.infrastructure.TokenRevocatio
 import com.panol_project.backendpanol.shared.error.security.RestAccessDeniedHandler;
 import com.panol_project.backendpanol.shared.error.security.RestAuthenticationEntryPoint;
 import com.panol_project.backendpanol.shared.security.AiAgentRequestFilter;
+import com.panol_project.backendpanol.shared.security.CookieOrHeaderBearerTokenResolver;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.LinkedHashSet;
@@ -29,6 +30,7 @@ import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
@@ -40,6 +42,7 @@ public class SecurityConfig {
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             AiAgentRequestFilter aiAgentRequestFilter,
+            BearerTokenResolver bearerTokenResolver,
             RestAuthenticationEntryPoint authenticationEntryPoint,
             RestAccessDeniedHandler accessDeniedHandler
     ) throws Exception {
@@ -50,13 +53,14 @@ public class SecurityConfig {
                 .addFilterBefore(aiAgentRequestFilter, BearerTokenAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                        .requestMatchers("/api/v2/auth/login").permitAll()
+                        .requestMatchers("/api/v2/auth/login", "/api/v2/auth/logout", "/api/v2/auth/refresh").permitAll()
                         .requestMatchers("/internal/**", "/api/v1/**").denyAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler))
                 .oauth2ResourceServer(oauth2 -> oauth2
+                        .bearerTokenResolver(bearerTokenResolver)
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(
                                 token -> new JwtAuthenticationToken(token, extractAuthorities(token)))))
                 .build();
@@ -68,6 +72,11 @@ public class SecurityConfig {
             @Value("${app.security.ai-agent.secret}") String aiAgentSecret
     ) {
         return new AiAgentRequestFilter(objectMapper, aiAgentSecret);
+    }
+
+    @Bean
+    BearerTokenResolver bearerTokenResolver(CookieOrHeaderBearerTokenResolver resolver) {
+        return resolver;
     }
 
     @Bean

@@ -1,8 +1,8 @@
 # Entorno y Secrets del Backend
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-06-07
-- Fuente de verdad: `application.yaml`, `Producto/databasepanol/.env.example`, `.env.local.example`, compose vigentes
+- Ultima verificacion: 2026-06-13
+- Fuente de verdad: `application.yaml`, `Producto/databasepanol/.env.example`, `.env`, `.env.local.example`, compose vigentes
 
 ## Selector de entorno de BD
 
@@ -19,6 +19,7 @@ Si no se define, Spring usa perfil `docker` por defecto.
 ## Archivos de entorno
 
 En `Producto/backendpanol`:
+- `.env` (base local del modulo)
 - `.env.local` (local no versionado)
 - `.env.local.example` (plantilla versionada)
 - `secrets/application-secrets.properties` (secretos runtime)
@@ -41,7 +42,14 @@ Comunes:
 - `APP_AUTH_LOCK_MINUTES`
 - `APP_AUTH_JWT_ISSUER`
 - `APP_AUTH_JWT_EXPIRATION_SECONDS`
+- `APP_AUTH_REFRESH_EXPIRATION_SECONDS`
+- `APP_AUTH_COOKIE_SECURE`
+- `APP_AUTH_COOKIE_SAME_SITE`
 - `APP_AUTH_JWT_SECRET`
+- `APP_AUTH_TOKEN_REVOCATION_CLEANUP_ENABLED`
+- `APP_AUTH_TOKEN_REVOCATION_CLEANUP_INITIAL_DELAY_MS`
+- `APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS`
+- `APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE`
 
 Docker DB:
 - `DB_DOCKER_HOST`
@@ -64,6 +72,38 @@ jOOQ (build-time):
 - `JOOQ_DB_USER`
 - `JOOQ_DB_PASSWORD`
 
+## Auth cookies y TTL
+
+- `APP_AUTH_JWT_EXPIRATION_SECONDS`
+  - TTL del access token JWT.
+  - Default: `3600` segundos.
+- `APP_AUTH_REFRESH_EXPIRATION_SECONDS`
+  - TTL de la sesion refresh y del `Max-Age` persistente de la cookie refresh.
+  - Default: `604800` segundos.
+- `APP_AUTH_COOKIE_SECURE`
+  - Si `true`, el navegador solo enviara las cookies por HTTPS.
+  - En localhost HTTP normalmente debe ser `false`.
+  - En entornos desplegados HTTPS debe ser `true`.
+- `APP_AUTH_COOKIE_SAME_SITE`
+  - Politica `SameSite` de las cookies de auth.
+  - Default: `Lax`.
+  - Valor vigente recomendado para el despliegue actual same-site.
+
+## Cleanup de `token_revocation`
+
+- `APP_AUTH_TOKEN_REVOCATION_CLEANUP_ENABLED`
+  - habilita o deshabilita el worker de purge.
+- `APP_AUTH_TOKEN_REVOCATION_CLEANUP_INITIAL_DELAY_MS`
+  - espera inicial despues del arranque.
+  - Default: `300000` ms = 5 minutos.
+- `APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS`
+  - intervalo entre corridas.
+  - Default del codigo: `1800000` ms = 30 minutos.
+  - Override local dejado en los `.env` del repo: `86400000` ms = 1 dia.
+- `APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE`
+  - maximo de filas expiradas borradas por corrida.
+  - Default: `500`.
+
 ## Compose y entorno
 
 - `Producto/databasepanol/docker-compose.yaml` levanta PostgreSQL local.
@@ -71,6 +111,12 @@ jOOQ (build-time):
 - `Producto/backendpanol/docker-compose.yaml` levanta `backend only`.
 
 `APP_DB_ENV` define a que base conecta la app, no que servicios crea Docker Compose.
+
+En backend:
+
+- `.env` define una base local del modulo.
+- `.env.local` puede sobreescribir valores de `.env`.
+- en `Producto/docker-compose.yaml`, el backend carga ambos archivos via `env_file`.
 
 ### Modo Supabase
 

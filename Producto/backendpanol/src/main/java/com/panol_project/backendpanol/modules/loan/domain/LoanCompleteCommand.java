@@ -4,6 +4,7 @@ import java.util.UUID;
 
 public record LoanCompleteCommand(
         UUID loanUuid,
-        UUID actorUuid
+        UUID actorUuid,
+        String notes
 ) {
 }

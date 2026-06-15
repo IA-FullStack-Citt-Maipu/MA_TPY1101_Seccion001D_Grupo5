@@ -1,11 +1,13 @@
 package com.panol_project.backendpanol.modules.loan.application.dto;
 
+import java.util.List;
 import java.util.UUID;
 
 public record RevisarPrestamoCommand(
         UUID loanUuid,
         UUID actorUuid,
         String decision,
-        String notes
+        String notes,
+        List<RevisarPrestamoItemCommand> items
 ) {
 }

@@ -67,7 +67,8 @@ Campos:
 ```json
 {
   "rut": "22307980",
-  "password": "******"
+  "password": "******",
+  "rememberMe": true
 }
 ```
 
@@ -78,7 +79,6 @@ Nota frontend:
 
 ```json
 {
-  "accessToken": "<jwt>",
   "role": "COORDINADOR",
   "expiresInSeconds": 3600,
   "user": {
@@ -90,18 +90,35 @@ Nota frontend:
 }
 ```
 
+Notas:
+- El JWT de acceso ya no viaja en el body.
+- La respuesta setea cookies HTTP-only `panol_access_token` y
+  `panol_refresh_token`.
+
 ## 4) Payload de logout
 
 ### Request (`POST /api/v2/auth/logout`)
 
 - Sin body.
-- Requiere header `Authorization: Bearer <jwt>`.
+- Usa cookies de auth; no requiere `Authorization: Bearer`.
 
 ### Response 204
 
 - Sin body.
 
-## 5) Perfil actual del usuario
+## 5) Refresh de sesion
+
+### Request (`POST /api/v2/auth/refresh`)
+
+- Sin body.
+- Usa la cookie HTTP-only `panol_refresh_token`.
+
+### Response 204
+
+- Sin body.
+- Reemite `panol_access_token` y `panol_refresh_token`.
+
+## 6) Perfil actual del usuario
 
 ### Response (`GET /api/v2/auth/me`)
 
@@ -114,7 +131,7 @@ Nota frontend:
 }
 ```
 
-## 6) Cambio de correo del usuario actual
+## 7) Cambio de correo del usuario actual
 
 ### Request (`PATCH /api/v2/auth/me/email`)
 
@@ -132,7 +149,7 @@ Error funcional esperado:
 
 - `AUTH_EMAIL_ALREADY_IN_USE`
 
-## 7) Cambio de contrasena del usuario actual
+## 8) Cambio de contrasena del usuario actual
 
 ### Request (`PATCH /api/v2/auth/me/password`)
 
@@ -155,11 +172,49 @@ Errores funcionales esperados:
 - `AUTH_NEW_PASSWORD_TOO_SHORT`
 - `AUTH_PASSWORD_REUSE_NOT_ALLOWED`
 
-## 8) Consumo en frontend
+## 9) Sesiones activas del usuario actual
+
+### Response (`GET /api/v2/auth/me/sessions`)
+
+```json
+[
+  {
+    "id": "41",
+    "current": true,
+    "persistentLogin": true,
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/137.0.0.0",
+    "createdAt": "2026-06-13T18:20:00Z",
+    "expiresAt": "2026-06-20T18:20:00Z"
+  }
+]
+```
+
+Notas:
+- `id` es string por contrato, aunque internamente provenga de `bigint`.
+- `userAgent` puede venir `null`.
+- Nunca se exponen `refresh_token_hash` ni `currentAccessJti`.
+
+### Request (`DELETE /api/v2/auth/me/sessions/{sessionId}`)
+
+- Sin body.
+- Requiere autenticacion por cookie `panol_access_token`.
+
+### Response 204
+
+- Sin body.
+
+Error funcional esperado:
+
+- `404` cuando la sesion no existe o no pertenece al usuario autenticado.
+
+## 10) Consumo en frontend
 
 - `src/services/apiClient.ts` espera en errores: `code`, `message`, `timestamp`.
 - `src/services/authService.ts` consume `POST /api/v2/auth/login` y persiste
-  `accessToken` + `user` en storage.
+  solo `auth_user` como snapshot no sensible.
+- `src/services/apiClient.ts` trabaja con `withCredentials: true` y hace
+  refresh silencioso contra `POST /api/v2/auth/refresh` cuando recibe `401`.
 - `src/services/profileService.ts` consume `GET /api/v2/auth/me`,
+  `GET /api/v2/auth/me/sessions`, `DELETE /api/v2/auth/me/sessions/{sessionId}`,
   `PATCH /api/v2/auth/me/email` y `PATCH /api/v2/auth/me/password`.
 - Cualquier otro detalle tecnico debe permanecer en logs internos del backend.

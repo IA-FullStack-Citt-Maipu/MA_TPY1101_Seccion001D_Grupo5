@@ -63,6 +63,11 @@ import org.springframework.test.web.servlet.MockMvc;
 })
 class LoanV2ControllerTest {
 
+    private static final String FUTURE_SCHEDULED_AT = "2099-06-12T10:30:00-04:00";
+    private static final String FUTURE_EXPECTED_RETURN_AT = "2099-06-12T13:45:00-04:00";
+    private static final String FUTURE_OFFSET_SCHEDULED_AT = "2099-06-24T19:00:00-04:00";
+    private static final String FUTURE_OFFSET_EXPECTED_RETURN_AT = "2099-06-24T19:53:00-04:00";
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -85,8 +90,8 @@ class LoanV2ControllerTest {
         UUID implementUuid = UUID.randomUUID();
         UUID ignoredRequesterUuid = UUID.randomUUID();
         UUID loanUuid = UUID.randomUUID();
-        OffsetDateTime scheduledAt = OffsetDateTime.parse("2026-06-12T10:30:00-04:00");
-        OffsetDateTime expectedReturnAt = OffsetDateTime.parse("2026-06-12T13:45:00-04:00");
+        OffsetDateTime scheduledAt = OffsetDateTime.parse(FUTURE_SCHEDULED_AT);
+        OffsetDateTime expectedReturnAt = OffsetDateTime.parse(FUTURE_EXPECTED_RETURN_AT);
 
         LoanAggregate createdLoan = new LoanAggregate(
                 loanUuid,
@@ -135,8 +140,8 @@ class LoanV2ControllerTest {
                                   "requester_uuid": "%s",
                                   "room_uuid": "%s",
                                   "subject_uuid": "%s",
-                                  "scheduled_at": "2026-06-12T10:30:00-04:00",
-                                  "expected_return_at": "2026-06-12T13:45:00-04:00",
+                                  "scheduled_at": "%s",
+                                  "expected_return_at": "%s",
                                   "items": [
                                     {
                                       "implement_uuid": "%s",
@@ -144,12 +149,19 @@ class LoanV2ControllerTest {
                                     }
                                   ]
                                 }
-                                """.formatted(ignoredRequesterUuid, roomUuid, subjectUuid, implementUuid)))
+                                """.formatted(
+                                        ignoredRequesterUuid,
+                                        roomUuid,
+                                        subjectUuid,
+                                        FUTURE_SCHEDULED_AT,
+                                        FUTURE_EXPECTED_RETURN_AT,
+                                        implementUuid
+                                )))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.uuid").value(response.uuid().toString()))
                 .andExpect(jsonPath("$.requester_uuid").value(authenticatedUserUuid.toString()))
                 .andExpect(jsonPath("$.status").value("pending"))
-                .andExpect(jsonPath("$.scheduled_at").value("2026-06-12T10:30:00-04:00"))
+                .andExpect(jsonPath("$.scheduled_at").value(FUTURE_SCHEDULED_AT))
                 .andExpect(jsonPath("$.room.uuid").value(roomUuid.toString()))
                 .andExpect(jsonPath("$.room.name").value("Sala 301"))
                 .andExpect(jsonPath("$.subject.uuid").value(subjectUuid.toString()))
@@ -206,7 +218,7 @@ class LoanV2ControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "scheduled_at": "2026-06-12T10:30:00-04:00",
+                                  "scheduled_at": "%s",
                                   "items": [
                                     {
                                       "implement_uuid": "%s",
@@ -214,7 +226,7 @@ class LoanV2ControllerTest {
                                     }
                                   ]
                                 }
-                                """.formatted(UUID.randomUUID())))
+                                """.formatted(FUTURE_SCHEDULED_AT, UUID.randomUUID())))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
@@ -230,8 +242,8 @@ class LoanV2ControllerTest {
                 """
                         {
                           "room_uuid": "%s",
-                          "scheduled_at": "2026-06-24T19:00:00-04:00",
-                          "expected_return_at": "2026-06-24T19:53:00-04:00",
+                          "scheduled_at": "%s",
+                          "expected_return_at": "%s",
                           "items": [
                             {
                               "implement_uuid": "%s",
@@ -239,7 +251,7 @@ class LoanV2ControllerTest {
                             }
                           ]
                         }
-                        """.formatted(UUID.randomUUID(), UUID.randomUUID()),
+                        """.formatted(UUID.randomUUID(), FUTURE_OFFSET_SCHEDULED_AT, FUTURE_OFFSET_EXPECTED_RETURN_AT, UUID.randomUUID()),
                 CreateLoanV2Request.class
         );
 
@@ -255,7 +267,7 @@ class LoanV2ControllerTest {
         UUID authenticatedUserUuid = UUID.randomUUID();
         UUID roomUuid = UUID.randomUUID();
         UUID implementUuid = UUID.randomUUID();
-        OffsetDateTime scheduledAt = OffsetDateTime.parse("2026-06-12T10:30:00-04:00");
+        OffsetDateTime scheduledAt = OffsetDateTime.parse(FUTURE_SCHEDULED_AT);
 
         when(loanRepositoryPort.existsActiveRequesterByUuid(authenticatedUserUuid)).thenReturn(true);
         when(loanRepositoryPort.existsActiveRoomByUuid(roomUuid)).thenReturn(true);
@@ -281,7 +293,7 @@ class LoanV2ControllerTest {
                         .content("""
                                 {
                                   "room_uuid": "%s",
-                                  "scheduled_at": "2026-06-12T10:30:00-04:00",
+                                  "scheduled_at": "%s",
                                   "items": [
                                     {
                                       "implement_uuid": "%s",
@@ -289,7 +301,7 @@ class LoanV2ControllerTest {
                                     }
                                   ]
                                 }
-                                """.formatted(roomUuid, implementUuid)))
+                                """.formatted(roomUuid, FUTURE_SCHEDULED_AT, implementUuid)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("LOAN_DUPLICATE_REQUEST"))
                 .andExpect(jsonPath("$.message").value("Ya tienes una solicitud pendiente con uno o m\u00e1s de estos implementos"));
@@ -325,10 +337,10 @@ class LoanV2ControllerTest {
                         .content("""
                                 {
                                   "room_uuid": "%s",
-                                  "scheduled_at": "2026-06-12T10:30:00-04:00",
+                                  "scheduled_at": "%s",
                                   "items": []
                                 }
-                                """.formatted(UUID.randomUUID())))
+                                """.formatted(UUID.randomUUID(), FUTURE_SCHEDULED_AT)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
@@ -343,14 +355,14 @@ class LoanV2ControllerTest {
                         .content("""
                                 {
                                   "room_uuid": "%s",
-                                  "scheduled_at": "2026-06-12T10:30:00-04:00",
+                                  "scheduled_at": "%s",
                                   "items": [
                                     {
                                       "requested_quantity": 1
                                     }
                                   ]
                                 }
-                                """.formatted(UUID.randomUUID())))
+                                """.formatted(UUID.randomUUID(), FUTURE_SCHEDULED_AT)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
@@ -365,7 +377,7 @@ class LoanV2ControllerTest {
                         .content("""
                                 {
                                   "room_uuid": "%s",
-                                  "scheduled_at": "2026-06-12T10:30:00-04:00",
+                                  "scheduled_at": "%s",
                                   "items": [
                                     {
                                       "implement_uuid": "%s",
@@ -373,7 +385,7 @@ class LoanV2ControllerTest {
                                     }
                                   ]
                                 }
-                                """.formatted(UUID.randomUUID(), UUID.randomUUID())))
+                                """.formatted(UUID.randomUUID(), FUTURE_SCHEDULED_AT, UUID.randomUUID())))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
@@ -383,7 +395,7 @@ class LoanV2ControllerTest {
     private String validCreatePayload() throws Exception {
         return objectMapper.writeValueAsString(java.util.Map.of(
                 "room_uuid", UUID.randomUUID(),
-                "scheduled_at", "2026-06-12T10:30:00-04:00",
+                "scheduled_at", FUTURE_SCHEDULED_AT,
                 "items", List.of(java.util.Map.of(
                         "implement_uuid", UUID.randomUUID(),
                         "requested_quantity", 1

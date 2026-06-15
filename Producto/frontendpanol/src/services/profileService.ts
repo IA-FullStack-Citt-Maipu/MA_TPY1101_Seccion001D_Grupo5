@@ -8,9 +8,27 @@ interface BackendProfileResponse {
   role?: string | null;
 }
 
+interface BackendCurrentUserSessionResponse {
+  id: string;
+  current: boolean;
+  persistentLogin: boolean;
+  userAgent?: string | null;
+  createdAt: string;
+  expiresAt: string;
+}
+
 export interface ChangePasswordPayload {
   currentPassword: string;
   newPassword: string;
+}
+
+export interface CurrentUserSession {
+  id: string;
+  current: boolean;
+  persistentLogin: boolean;
+  userAgent: string | null;
+  createdAt: string;
+  expiresAt: string;
 }
 
 function toSessionUserSummary(data: BackendProfileResponse): SessionUserSummary {
@@ -37,4 +55,20 @@ export async function updateCurrentUserPassword(payload: ChangePasswordPayload):
     current_password: payload.currentPassword,
     new_password: payload.newPassword,
   });
+}
+
+export async function fetchCurrentUserSessions(): Promise<CurrentUserSession[]> {
+  const { data } = await apiClient.get<BackendCurrentUserSessionResponse[]>("/api/v2/auth/me/sessions");
+  return data.map((session) => ({
+    id: String(session.id),
+    current: session.current === true,
+    persistentLogin: session.persistentLogin === true,
+    userAgent: typeof session.userAgent === "string" ? session.userAgent : null,
+    createdAt: session.createdAt,
+    expiresAt: session.expiresAt,
+  }));
+}
+
+export async function revokeCurrentUserSession(sessionId: string): Promise<void> {
+  await apiClient.delete(`/api/v2/auth/me/sessions/${encodeURIComponent(sessionId)}`);
 }

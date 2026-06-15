@@ -7,6 +7,7 @@
 ## Indice
 
 - [auth.md](./auth.md)
+- [auth-token-cookie-flow.md](./auth-token-cookie-flow.md)
 - [users.md](./users.md)
 - [catalog-category.md](./catalog-category.md)
 - [catalog-location.md](./catalog-location.md)

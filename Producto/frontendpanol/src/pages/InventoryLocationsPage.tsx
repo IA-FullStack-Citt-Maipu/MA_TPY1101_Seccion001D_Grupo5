@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, RefreshCcw, Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { InventoryLayout } from "../components/layout/InventoryLayout";
 import { getApiErrorPayload, getErrorMessage } from "../services/apiClient";
 import {
@@ -169,10 +169,6 @@ export function InventoryLocationsPage({ embedded = false }: { embedded?: boolea
           <p>Gestiona las ubicaciones fisicas para asignar implementos y unidades.</p>
         </div>
         <div className="content-header__actions content-header__actions--mobile-visible">
-          <button type="button" className="button button--ghost" onClick={() => void load()} disabled={loading}>
-            <RefreshCcw size={16} />
-            Refrescar
-          </button>
           <button type="button" className="button" onClick={openCreate}>
             <Plus size={16} />
             Nueva ubicacion

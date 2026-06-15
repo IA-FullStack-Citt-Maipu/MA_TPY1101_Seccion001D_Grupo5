@@ -10,6 +10,7 @@ public record LoanCreateCommand(
         UUID subjectUuid,
         OffsetDateTime scheduledAt,
         OffsetDateTime expectedReturnAt,
+        String notes,
         List<LoanRequestedItem> requestedItems
 ) {
 }
