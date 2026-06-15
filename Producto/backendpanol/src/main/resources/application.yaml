@@ -26,6 +26,19 @@ app:
     enabled: ${APP_SECURITY_ENABLED:true}
   outbox:
     system-user-uuid: ${APP_OUTBOX_SYSTEM_USER_UUID:99999999-9999-9999-9999-999999999999}
+    cleanup:
+      enabled: ${APP_OUTBOX_CLEANUP_ENABLED:true}
+      initial-delay-ms: ${APP_OUTBOX_CLEANUP_INITIAL_DELAY_MS:300000}
+      delay-ms: ${APP_OUTBOX_CLEANUP_DELAY_MS:86400000}
+      batch-size: ${APP_OUTBOX_CLEANUP_BATCH_SIZE:500}
+      retention-days: ${APP_OUTBOX_CLEANUP_RETENTION_DAYS:30}
+  notification:
+    cleanup:
+      enabled: ${APP_NOTIFICATION_CLEANUP_ENABLED:true}
+      initial-delay-ms: ${APP_NOTIFICATION_CLEANUP_INITIAL_DELAY_MS:300000}
+      delay-ms: ${APP_NOTIFICATION_CLEANUP_DELAY_MS:86400000}
+      batch-size: ${APP_NOTIFICATION_CLEANUP_BATCH_SIZE:500}
+      retention-days: ${APP_NOTIFICATION_CLEANUP_RETENTION_DAYS:15}
   auth:
     max-failed-attempts: ${APP_AUTH_MAX_FAILED_ATTEMPTS:5}
     lock-minutes: ${APP_AUTH_LOCK_MINUTES:15}

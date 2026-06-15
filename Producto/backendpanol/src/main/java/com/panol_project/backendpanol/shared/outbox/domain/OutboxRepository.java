@@ -12,4 +12,5 @@ public interface OutboxRepository {
     void markRetry(UUID eventId, int retryCount, OutboxEventStatus status);
     int countByStatus(OutboxEventStatus status);
     int countWithRetries();
+    int deleteSentOlderThan(OffsetDateTime cutoff, int limit);
 }
