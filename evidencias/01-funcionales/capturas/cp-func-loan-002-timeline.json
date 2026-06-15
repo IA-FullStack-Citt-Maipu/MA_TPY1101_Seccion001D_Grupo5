@@ -1,0 +1,25 @@
+{
+  "status_code": 200,
+  "json": [
+    {
+      "notes": "QA CP-FUNC-LOAN-001",
+      "history_id": 7004,
+      "from_status": null,
+      "to_status": "pending",
+      "actor_user_id": 80,
+      "actor_name": "Docente QA Local",
+      "actor_email": "docente.local@panolsalud.test",
+      "changed_at": "2026-06-15T16:49:52.621289Z"
+    },
+    {
+      "notes": "QA CP-FUNC-LOAN-002",
+      "history_id": 7005,
+      "from_status": "pending",
+      "to_status": "approved",
+      "actor_user_id": 79,
+      "actor_name": "Coordinador QA Local",
+      "actor_email": "coordinador.local@panolsalud.test",
+      "changed_at": "2026-06-15T16:49:53.0831Z"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "status_code": 200,
+  "json": {
+    "uuid": "12a3a047-28d0-423d-89de-bb2c135a5a55",
+    "status": "pending",
+    "room": {
+      "uuid": "0700ee77-a0d2-4391-b622-9c8d7b83deb0",
+      "name": "Sala 320"
+    },
+    "subject": {
+      "uuid": "2fbc919e-0de0-432a-b460-7fd83d82c0b6",
+      "name": "Fundamentos de Enfermer?a"
+    },
+    "items": [
+      {
+        "implement_uuid": "a4d14b48-e453-4f4b-bafe-f7db99ae9008",
+        "implement_name": "Bandeja de procedimiento B",
+        "requested_quantity": 1,
+        "reserved_quantity": 0,
+        "delivered_quantity": 0
+      }
+    ],
+    "requester_uuid": "b5eafded-e45e-48e0-8066-837572d61d4a",
+    "scheduled_at": "2026-06-18T16:49:53.750269Z",
+    "expected_return_at": "2026-06-19T16:49:53.750269Z",
+    "created_at": "2026-06-15T16:49:53.835177Z"
+  }
+}

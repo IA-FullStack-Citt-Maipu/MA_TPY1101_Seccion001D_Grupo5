@@ -1,0 +1,12 @@
+{
+  "create_status_code": 409,
+  "user_summary": {
+    "uuid": "5464aedd-2cbf-4a8d-9c5b-cd274ffb614b",
+    "name": "Docente QA B",
+    "rut": "44444444",
+    "email": "docenteb.local@panolsalud.test",
+    "role": "DOCENTE",
+    "active": true,
+    "createdAt": "2026-06-15T16:48:25.628022Z"
+  }
+}

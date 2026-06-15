@@ -1,0 +1,8 @@
+{
+  "status_code": 403,
+  "json": {
+    "code": "FORBIDDEN",
+    "message": "Acceso denegado",
+    "timestamp": "2026-06-15T16:49:53.441056294Z"
+  }
+}

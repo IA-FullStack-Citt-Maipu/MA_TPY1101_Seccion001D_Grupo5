@@ -1,0 +1,13 @@
+{
+  "status_code": 200,
+  "json": {
+    "approved_at": "2026-06-15T16:49:53.0831Z",
+    "prepared_at": null,
+    "delivered_at": null,
+    "completed_at": null,
+    "rejected_at": null,
+    "cancelled_at": null,
+    "expired_at": null,
+    "overdue_at": null
+  }
+}

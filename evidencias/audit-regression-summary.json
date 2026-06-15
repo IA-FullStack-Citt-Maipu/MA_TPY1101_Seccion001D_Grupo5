@@ -1,0 +1,9 @@
+{
+  "login_exitoso": "Pas?",
+  "login_fallido": "Pas?",
+  "listado_implementos": "Pas?",
+  "crear_prestamo": "Pas?",
+  "aprobacion_rechazo": "Fall?",
+  "control_acceso_rol": "Pas?",
+  "protegido_sin_token": "Pas?"
+}

@@ -1,0 +1,106 @@
+[
+  {
+    "url": "https://panol-backend-staging-perf-369729778197.us-central1.run.app/api/v2/auth/me",
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "access-control-allow-origin": "https://panol-frontend-staging-perf-369729778197.us-central1.run.app",
+      "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+      "cache-control": "no-cache, no-store, max-age=0, must-revalidate",
+      "content-length": "85",
+      "content-type": "application/json",
+      "date": "Mon, 15 Jun 2026 17:44:04 GMT",
+      "expires": "0",
+      "pragma": "no-cache",
+      "server": "Google Frontend",
+      "vary": "Origin, Access-Control-Request-Method, Access-Control-Request-Headers",
+      "x-cloud-trace-context": "b5c78af57d6ed4e1c145def54c2a03b6",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "DENY",
+      "x-xss-protection": "0"
+    }
+  },
+  {
+    "url": "https://panol-backend-staging-perf-369729778197.us-central1.run.app/api/v2/auth/login",
+    "status": 200,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "access-control-allow-origin": "https://panol-frontend-staging-perf-369729778197.us-central1.run.app",
+      "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+      "cache-control": "no-cache, no-store, max-age=0, must-revalidate",
+      "content-type": "application/json",
+      "date": "Mon, 15 Jun 2026 17:44:07 GMT",
+      "expires": "0",
+      "pragma": "no-cache",
+      "server": "Google Frontend",
+      "set-cookie": [
+        {
+          "cookie": "panol_access_token",
+          "attributes": [
+            "Path=/",
+            "Max-Age=43200",
+            "Expires=Tue, 16 Jun 2026 05:44:07 GMT",
+            "Secure",
+            "HttpOnly",
+            "SameSite=None"
+          ]
+        },
+        {
+          "cookie": "panol_refresh_token",
+          "attributes": [
+            "Path=/api/v2/auth",
+            "Max-Age=604800",
+            "Expires=Mon, 22 Jun 2026 17:44:07 GMT",
+            "Secure",
+            "HttpOnly",
+            "SameSite=None"
+          ]
+        }
+      ],
+      "vary": "Origin, Access-Control-Request-Method, Access-Control-Request-Headers",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "DENY",
+      "x-xss-protection": "0"
+    }
+  },
+  {
+    "url": "https://panol-backend-staging-perf-369729778197.us-central1.run.app/api/v2/loans/c2d1fef5-5bac-4b95-a204-4cd060825e90",
+    "status": 404,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "access-control-allow-origin": "https://panol-frontend-staging-perf-369729778197.us-central1.run.app",
+      "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+      "cache-control": "no-cache, no-store, max-age=0, must-revalidate",
+      "content-length": "105",
+      "content-type": "application/json",
+      "date": "Mon, 15 Jun 2026 17:44:07 GMT",
+      "expires": "0",
+      "pragma": "no-cache",
+      "server": "Google Frontend",
+      "vary": "Origin, Access-Control-Request-Method, Access-Control-Request-Headers",
+      "x-cloud-trace-context": "95eee7fa5e24deef49990aa593fb0442",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "DENY",
+      "x-xss-protection": "0"
+    }
+  },
+  {
+    "url": "https://panol-backend-staging-perf-369729778197.us-central1.run.app/api/v2/auth/me",
+    "status": 200,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "access-control-allow-origin": "https://panol-frontend-staging-perf-369729778197.us-central1.run.app",
+      "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+      "cache-control": "no-cache, no-store, max-age=0, must-revalidate",
+      "content-type": "application/json",
+      "date": "Mon, 15 Jun 2026 17:44:08 GMT",
+      "expires": "0",
+      "pragma": "no-cache",
+      "server": "Google Frontend",
+      "vary": "Origin, Access-Control-Request-Method, Access-Control-Request-Headers",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "DENY",
+      "x-xss-protection": "0"
+    }
+  }
+]

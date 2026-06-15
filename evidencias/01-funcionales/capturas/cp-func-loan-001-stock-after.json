@@ -1,0 +1,13 @@
+{
+  "stock": {
+    "available": 50,
+    "reserved": 0,
+    "loaned": 0,
+    "damaged": 0,
+    "total_stock": 50,
+    "min_stock": 5
+  },
+  "individuals": [],
+  "implement_uuid": "a4d14b48-e453-4f4b-bafe-f7db99ae9007",
+  "item_type": "reusable"
+}

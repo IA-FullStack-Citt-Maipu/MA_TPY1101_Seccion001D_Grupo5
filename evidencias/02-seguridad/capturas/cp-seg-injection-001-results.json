@@ -1,0 +1,26 @@
+[
+  {
+    "payload": "' OR '1'='1",
+    "status_code": 200,
+    "contains_sql_error_terms": false,
+    "response_excerpt": "[]"
+  },
+  {
+    "payload": "' OR 1=1--",
+    "status_code": 200,
+    "contains_sql_error_terms": false,
+    "response_excerpt": "[]"
+  },
+  {
+    "payload": "1; DROP TABLE implemento;--",
+    "status_code": 200,
+    "contains_sql_error_terms": false,
+    "response_excerpt": "[]"
+  },
+  {
+    "payload": "' UNION SELECT username,password FROM usuario--",
+    "status_code": 200,
+    "contains_sql_error_terms": false,
+    "response_excerpt": "[]"
+  }
+]

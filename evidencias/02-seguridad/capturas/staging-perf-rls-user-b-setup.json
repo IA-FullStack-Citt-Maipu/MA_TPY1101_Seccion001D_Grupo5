@@ -1,0 +1,12 @@
+{
+  "create_status_code": 201,
+  "user_b": {
+    "uuid": "39eeec5a-1bd3-4edb-a9e2-ac892580e6d5",
+    "name": "Docente QA B Staging Perf",
+    "rut": "44444444",
+    "email": "docenteb.stagingperf@panolsalud.test",
+    "role": "DOCENTE",
+    "active": true,
+    "createdAt": "2026-06-15T17:42:45.589511Z"
+  }
+}

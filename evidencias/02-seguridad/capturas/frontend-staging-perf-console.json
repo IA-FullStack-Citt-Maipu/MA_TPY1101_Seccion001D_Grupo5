@@ -1,0 +1,22 @@
+[
+  {
+    "type": "error",
+    "text": "Failed to load resource: the server responded with a status of 401 ()"
+  },
+  {
+    "type": "error",
+    "text": "Failed to load resource: the server responded with a status of 401 ()"
+  },
+  {
+    "type": "error",
+    "text": "Failed to load resource: the server responded with a status of 404 ()"
+  },
+  {
+    "type": "log",
+    "text": "foreign-loan-fetch status=404"
+  },
+  {
+    "type": "log",
+    "text": "auth-me-fetch status=200"
+  }
+]

@@ -1,0 +1,99 @@
+{
+  "items": [
+    {
+      "uuid": "b951db6f-4546-42d1-88e3-88249a213c57",
+      "status": "approved",
+      "room": {
+        "uuid": "0700ee77-a0d2-4391-b622-9c8d7b83deb0",
+        "name": "Sala 320"
+      },
+      "subject": {
+        "uuid": "2fbc919e-0de0-432a-b460-7fd83d82c0b6",
+        "name": "Fundamentos de Enfermer?a"
+      },
+      "items": [
+        {
+          "implement_uuid": "a4d14b48-e453-4f4b-bafe-f7db99ae9007",
+          "implement_name": "Bandeja de procedimiento A",
+          "requested_quantity": 2,
+          "reserved_quantity": 2,
+          "delivered_quantity": 0
+        }
+      ],
+      "requester_uuid": "b5eafded-e45e-48e0-8066-837572d61d4a",
+      "scheduled_at": "2026-06-16T16:49:52.539843Z",
+      "expected_return_at": "2026-06-17T16:49:52.539843Z",
+      "created_at": "2026-06-15T16:49:52.621289Z"
+    },
+    {
+      "uuid": "8a6b4afc-4954-4467-b0c1-53df927753b3",
+      "status": "approved",
+      "room": {
+        "uuid": "354571ca-5f32-4a58-bf10-8891d4a82163",
+        "name": "Sala 323"
+      },
+      "subject": {
+        "uuid": "50a4856e-d49b-4602-ae43-2ae5da227a03",
+        "name": "Urgencias y Primeros Auxilios"
+      },
+      "items": [
+        {
+          "implement_uuid": "7e218e90-f42c-44ba-b1ba-f833d2671eb2",
+          "implement_name": "Simulador de v?a venosa",
+          "requested_quantity": 1,
+          "reserved_quantity": 1,
+          "delivered_quantity": 0
+        },
+        {
+          "implement_uuid": "f8d2f97d-63da-40c5-b1f1-c1f2e2f9ea11",
+          "implement_name": "Jeringa 5ml",
+          "requested_quantity": 20,
+          "reserved_quantity": 20,
+          "delivered_quantity": 0
+        }
+      ],
+      "requester_uuid": "b5eafded-e45e-48e0-8066-837572d61d4a",
+      "scheduled_at": "2026-06-16T10:00:00Z",
+      "expected_return_at": "2026-06-16T12:00:00Z",
+      "created_at": "2026-06-15T11:08:09.733101Z"
+    },
+    {
+      "uuid": "6f42fca6-3074-434d-81eb-bdfdbcae4488",
+      "status": "pending",
+      "room": {
+        "uuid": "1a925554-d8b7-4aa9-8a43-a50001bc45a2",
+        "name": "Sala 322"
+      },
+      "subject": {
+        "uuid": "2fbc919e-0de0-432a-b460-7fd83d82c0b6",
+        "name": "Fundamentos de Enfermer?a"
+      },
+      "items": [
+        {
+          "implement_uuid": "7e218e90-f42c-44ba-b1ba-f833d2671eb2",
+          "implement_name": "Simulador de v?a venosa",
+          "requested_quantity": 1,
+          "reserved_quantity": 0,
+          "delivered_quantity": 0
+        },
+        {
+          "implement_uuid": "f8d2f97d-63da-40c5-b1f1-c1f2e2f9ea11",
+          "implement_name": "Jeringa 5ml",
+          "requested_quantity": 10,
+          "reserved_quantity": 0,
+          "delivered_quantity": 0
+        }
+      ],
+      "requester_uuid": "b5eafded-e45e-48e0-8066-837572d61d4a",
+      "scheduled_at": "2026-06-17T09:00:00Z",
+      "expected_return_at": "2026-06-17T11:00:00Z",
+      "created_at": "2026-06-15T11:08:09.733101Z"
+    }
+  ],
+  "page": 1,
+  "size": 100,
+  "total_items": 3,
+  "total_pages": 1,
+  "has_next": false,
+  "has_previous": false
+}

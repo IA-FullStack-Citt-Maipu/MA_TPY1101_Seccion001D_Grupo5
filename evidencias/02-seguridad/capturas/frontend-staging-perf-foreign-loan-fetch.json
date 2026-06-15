@@ -1,0 +1,4 @@
+{
+  "status": 404,
+  "body": "{\"code\":\"LOAN_NOT_FOUND\",\"message\":\"Prestamo no encontrado\",\"timestamp\":\"2026-06-15T17:44:07.922314593Z\"}"
+}

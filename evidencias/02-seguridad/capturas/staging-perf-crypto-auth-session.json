@@ -1,0 +1,44 @@
+{
+  "status_code": 200,
+  "response_role": "DOCENTE",
+  "user_role": "DOCENTE",
+  "cookie_flags": [
+    {
+      "cookie": "panol_access_token",
+      "attributes": [
+        "Path=/",
+        "Max-Age=43200",
+        "Expires=Tue, 16 Jun 2026 05:42:44 GMT",
+        "Secure",
+        "HttpOnly",
+        "SameSite=None"
+      ]
+    },
+    {
+      "cookie": "panol_refresh_token",
+      "attributes": [
+        "Path=/api/v2/auth",
+        "Max-Age=604800",
+        "Expires=Mon, 22 Jun 2026 17:42:44 GMT",
+        "Secure",
+        "HttpOnly",
+        "SameSite=None"
+      ]
+    }
+  ],
+  "jwt_decoded": {
+    "header": {
+      "alg": "HS256"
+    },
+    "payload": {
+      "iss": "panol-backend-staging-perf",
+      "sub": "b5eafded-e45e-48e0-8066-837572d61d4a",
+      "role": "DOCENTE",
+      "exp": 1781588563,
+      "iat": 1781545363,
+      "jti": "3494d6d5-7510-4357-8177-d2ef3679539a"
+    },
+    "signature_present": true
+  },
+  "https_backend": true
+}

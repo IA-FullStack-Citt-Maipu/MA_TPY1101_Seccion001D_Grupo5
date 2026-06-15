@@ -1,0 +1,8 @@
+{
+  "href": "https://panol-frontend-staging-perf-369729778197.us-central1.run.app/#/inventory/prestamos",
+  "title": "Inventario Escuela de Salud",
+  "localStorage": {
+    "auth_user": "{\"id\":\"b5eafded-e45e-48e0-8066-837572d61d4a\",\"name\":\"Docente QA Local\",\"email\":\"docente.local@panolsalud.test\",\"role\":\"DOCENTE\"}"
+  },
+  "sessionStorage": {}
+}

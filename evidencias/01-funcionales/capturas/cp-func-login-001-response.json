@@ -1,0 +1,35 @@
+{
+  "status_code": 200,
+  "json": {
+    "role": "DOCENTE",
+    "expiresInSeconds": 3600,
+    "user": {
+      "id": "b5eafded-e45e-48e0-8066-837572d61d4a",
+      "name": "Docente QA Local",
+      "email": "docente.local@panolsalud.test",
+      "role": "DOCENTE"
+    }
+  },
+  "cookies": [
+    {
+      "cookie": "panol_access_token",
+      "attributes": [
+        "Path=/",
+        "Max-Age=3600",
+        "Expires=Mon, 15 Jun 2026 17:49:51 GMT",
+        "HttpOnly",
+        "SameSite=Lax"
+      ]
+    },
+    {
+      "cookie": "panol_refresh_token",
+      "attributes": [
+        "Path=/api/v2/auth",
+        "Max-Age=604800",
+        "Expires=Mon, 22 Jun 2026 16:49:51 GMT",
+        "HttpOnly",
+        "SameSite=Lax"
+      ]
+    }
+  ]
+}

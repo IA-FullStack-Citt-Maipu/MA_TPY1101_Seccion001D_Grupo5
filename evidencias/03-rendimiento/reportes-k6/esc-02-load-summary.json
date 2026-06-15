@@ -1,0 +1,228 @@
+{
+    "metrics": {
+        "http_req_tls_handshaking": {
+            "med": 0,
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0,
+            "min": 0
+        },
+        "http_req_receiving": {
+            "p(90)": 0.61606,
+            "p(95)": 0.7441899999999998,
+            "avg": 0.18784927617272473,
+            "min": 0,
+            "med": 0,
+            "max": 11.4165
+        },
+        "http_req_duration{expected_response:true}": {
+            "p(95)": 12.95852,
+            "avg": 7.02648611991299,
+            "min": 0.6428,
+            "med": 6.3593,
+            "max": 358.7952,
+            "p(90)": 11.073400000000001
+        },
+        "http_req_sending": {
+            "avg": 0.024066921404162788,
+            "min": 0,
+            "med": 0,
+            "max": 14.4796,
+            "p(90)": 0,
+            "p(95)": 0
+        },
+        "data_received": {
+            "count": 85257158,
+            "rate": 141328.67293876078
+        },
+        "checks": {
+            "passes": 16092,
+            "fails": 0,
+            "value": 1
+        },
+        "vus": {
+            "value": 1,
+            "min": 0,
+            "max": 50
+        },
+        "iteration_duration": {
+            "avg": 4531.966832127532,
+            "min": 3010.3837,
+            "med": 5012.7358,
+            "max": 6065.2557,
+            "p(90)": 6021.6429800000005,
+            "p(95)": 6027.47994
+        },
+        "http_req_failed": {
+            "passes": 0,
+            "fails": 16095,
+            "thresholds": {
+                "rate<0.01": false
+            },
+            "value": 0
+        },
+        "http_reqs": {
+            "rate": 26.680281683203127,
+            "count": 16095
+        },
+        "http_req_connecting": {
+            "med": 0,
+            "max": 12.2549,
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0.016251512892202537,
+            "min": 0
+        },
+        "http_req_blocked": {
+            "avg": 0.027280820130475312,
+            "min": 0,
+            "med": 0,
+            "max": 29.2692,
+            "p(90)": 0,
+            "p(95)": 0
+        },
+        "vus_max": {
+            "value": 50,
+            "min": 50,
+            "max": 50
+        },
+        "iterations": {
+            "count": 5363,
+            "rate": 8.890111877416487
+        },
+        "data_sent": {
+            "count": 6482717,
+            "rate": 10746.238933363747
+        },
+        "http_req_waiting": {
+            "med": 6.1453,
+            "max": 358.7952,
+            "p(90)": 10.759,
+            "p(95)": 12.619169999999997,
+            "avg": 6.814569922336125,
+            "min": 0.6428
+        },
+        "http_req_duration": {
+            "avg": 7.02648611991299,
+            "min": 0.6428,
+            "med": 6.3593,
+            "max": 358.7952,
+            "p(90)": 11.073400000000001,
+            "p(95)": 12.95852,
+            "thresholds": {
+                "p(95)<5000": false
+            }
+        }
+    },
+    "setup_data": {
+        "coordRefreshToken": "[REDACTED]",
+        "coordToken": "[REDACTED]",
+        "directorRefreshToken": "[REDACTED]",
+        "directorToken": "[REDACTED]",
+        "docenteRefreshToken": "[REDACTED]",
+        "docenteToken": "[REDACTED]",
+        "baseUrl": "[REDACTED]"
+    },
+    "root_group": {
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {
+            "setup": {
+                "name": "setup",
+                "path": "::setup",
+                "id": "5c0f8025f7e0b6654089e5b00e950f1a",
+                "groups": {},
+                "checks": {
+                    "docente login status is 200": {
+                        "path": "::setup::docente login status is 200",
+                        "id": "c73d615141eb1351a6c289269576f085",
+                        "passes": 1,
+                        "fails": 0,
+                        "name": "docente login status is 200"
+                    },
+                    "coordinador login status is 200": {
+                        "name": "coordinador login status is 200",
+                        "path": "::setup::coordinador login status is 200",
+                        "id": "85d61d17be8dd213a60c19f742054448",
+                        "passes": 1,
+                        "fails": 0
+                    },
+                    "director login status is 200": {
+                        "name": "director login status is 200",
+                        "path": "::setup::director login status is 200",
+                        "id": "b0345d79f0ddc105df1699fd4f58704d",
+                        "passes": 1,
+                        "fails": 0
+                    }
+                }
+            }
+        },
+        "checks": {
+            "docente implements status is 200": {
+                "name": "docente implements status is 200",
+                "path": "::docente implements status is 200",
+                "id": "3811d738175274155688e31ea0efde43",
+                "passes": 3200,
+                "fails": 0
+            },
+            "director users status is 200": {
+                "fails": 0,
+                "name": "director users status is 200",
+                "path": "::director users status is 200",
+                "id": "f6cb975d1abfdfdc5ffbc1bc023978dc",
+                "passes": 553
+            },
+            "coordinador loans status is 200": {
+                "name": "coordinador loans status is 200",
+                "path": "::coordinador loans status is 200",
+                "id": "dbab12d2cd3024cd95e6042bfc8a39ad",
+                "passes": 1610,
+                "fails": 0
+            },
+            "director loans status is 200": {
+                "name": "director loans status is 200",
+                "path": "::director loans status is 200",
+                "id": "98dca80b0c9351fb978d0a1439ecd293",
+                "passes": 553,
+                "fails": 0
+            },
+            "docente loans status is 200": {
+                "name": "docente loans status is 200",
+                "path": "::docente loans status is 200",
+                "id": "d428d357f8410d23f19b51f97eaa1c45",
+                "passes": 3200,
+                "fails": 0
+            },
+            "coordinador implements status is 200": {
+                "fails": 0,
+                "name": "coordinador implements status is 200",
+                "path": "::coordinador implements status is 200",
+                "id": "62c056f432475ba5810b9626fb37b6a0",
+                "passes": 1610
+            },
+            "director me status is 200": {
+                "passes": 553,
+                "fails": 0,
+                "name": "director me status is 200",
+                "path": "::director me status is 200",
+                "id": "276413eb918fff94d9b090efd4ca627e"
+            },
+            "coordinador categories status is 200": {
+                "name": "coordinador categories status is 200",
+                "path": "::coordinador categories status is 200",
+                "id": "0f2187f8a261c0ead146c2b002089106",
+                "passes": 1610,
+                "fails": 0
+            },
+            "docente me status is 200": {
+                "name": "docente me status is 200",
+                "path": "::docente me status is 200",
+                "id": "12bb21b85dbaea3c09865308a78771da",
+                "passes": 3200,
+                "fails": 0
+            }
+        },
+        "name": "",
+        "path": ""
+    }
+}

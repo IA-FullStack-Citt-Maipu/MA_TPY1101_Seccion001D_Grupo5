@@ -1,0 +1,9 @@
+{
+  "status_code": 401,
+  "json": {
+    "code": "AUTH_INVALID_CREDENTIALS",
+    "message": "Credenciales incorrectas",
+    "timestamp": "2026-06-15T16:49:51.996634467Z"
+  },
+  "cookies": []
+}

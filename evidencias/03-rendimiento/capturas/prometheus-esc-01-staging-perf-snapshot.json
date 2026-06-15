@@ -1,0 +1,221 @@
+{
+  "rps_5m": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": [
+        {
+          "metric": {},
+          "value": [
+            1781543762.654,
+            "0.5741229808465165"
+          ]
+        }
+      ]
+    }
+  },
+  "p95_5m": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": [
+        {
+          "metric": {},
+          "value": [
+            1781543762.659,
+            "0.03402046474999997"
+          ]
+        }
+      ]
+    }
+  },
+  "mem_pct_10m": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": [
+        {
+          "metric": {
+            "instance": "panol-backend-staging-perf-369729778197.us-central1.run.app:443",
+            "job": "panol-backend"
+          },
+          "value": [
+            1781543762.678,
+            "81.08901977539062"
+          ]
+        }
+      ]
+    }
+  },
+  "mem_bytes_10m": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": [
+        {
+          "metric": {
+            "instance": "panol-backend-staging-perf-369729778197.us-central1.run.app:443",
+            "job": "panol-backend"
+          },
+          "value": [
+            1781543762.684,
+            "435343360"
+          ]
+        }
+      ]
+    }
+  },
+  "hikari_active_10m": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": [
+        {
+          "metric": {
+            "instance": "panol-backend-staging-perf-369729778197.us-central1.run.app:443",
+            "job": "panol-backend",
+            "pool": "HikariPool-1"
+          },
+          "value": [
+            1781543762.689,
+            "1"
+          ]
+        }
+      ]
+    }
+  },
+  "hikari_pending_10m": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": [
+        {
+          "metric": {
+            "instance": "panol-backend-staging-perf-369729778197.us-central1.run.app:443",
+            "job": "panol-backend",
+            "pool": "HikariPool-1"
+          },
+          "value": [
+            1781543762.693,
+            "0"
+          ]
+        }
+      ]
+    }
+  },
+  "hikari_timeout_inc_10m": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": [
+        {
+          "metric": {
+            "instance": "panol-backend-staging-perf-369729778197.us-central1.run.app:443",
+            "job": "panol-backend",
+            "pool": "HikariPool-1"
+          },
+          "value": [
+            1781543762.697,
+            "0"
+          ]
+        }
+      ]
+    }
+  },
+  "top_endpoints_10m": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": [
+        {
+          "metric": {
+            "method": "GET",
+            "status": "200",
+            "uri": "/api/v2/auth/me"
+          },
+          "value": [
+            1781543762.71,
+            "53.68892008070883"
+          ]
+        },
+        {
+          "metric": {
+            "method": "GET",
+            "status": "200",
+            "uri": "/api/v2/implements"
+          },
+          "value": [
+            1781543762.71,
+            "53.68892008070883"
+          ]
+        },
+        {
+          "metric": {
+            "method": "GET",
+            "status": "200",
+            "uri": "/api/v2/loans"
+          },
+          "value": [
+            1781543762.71,
+            "53.68892008070883"
+          ]
+        },
+        {
+          "metric": {
+            "method": "POST",
+            "status": "204",
+            "uri": "/api/v2/auth/logout"
+          },
+          "value": [
+            1781543762.71,
+            "1.0527239231511536"
+          ]
+        },
+        {
+          "metric": {
+            "method": "POST",
+            "status": "200",
+            "uri": "/api/v2/auth/login"
+          },
+          "value": [
+            1781543762.71,
+            "1.0527239231511536"
+          ]
+        },
+        {
+          "metric": {
+            "method": "GET",
+            "status": "200",
+            "uri": "/api/v2/categories/{categoryUuid}/associations"
+          },
+          "value": [
+            1781543762.71,
+            "0"
+          ]
+        },
+        {
+          "metric": {
+            "method": "GET",
+            "status": "200",
+            "uri": "/api/v2/locations/management"
+          },
+          "value": [
+            1781543762.71,
+            "0"
+          ]
+        },
+        {
+          "metric": {
+            "method": "GET",
+            "status": "200",
+            "uri": "/api/v2/implements/movements"
+          },
+          "value": [
+            1781543762.71,
+            "0"
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "teacher_b_loan_uuid": "c2d1fef5-5bac-4b95-a204-4cd060825e90",
+  "teacher_b_implement_uuid": "a4d14b48-e453-4f4b-bafe-f7db99ae9007",
+  "teacher_b_implement_name": "Bandeja de procedimiento A",
+  "teacher_a_foreign_get_status": 404,
+  "teacher_a_foreign_get_body": {
+    "code": "LOAN_NOT_FOUND",
+    "message": "Prestamo no encontrado",
+    "timestamp": "2026-06-15T17:42:47.726074357Z"
+  },
+  "teacher_a_list_contains_foreign": false
+}

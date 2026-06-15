@@ -1,0 +1,16 @@
+{
+  "frontend_root": {
+    "status_code": 200,
+    "headers": {
+      "server": "Google Frontend"
+    }
+  },
+  "backend_health": {
+    "status_code": 200,
+    "headers": {
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "DENY",
+      "server": "Google Frontend"
+    }
+  }
+}

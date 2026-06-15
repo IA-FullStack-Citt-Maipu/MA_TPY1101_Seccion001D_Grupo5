@@ -1,0 +1,14 @@
+{
+  "header": {
+    "alg": "HS256"
+  },
+  "payload": {
+    "iss": "panol-backend",
+    "sub": "b5eafded-e45e-48e0-8066-837572d61d4a",
+    "role": "DOCENTE",
+    "exp": 1781545791,
+    "iat": 1781542191,
+    "jti": "4ade96ab-9d9a-4995-a0c5-5fbb0644039e"
+  },
+  "signature_present": true
+}
