@@ -56,6 +56,8 @@ Se propagan via `GitHub Variables -> TF_VAR_* -> env_vars de Cloud Run`:
 - `JWT_ISSUER_URI`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
 - `BOT_DOMAIN`
+  - opcional en `dev` mientras el bot use fallback a `run.app`
+  - requerido solo en entornos donde Terraform deba crear `domain mapping`
 - `GEMINI_MODEL`
 - `BOT_MIN_INSTANCES`
 - `BOT_MAX_INSTANCES`
@@ -71,8 +73,20 @@ Se propagan via `GitHub Variables -> TF_VAR_* -> env_vars de Cloud Run`:
 - El frontend cloud debe buildarse con:
   - `VITE_API_BASE_URL`
   - `VITE_BOT_API_BASE_URL`
-- El bot se publica como servicio Cloud Run independiente con dominio propio por entorno.
+- En `dev`, el workflow despliega `backend` y `bot` primero, resuelve `bot_service_uri`
+  desde Cloud Run/Terraform y luego builda el frontend con esa URL `run.app`.
+- El bot se publica como servicio Cloud Run independiente.
+  - `dev`: usa temporalmente `run.app` y no depende de `BOT_DOMAIN_DEV`
+  - `prod`: mantiene dominio propio por entorno
 - El backend y el bot comparten `APP_SECURITY_AI_AGENT_SECRET` para la autenticacion de herramientas internas.
+
+## Nota sobre el bloqueo del dominio del bot en dev
+
+- El bloqueo original en `dev` no era la creacion del servicio Cloud Run.
+- El fallo ocurria al crear `google_cloud_run_domain_mapping` para `bot.dev.panol.cl`
+  porque GCP no tenia autorizacion para administrar ese dominio.
+- Mientras `panol.cl` o `dev.panol.cl` no queden verificados/autorizados en GCP,
+  `dev` queda operando con la URL `run.app` del bot.
 
 ## Requisitos en GitHub
 

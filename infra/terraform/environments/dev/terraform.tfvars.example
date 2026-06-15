@@ -29,7 +29,7 @@ jwt_issuer_uri                    = "https://replace-me.supabase.co/auth/v1"
 vite_supabase_publishable_key     = "sb_publishable_replace_me"
 
 backend_domain           = "api.dev.panol.cl"
-bot_domain               = "bot.dev.panol.cl"
+bot_domain               = ""
 frontend_domain          = "dev.panol.cl"
 
 # Dev profile with warm backend instance to avoid login cold starts

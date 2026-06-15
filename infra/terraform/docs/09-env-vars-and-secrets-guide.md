@@ -52,6 +52,8 @@ Esta guia define el proceso estandar para agregar configuracion nueva al stack s
 - `BOT_LLM_TIMEOUT_SECONDS`
 - `BOT_BACKEND_TIMEOUT_SECONDS`
 - `BOT_BACKEND_RETRY_COUNT`
+- `BOT_DOMAIN`
+  - opcional cuando un entorno use `run.app` en vez de `domain mapping`
 
 ## Estandar de nombres
 
@@ -67,6 +69,13 @@ Esta guia define el proceso estandar para agregar configuracion nueva al stack s
 2. Declarar la entrada en `variables.tf` de ambos entornos.
 3. Mapear la variable como `TF_VAR_*` en `.github/workflows/terraform-plan-apply.yml` y, si corresponde al despliegue de imagen, tambien en `.github/workflows/deploy-gcp.yml`.
 4. Ejecutar `terraform fmt`, `terraform validate` y `terraform plan`.
+
+Nota operativa:
+
+- Si `bot_domain` queda vacio, Terraform usa `module.bot_service.service_uri` y no
+  crea `google_cloud_run_domain_mapping`.
+- En `dev`, ese fallback queda activo temporalmente para evitar fallos por
+  autorizacion pendiente del dominio del bot en GCP.
 
 ## Flujo para agregar un nuevo secreto sensible
 
@@ -145,6 +154,7 @@ Resultado esperado:
    - `gcloud run services logs read <service> --region <region> --project <project-id>`
 4. Verificar frontend:
    - revisar que la build del frontend reciba `VITE_BOT_API_BASE_URL`
+   - en `dev`, confirmar que apunte a la `run.app` del bot mientras siga activo el fallback
 5. Verificar bot:
    - `GET /health`
    - `OPTIONS /api/v1/chat` con `Origin` del frontend
