@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<th:block th:replace="~{base :: layout(~{::section})}">
+    <section>
+        <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#334e68;" th:text="${message}">
+            Hay una nueva solicitud pendiente.
+        </p>
+
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+               style="border-collapse:separate;border-spacing:0;background-color:#f8fbff;border:1px solid #d9e6f7;border-radius:14px;overflow:hidden;">
+            <tr>
+                <td style="padding:16px 18px;border-bottom:1px solid #d9e6f7;">
+                    <strong>Docente</strong><br>
+                    <span th:text="${requester_name}">Docente</span>
+                </td>
+            </tr>
+            <tr>
+                <td style="padding:16px 18px;border-bottom:1px solid #d9e6f7;">
+                    <strong>Prestamo</strong><br>
+                    <span th:text="${loan_uuid}">uuid</span>
+                </td>
+            </tr>
+            <tr>
+                <td style="padding:16px 18px;border-bottom:1px solid #d9e6f7;">
+                    <strong>Asignatura</strong><br>
+                    <span th:text="${subject_name}">Asignatura</span>
+                </td>
+            </tr>
+            <tr>
+                <td style="padding:16px 18px;border-bottom:1px solid #d9e6f7;">
+                    <strong>Sala</strong><br>
+                    <span th:text="${room_name}">Sala</span>
+                </td>
+            </tr>
+            <tr>
+                <td style="padding:16px 18px;">
+                    <strong>Programado</strong><br>
+                    <span th:text="${scheduledAtFormatted}">Fecha</span>
+                </td>
+            </tr>
+        </table>
+
+        <div th:if="${!#lists.isEmpty(details)}" style="margin-top:20px;">
+            <div style="font-size:16px;font-weight:700;margin-bottom:12px;">Resumen solicitado</div>
+            <div th:each="detail : ${details}"
+                 style="padding:12px 14px;border:1px solid #d9e6f7;border-radius:12px;background-color:#ffffff;margin-bottom:10px;">
+                <div style="font-weight:700;" th:text="${detail['implement_name']}">Implemento</div>
+                <div style="color:#5b6f8f;margin-top:4px;">
+                    Cantidad solicitada:
+                    <span th:text="${detail['requested_quantity']}">0</span>
+                </div>
+            </div>
+        </div>
+    </section>
+</th:block>
+</body>
+</html>

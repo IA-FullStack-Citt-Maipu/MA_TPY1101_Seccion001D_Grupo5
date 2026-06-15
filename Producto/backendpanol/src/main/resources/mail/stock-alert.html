@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<th:block th:replace="~{base :: layout(~{::section})}">
+    <section>
+        <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#334e68;" th:text="${message}">
+            Un implemento quedo bajo el stock minimo.
+        </p>
+
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+               style="border-collapse:separate;border-spacing:0;background-color:#f8fbff;border:1px solid #d9e6f7;border-radius:14px;overflow:hidden;">
+            <tr>
+                <td style="padding:16px 18px;border-bottom:1px solid #d9e6f7;">
+                    <strong>Implemento</strong><br>
+                    <span th:text="${implement_name}">Implemento</span>
+                </td>
+            </tr>
+            <tr>
+                <td style="padding:16px 18px;border-bottom:1px solid #d9e6f7;">
+                    <strong>Estado de stock</strong><br>
+                    <span th:text="${stock_status}">low_stock</span>
+                </td>
+            </tr>
+            <tr>
+                <td style="padding:16px 18px;border-bottom:1px solid #d9e6f7;">
+                    <strong>Disponible</strong><br>
+                    <span th:text="${available}">0</span>
+                </td>
+            </tr>
+            <tr>
+                <td style="padding:16px 18px;">
+                    <strong>Stock minimo</strong><br>
+                    <span th:text="${min_stock}">0</span>
+                </td>
+            </tr>
+        </table>
+    </section>
+</th:block>
+</body>
+</html>

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<th:block th:replace="~{base :: layout(~{::section})}">
+    <section>
+        <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#334e68;" th:text="${message}">
+            El estado de tu prestamo cambio.
+        </p>
+
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+               style="border-collapse:separate;border-spacing:0;background-color:#f8fbff;border:1px solid #d9e6f7;border-radius:14px;overflow:hidden;">
+            <tr>
+                <td style="padding:16px 18px;border-bottom:1px solid #d9e6f7;">
+                    <strong>Prestamo</strong><br>
+                    <span th:text="${loan_uuid}">uuid</span>
+                </td>
+            </tr>
+            <tr>
+                <td style="padding:16px 18px;border-bottom:1px solid #d9e6f7;">
+                    <strong>Estado actual</strong><br>
+                    <span th:text="${status_label}">Estado</span>
+                </td>
+            </tr>
+            <tr>
+                <td style="padding:16px 18px;border-bottom:1px solid #d9e6f7;">
+                    <strong>Asignatura</strong><br>
+                    <span th:text="${subject_name}">Asignatura</span>
+                </td>
+            </tr>
+            <tr>
+                <td style="padding:16px 18px;">
+                    <strong>Fecha del evento</strong><br>
+                    <span th:text="${createdAtFormatted}">Fecha</span>
+                </td>
+            </tr>
+        </table>
+    </section>
+</th:block>
+</body>
+</html>
