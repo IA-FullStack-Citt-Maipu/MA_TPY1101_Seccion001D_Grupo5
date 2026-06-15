@@ -17,6 +17,7 @@ Estas semillas entregan una base minima y controlada para levantar el sistema lo
 ## Archivo actual
 
 - `00_local_initial_flow_seed.sql`
+- `01_local_perf_catalog_seed.sql`
 
 ## Criterios
 
@@ -33,3 +34,5 @@ Por eso, despues de aplicar migraciones + `00_local_initial_flow_seed.sql`, la b
 
 - 1 usuario tecnico de sistema;
 - 3 usuarios QA locales para pruebas manuales.
+
+Si ademas aplicas `01_local_perf_catalog_seed.sql`, el catalogo local queda ampliado para pruebas de carga y observabilidad con k6.

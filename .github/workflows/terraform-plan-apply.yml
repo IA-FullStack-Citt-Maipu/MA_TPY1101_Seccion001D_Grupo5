@@ -15,6 +15,7 @@ on:
         type: choice
         options:
           - dev
+          - staging-perf
           - prod
       apply:
         description: "Run terraform apply"
@@ -70,29 +71,29 @@ jobs:
               --format=json)"
 
             python - <<'PY' <<<"$payload"
-import json
-import sys
+            import json
+            import sys
 
-data = json.load(sys.stdin)
-paths = [
-    ("template", "containers", 0, "image"),
-    ("spec", "template", "spec", "containers", 0, "image"),
-    ("spec", "template", "containers", 0, "image"),
-]
+            data = json.load(sys.stdin)
+            paths = [
+                ("template", "containers", 0, "image"),
+                ("spec", "template", "spec", "containers", 0, "image"),
+                ("spec", "template", "containers", 0, "image"),
+            ]
 
-for path in paths:
-    current = data
-    try:
-        for key in path:
-            current = current[key]
-        if current:
-            print(current)
-            raise SystemExit(0)
-    except (KeyError, IndexError, TypeError):
-        pass
+            for path in paths:
+                current = data
+                try:
+                    for key in path:
+                        current = current[key]
+                    if current:
+                        print(current)
+                        raise SystemExit(0)
+                except (KeyError, IndexError, TypeError):
+                    pass
 
-raise SystemExit(1)
-PY
+            raise SystemExit(1)
+            PY
           }
 
           backend_image="$(resolve_image "panol-backend-dev")"
@@ -197,6 +198,162 @@ PY
 
       - name: Terraform apply (dev - manual only)
         if: github.event_name == 'workflow_dispatch' && inputs.apply == true
+        run: terraform apply -auto-approve tfplan
+
+  terraform-staging-perf:
+    if: github.event_name == 'workflow_dispatch' && inputs.environment == 'staging-perf'
+    runs-on: ubuntu-latest
+    environment: staging-perf
+    defaults:
+      run:
+        working-directory: infra/terraform/environments/staging-perf
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER_STAGING_PERF }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_STAGING_PERF }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Resolve current Cloud Run images (staging-perf)
+        id: current_images
+        env:
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID_STAGING_PERF }}
+          GCP_REGION: ${{ vars.GCP_REGION_STAGING_PERF }}
+          FALLBACK_BACKEND_IMAGE: ${{ vars.BACKEND_IMAGE_STAGING_PERF }}
+          FALLBACK_FRONTEND_IMAGE: ${{ vars.FRONTEND_IMAGE_STAGING_PERF }}
+        run: |
+          set -euo pipefail
+
+          resolve_image() {
+            local service_name="$1"
+            gcloud run services describe "$service_name" \
+              --project "$GCP_PROJECT_ID" \
+              --region "$GCP_REGION" \
+              --format='value(spec.template.spec.containers[0].image)' 2>/dev/null || true
+          }
+
+          backend_image="$(resolve_image "panol-backend-staging-perf")"
+          frontend_image="$(resolve_image "panol-frontend-staging-perf")"
+
+          if [ -z "$backend_image" ]; then
+            backend_image="$FALLBACK_BACKEND_IMAGE"
+          fi
+
+          if [ -z "$frontend_image" ]; then
+            frontend_image="$FALLBACK_FRONTEND_IMAGE"
+          fi
+
+          if [ -z "$backend_image" ] || [ -z "$frontend_image" ]; then
+            echo "Unable to resolve staging-perf images from Cloud Run or fallback variables." >&2
+            exit 1
+          fi
+
+          echo "backend_image=$backend_image" >> "$GITHUB_OUTPUT"
+          echo "frontend_image=$frontend_image" >> "$GITHUB_OUTPUT"
+
+      - name: Validate required inputs (staging-perf)
+        env:
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID_STAGING_PERF }}
+          GCP_REGION: ${{ vars.GCP_REGION_STAGING_PERF }}
+          GCP_ARTIFACT_REGISTRY_LOCATION: ${{ vars.GCP_ARTIFACT_REGISTRY_LOCATION_STAGING_PERF }}
+          GCP_TFSTATE_BUCKET: ${{ vars.GCP_TFSTATE_BUCKET_STAGING_PERF }}
+          BACKEND_IMAGE: ${{ steps.current_images.outputs.backend_image }}
+          FRONTEND_IMAGE: ${{ steps.current_images.outputs.frontend_image }}
+          CLOUDSQL_INSTANCE_NAME: ${{ vars.CLOUDSQL_INSTANCE_NAME_STAGING_PERF }}
+          CLOUDSQL_DB_NAME: ${{ vars.CLOUDSQL_DB_NAME_STAGING_PERF }}
+          CLOUDSQL_DB_USER: ${{ vars.CLOUDSQL_DB_USER_STAGING_PERF }}
+          CLOUDSQL_DB_TIER: ${{ vars.CLOUDSQL_DB_TIER_STAGING_PERF }}
+          CLOUDSQL_DB_DISK_SIZE_GB: ${{ vars.CLOUDSQL_DB_DISK_SIZE_GB_STAGING_PERF }}
+          CLOUDSQL_DB_AVAILABILITY_TYPE: ${{ vars.CLOUDSQL_DB_AVAILABILITY_TYPE_STAGING_PERF }}
+          CLOUDSQL_IP_TYPES: ${{ vars.CLOUDSQL_IP_TYPES_STAGING_PERF }}
+          APP_AUTH_JWT_ISSUER: ${{ vars.APP_AUTH_JWT_ISSUER_STAGING_PERF }}
+          APP_AUTH_JWT_EXPIRATION_SECONDS: ${{ vars.APP_AUTH_JWT_EXPIRATION_SECONDS_STAGING_PERF }}
+          APP_AUTH_REFRESH_EXPIRATION_SECONDS: ${{ vars.APP_AUTH_REFRESH_EXPIRATION_SECONDS_STAGING_PERF }}
+          APP_AUTH_COOKIE_SECURE: ${{ vars.APP_AUTH_COOKIE_SECURE_STAGING_PERF }}
+          APP_AUTH_COOKIE_SAME_SITE: ${{ vars.APP_AUTH_COOKIE_SAME_SITE_STAGING_PERF }}
+          APP_AUTH_TOKEN_REVOCATION_CLEANUP_ENABLED: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_ENABLED_STAGING_PERF }}
+          APP_AUTH_TOKEN_REVOCATION_CLEANUP_INITIAL_DELAY_MS: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_INITIAL_DELAY_MS_STAGING_PERF }}
+          APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS_STAGING_PERF }}
+          APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE_STAGING_PERF }}
+          DB_CLOUDSQL_PASSWORD: ${{ secrets.DB_CLOUDSQL_PASSWORD_STAGING_PERF }}
+          APP_AUTH_JWT_SECRET: ${{ secrets.APP_AUTH_JWT_SECRET_STAGING_PERF }}
+        run: |
+          set -euo pipefail
+          required=(
+            GCP_PROJECT_ID GCP_REGION GCP_ARTIFACT_REGISTRY_LOCATION GCP_TFSTATE_BUCKET
+            BACKEND_IMAGE FRONTEND_IMAGE
+            CLOUDSQL_INSTANCE_NAME CLOUDSQL_DB_NAME CLOUDSQL_DB_USER CLOUDSQL_DB_TIER
+            CLOUDSQL_DB_DISK_SIZE_GB CLOUDSQL_DB_AVAILABILITY_TYPE CLOUDSQL_IP_TYPES
+            APP_AUTH_JWT_ISSUER APP_AUTH_JWT_EXPIRATION_SECONDS APP_AUTH_REFRESH_EXPIRATION_SECONDS
+            APP_AUTH_COOKIE_SECURE APP_AUTH_COOKIE_SAME_SITE
+            APP_AUTH_TOKEN_REVOCATION_CLEANUP_ENABLED APP_AUTH_TOKEN_REVOCATION_CLEANUP_INITIAL_DELAY_MS
+            APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE
+            DB_CLOUDSQL_PASSWORD APP_AUTH_JWT_SECRET
+          )
+          for key in "${required[@]}"; do
+            if [ -z "${!key:-}" ]; then
+              echo "Missing required value: $key" >&2
+              exit 1
+            fi
+          done
+
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive ../../
+
+      - name: Terraform init
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ vars.GCP_TFSTATE_BUCKET_STAGING_PERF }}" \
+            -backend-config="prefix=terraform/state"
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform plan (staging-perf)
+        env:
+          TF_VAR_gcp_project_id: ${{ vars.GCP_PROJECT_ID_STAGING_PERF }}
+          TF_VAR_region: ${{ vars.GCP_REGION_STAGING_PERF }}
+          TF_VAR_environment: staging-perf
+          TF_VAR_artifact_registry_location: ${{ vars.GCP_ARTIFACT_REGISTRY_LOCATION_STAGING_PERF }}
+          TF_VAR_backend_image: ${{ steps.current_images.outputs.backend_image }}
+          TF_VAR_frontend_image: ${{ steps.current_images.outputs.frontend_image }}
+          TF_VAR_cloudsql_instance_name: ${{ vars.CLOUDSQL_INSTANCE_NAME_STAGING_PERF }}
+          TF_VAR_cloudsql_db_name: ${{ vars.CLOUDSQL_DB_NAME_STAGING_PERF }}
+          TF_VAR_cloudsql_db_user: ${{ vars.CLOUDSQL_DB_USER_STAGING_PERF }}
+          TF_VAR_cloudsql_db_tier: ${{ vars.CLOUDSQL_DB_TIER_STAGING_PERF }}
+          TF_VAR_cloudsql_db_disk_size_gb: ${{ vars.CLOUDSQL_DB_DISK_SIZE_GB_STAGING_PERF }}
+          TF_VAR_cloudsql_db_availability_type: ${{ vars.CLOUDSQL_DB_AVAILABILITY_TYPE_STAGING_PERF }}
+          TF_VAR_cloudsql_ip_types: ${{ vars.CLOUDSQL_IP_TYPES_STAGING_PERF }}
+          TF_VAR_app_security_enabled: ${{ vars.APP_SECURITY_ENABLED_STAGING_PERF }}
+          TF_VAR_app_auth_max_failed_attempts: ${{ vars.APP_AUTH_MAX_FAILED_ATTEMPTS_STAGING_PERF }}
+          TF_VAR_app_auth_lock_minutes: ${{ vars.APP_AUTH_LOCK_MINUTES_STAGING_PERF }}
+          TF_VAR_app_auth_jwt_issuer: ${{ vars.APP_AUTH_JWT_ISSUER_STAGING_PERF }}
+          TF_VAR_app_auth_jwt_expiration_seconds: ${{ vars.APP_AUTH_JWT_EXPIRATION_SECONDS_STAGING_PERF }}
+          TF_VAR_app_auth_refresh_expiration_seconds: ${{ vars.APP_AUTH_REFRESH_EXPIRATION_SECONDS_STAGING_PERF }}
+          TF_VAR_app_auth_cookie_secure: ${{ vars.APP_AUTH_COOKIE_SECURE_STAGING_PERF }}
+          TF_VAR_app_auth_cookie_same_site: ${{ vars.APP_AUTH_COOKIE_SAME_SITE_STAGING_PERF }}
+          TF_VAR_app_auth_token_revocation_cleanup_enabled: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_ENABLED_STAGING_PERF }}
+          TF_VAR_app_auth_token_revocation_cleanup_initial_delay_ms: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_INITIAL_DELAY_MS_STAGING_PERF }}
+          TF_VAR_app_auth_token_revocation_cleanup_delay_ms: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS_STAGING_PERF }}
+          TF_VAR_app_auth_token_revocation_cleanup_batch_size: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE_STAGING_PERF }}
+          TF_VAR_db_cloudsql_password_secret_value: ${{ secrets.DB_CLOUDSQL_PASSWORD_STAGING_PERF }}
+          TF_VAR_app_auth_jwt_secret_value: ${{ secrets.APP_AUTH_JWT_SECRET_STAGING_PERF }}
+          TF_VAR_runtime_sa_user_members: '["serviceAccount:${{ secrets.GCP_SERVICE_ACCOUNT_STAGING_PERF }}"]'
+          TF_VAR_backend_domain: ""
+          TF_VAR_frontend_domain: ""
+        run: terraform plan -out=tfplan
+
+      - name: Terraform apply (staging-perf)
+        if: inputs.apply == true
         run: terraform apply -auto-approve tfplan
 
   terraform-prod:

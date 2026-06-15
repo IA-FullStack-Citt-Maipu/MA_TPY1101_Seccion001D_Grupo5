@@ -69,3 +69,7 @@ frontendpanol/dist/
 
 # === Personal local documentation ===
 docs-personal/
+
+# === Load testing artifacts ===
+tests/load/k6/results/*.json
+!tests/load/k6/results/.gitkeep

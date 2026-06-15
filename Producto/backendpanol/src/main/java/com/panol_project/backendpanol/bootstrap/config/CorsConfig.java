@@ -16,6 +16,9 @@ public class CorsConfig {
     @Value("${CORS_ALLOWED_ORIGINS:}")
     private String corsAllowedOrigins;
 
+    @Value("${CORS_ALLOWED_ORIGIN_PATTERNS:}")
+    private String corsAllowedOriginPatterns;
+
     @Value("${FRONTEND_ORIGIN:}")
     private String frontendOrigin;
 
@@ -33,6 +36,7 @@ public class CorsConfig {
         allowedOrigins.addAll(parseOrigins(frontendOrigin));
 
         config.setAllowedOrigins(allowedOrigins.stream().distinct().toList());
+        config.setAllowedOriginPatterns(parseOrigins(corsAllowedOriginPatterns));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

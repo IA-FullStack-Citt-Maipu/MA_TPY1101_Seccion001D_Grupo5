@@ -1,0 +1,48 @@
+﻿
+gcp_project_id             = "replace-me-staging-perf-project"
+region                     = "us-central1"
+environment                = "staging-perf"
+artifact_registry_location = "us-central1"
+
+backend_image              = "us-central1-docker.pkg.dev/replace-me-staging-perf-project/panol-apps-staging-perf/backend:latest"
+frontend_image             = "us-central1-docker.pkg.dev/replace-me-staging-perf-project/panol-apps-staging-perf/frontend:latest"
+
+cloudsql_instance_name     = "panol-staging-perf-pg"
+cloudsql_db_name           = "panol"
+cloudsql_db_user           = "panol_app"
+cloudsql_db_tier           = "db-custom-2-7680"
+cloudsql_db_disk_size_gb   = 50
+cloudsql_ip_types          = "PUBLIC"
+
+app_security_enabled              = true
+app_auth_max_failed_attempts      = 5
+app_auth_lock_minutes             = 15
+app_auth_jwt_issuer               = "panol-backend-staging-perf"
+app_auth_jwt_expiration_seconds   = 43200
+app_auth_refresh_expiration_seconds = 604800
+app_auth_cookie_secure            = true
+app_auth_cookie_same_site         = "None"
+app_auth_token_revocation_cleanup_enabled          = true
+app_auth_token_revocation_cleanup_initial_delay_ms = 300000
+app_auth_token_revocation_cleanup_delay_ms         = 86400000
+app_auth_token_revocation_cleanup_batch_size       = 500
+
+backend_domain           = ""
+frontend_domain          = ""
+
+# Perf profile keeps a warm backend and allows short horizontal scaling bursts
+backend_min_instances    = 1
+backend_max_instances    = 6
+backend_timeout_seconds  = 120
+backend_concurrency      = 40
+
+# Frontend can still scale low because the load focus is backend + DB
+frontend_min_instances   = 0
+frontend_max_instances   = 2
+frontend_timeout_seconds = 60
+frontend_concurrency     = 40
+
+# Sensitive values should be provided via TF_VAR_* in CI/CD or local shell.
+# Keep them empty in tfvars when not needed.
+db_cloudsql_password_secret_value  = ""
+app_auth_jwt_secret_value          = ""

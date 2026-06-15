@@ -1,0 +1,13 @@
+services:
+  backend:
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    environment:
+      SERVER_TOMCAT_THREADS_MAX: "80"
+      SERVER_TOMCAT_THREADS_MIN_SPARE: "10"

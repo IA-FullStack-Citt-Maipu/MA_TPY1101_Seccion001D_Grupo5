@@ -3,7 +3,7 @@
 - Estado del documento: vigente
 - Ultima verificacion: 2026-06-07
 - Fuente de verdad: controllers V2, SecurityConfig, application.yaml, ArchitectureTest, `Producto/databasepanol/migrations/v25/`
-- Arquitectura de datos: PostgreSQL (Supabase en nube / PostgreSQL local en Docker) como estado transaccional can?nico.
+- Arquitectura de datos: PostgreSQL (Supabase en nube / PostgreSQL local en Docker / Cloud SQL en GCP) como estado transaccional can?nico.
 
 ## Resumen
 
@@ -35,6 +35,7 @@ No existen controladores legacy publicos en runtime (`/api/categorias`, `/api/im
 Selector:
 - `APP_DB_ENV=docker` usa `DB_DOCKER_*`
 - `APP_DB_ENV=supabase` usa `DB_SUPABASE_*`
+- `APP_DB_ENV=cloudsql` usa `DB_CLOUDSQL_*`
 
 ## Docker Compose
 
@@ -60,7 +61,7 @@ Escenarios:
 - Outbox base en `V25__schema_alignment_big_bang.sql` (tabla actual `outbox_event` y vista de compatibilidad `outbox_events`).
 - Estados can?nicos de outbox: `PENDING`, `PROCESSING`, `SENT`, `FAILED`.
 - Codegen jOOQ con `scripts/generate-jooq.ps1` o `./mvnw generate-sources`.
-- `JOOQ_DB_*` es independiente de `APP_DB_ENV`: el runtime puede usar PostgreSQL local y el build seguir introspectando Supabase, o viceversa, segun como configures esas variables.
+- `JOOQ_DB_*` es independiente de `APP_DB_ENV`: el runtime puede usar PostgreSQL local o Cloud SQL y el build seguir introspectando otra base, segun como configures esas variables.
 
 ## Documentacion relacionada
 

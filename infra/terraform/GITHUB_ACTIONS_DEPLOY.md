@@ -2,7 +2,7 @@
 
 Este documento describe el bootstrap para enlazar este repositorio con GCP sin usar llaves JSON (Workload Identity Federation).
 
-## 1) Crear Service Accounts (dev/prod)
+## 1) Crear Service Accounts (dev/staging-perf/prod)
 
 ```bash
 gcloud iam service-accounts create gha-deploy-dev \
@@ -12,6 +12,10 @@ gcloud iam service-accounts create gha-deploy-dev \
 gcloud iam service-accounts create gha-deploy-prod \
   --project="PANOL_PROD_PROJECT_ID" \
   --display-name="GitHub Deploy Prod"
+
+gcloud iam service-accounts create gha-deploy-staging-perf \
+  --project="PANOL_STAGING_PERF_PROJECT_ID" \
+  --display-name="GitHub Deploy Staging Perf"
 ```
 
 ## 2) Permisos mínimos de deploy
@@ -38,6 +42,18 @@ gcloud projects add-iam-policy-binding "$PROJECT_PROD" --member="serviceAccount:
 gcloud projects add-iam-policy-binding "$PROJECT_PROD" --member="serviceAccount:$SA_PROD" --role="roles/iam.serviceAccountAdmin"
 gcloud projects add-iam-policy-binding "$PROJECT_PROD" --member="serviceAccount:$SA_PROD" --role="roles/resourcemanager.projectIamAdmin"
 gcloud projects add-iam-policy-binding "$PROJECT_PROD" --member="serviceAccount:$SA_PROD" --role="roles/storage.admin"
+
+# STAGING-PERF
+SA_STAGING_PERF="gha-deploy-staging-perf@PANOL_STAGING_PERF_PROJECT_ID.iam.gserviceaccount.com"
+PROJECT_STAGING_PERF="PANOL_STAGING_PERF_PROJECT_ID"
+
+gcloud projects add-iam-policy-binding "$PROJECT_STAGING_PERF" --member="serviceAccount:$SA_STAGING_PERF" --role="roles/run.admin"
+gcloud projects add-iam-policy-binding "$PROJECT_STAGING_PERF" --member="serviceAccount:$SA_STAGING_PERF" --role="roles/artifactregistry.admin"
+gcloud projects add-iam-policy-binding "$PROJECT_STAGING_PERF" --member="serviceAccount:$SA_STAGING_PERF" --role="roles/secretmanager.admin"
+gcloud projects add-iam-policy-binding "$PROJECT_STAGING_PERF" --member="serviceAccount:$SA_STAGING_PERF" --role="roles/iam.serviceAccountAdmin"
+gcloud projects add-iam-policy-binding "$PROJECT_STAGING_PERF" --member="serviceAccount:$SA_STAGING_PERF" --role="roles/resourcemanager.projectIamAdmin"
+gcloud projects add-iam-policy-binding "$PROJECT_STAGING_PERF" --member="serviceAccount:$SA_STAGING_PERF" --role="roles/storage.admin"
+gcloud projects add-iam-policy-binding "$PROJECT_STAGING_PERF" --member="serviceAccount:$SA_STAGING_PERF" --role="roles/cloudsql.admin"
 ```
 
 ## 3) Crear Workload Identity Pool + Provider
@@ -90,6 +106,11 @@ gcloud iam service-accounts add-iam-policy-binding "$SA_PROD" \
   --project="$PROJECT_PROD" \
   --role="roles/iam.workloadIdentityUser" \
   --member="$WIF_PRINCIPAL"
+
+gcloud iam service-accounts add-iam-policy-binding "$SA_STAGING_PERF" \
+  --project="$PROJECT_STAGING_PERF" \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="$WIF_PRINCIPAL"
 ```
 
 ## 5) Configurar GitHub Secrets (Repository)
@@ -99,6 +120,11 @@ gcloud iam service-accounts add-iam-policy-binding "$SA_PROD" \
 - `DB_SUPABASE_PASSWORD_DEV`
 - `JWT_ISSUER_URI_DEV`
 - `VITE_SUPABASE_PUBLISHABLE_KEY_DEV`
+
+- `GCP_WIF_PROVIDER_STAGING_PERF`: resource name del provider
+- `GCP_SERVICE_ACCOUNT_STAGING_PERF`: `gha-deploy-staging-perf@...`
+- `DB_CLOUDSQL_PASSWORD_STAGING_PERF`
+- `APP_AUTH_JWT_SECRET_STAGING_PERF`
 
 - `GCP_WIF_PROVIDER_PROD`: resource name del provider
 - `GCP_SERVICE_ACCOUNT_PROD`: `gha-deploy-prod@...`
@@ -118,6 +144,31 @@ DEV:
 - `SUPABASE_DB_NAME_DEV`
 - `SUPABASE_DB_USER_DEV`
 
+STAGING-PERF:
+- `GCP_PROJECT_ID_STAGING_PERF`
+- `GCP_REGION_STAGING_PERF`
+- `GCP_ARTIFACT_REGISTRY_LOCATION_STAGING_PERF`
+- `GCP_TFSTATE_BUCKET_STAGING_PERF`
+- `BACKEND_IMAGE_STAGING_PERF`
+- `FRONTEND_IMAGE_STAGING_PERF`
+- `CLOUDSQL_INSTANCE_NAME_STAGING_PERF`
+- `CLOUDSQL_DB_NAME_STAGING_PERF`
+- `CLOUDSQL_DB_USER_STAGING_PERF`
+- `CLOUDSQL_DB_TIER_STAGING_PERF`
+- `CLOUDSQL_DB_DISK_SIZE_GB_STAGING_PERF`
+- `CLOUDSQL_DB_AVAILABILITY_TYPE_STAGING_PERF`
+- `CLOUDSQL_IP_TYPES_STAGING_PERF`
+- `APP_SECURITY_ENABLED_STAGING_PERF`
+- `APP_AUTH_JWT_ISSUER_STAGING_PERF`
+- `APP_AUTH_JWT_EXPIRATION_SECONDS_STAGING_PERF`
+- `APP_AUTH_REFRESH_EXPIRATION_SECONDS_STAGING_PERF`
+- `APP_AUTH_COOKIE_SECURE_STAGING_PERF`
+- `APP_AUTH_COOKIE_SAME_SITE_STAGING_PERF`
+- `APP_AUTH_TOKEN_REVOCATION_CLEANUP_ENABLED_STAGING_PERF`
+- `APP_AUTH_TOKEN_REVOCATION_CLEANUP_INITIAL_DELAY_MS_STAGING_PERF`
+- `APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS_STAGING_PERF`
+- `APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE_STAGING_PERF`
+
 PROD:
 - `GCP_PROJECT_ID_PROD`
 - `GCP_REGION_PROD`
@@ -131,8 +182,8 @@ PROD:
 ## 7) Flujo de deploy
 
 - `push` a `dev`: despliegue automático a `dev`.
+- `workflow_dispatch` con `environment=staging-perf`: despliegue manual aislado para performance.
 - `workflow_dispatch` con `environment=prod`: despliegue manual a `prod`.
-- Rotación de secretos: solo si en `workflow_dispatch` activas `rotate_secrets=true`.
 
 ## 8) Optimizaciones de costo aplicadas
 

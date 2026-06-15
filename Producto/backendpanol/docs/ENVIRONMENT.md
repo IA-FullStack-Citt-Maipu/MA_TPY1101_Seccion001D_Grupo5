@@ -8,6 +8,7 @@
 
 - `APP_DB_ENV=docker` -> usa `DB_DOCKER_*`
 - `APP_DB_ENV=supabase` -> usa `DB_SUPABASE_*`
+- `APP_DB_ENV=cloudsql` -> usa `DB_CLOUDSQL_*`
 
 Si no se define, Spring usa perfil `docker` por defecto.
 
@@ -51,6 +52,12 @@ Comunes:
 - `APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS`
 - `APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE`
 
+Observabilidad local:
+- `PROMETHEUS_PORT`
+- `GRAFANA_PORT`
+- `GRAFANA_ADMIN_USER`
+- `GRAFANA_ADMIN_PASSWORD`
+
 Docker DB:
 - `DB_DOCKER_HOST`
 - `DB_DOCKER_PORT`
@@ -58,6 +65,10 @@ Docker DB:
 - `DB_DOCKER_USER`
 - `DB_DOCKER_PASSWORD`
 - `DB_DOCKER_SSL_MODE`
+- `DB_DOCKER_HIKARI_MIN_IDLE`
+- `DB_DOCKER_HIKARI_CONNECTION_TIMEOUT_MS`
+- `DB_DOCKER_HIKARI_IDLE_TIMEOUT_MS`
+- `DB_DOCKER_HIKARI_MAX_LIFETIME_MS`
 
 Supabase:
 - `DB_SUPABASE_HOST`
@@ -66,6 +77,19 @@ Supabase:
 - `DB_SUPABASE_USER`
 - `DB_SUPABASE_PASSWORD`
 - `DB_SUPABASE_SSL_MODE`
+
+Cloud SQL:
+- `DB_CLOUDSQL_INSTANCE_CONNECTION_NAME`
+- `DB_CLOUDSQL_NAME`
+- `DB_CLOUDSQL_USER`
+- `DB_CLOUDSQL_PASSWORD`
+- `DB_CLOUDSQL_IP_TYPES`
+- `APP_DB_CLOUDSQL_PG16_NO_FORCE_RLS_ENABLED`
+- `DB_CLOUDSQL_HIKARI_MIN_IDLE`
+- `DB_CLOUDSQL_HIKARI_MAX_POOL_SIZE`
+- `DB_CLOUDSQL_HIKARI_CONNECTION_TIMEOUT_MS`
+- `DB_CLOUDSQL_HIKARI_IDLE_TIMEOUT_MS`
+- `DB_CLOUDSQL_HIKARI_MAX_LIFETIME_MS`
 
 jOOQ (build-time):
 - `JOOQ_DB_URL`
@@ -88,6 +112,7 @@ jOOQ (build-time):
   - Politica `SameSite` de las cookies de auth.
   - Default: `Lax`.
   - Valor vigente recomendado para el despliegue actual same-site.
+  - Para frontend/backend separados en dominios `*.run.app`, usar `None` junto con `APP_AUTH_COOKIE_SECURE=true`.
 
 ## Cleanup de `token_revocation`
 
@@ -107,7 +132,7 @@ jOOQ (build-time):
 ## Compose y entorno
 
 - `Producto/databasepanol/docker-compose.yaml` levanta PostgreSQL local.
-- `Producto/docker-compose.yaml` levanta `frontend + backend`.
+- `Producto/docker-compose.yaml` levanta `frontend + backend + prometheus + grafana`.
 - `Producto/backendpanol/docker-compose.yaml` levanta `backend only`.
 
 `APP_DB_ENV` define a que base conecta la app, no que servicios crea Docker Compose.
@@ -142,6 +167,14 @@ No dependen automaticamente de `APP_DB_ENV`. Eso significa:
 - puedes correr la app contra PostgreSQL local (`APP_DB_ENV=docker`) y seguir generando jOOQ desde Supabase;
 - o puedes apuntar `JOOQ_DB_*` tambien a tu base local si quieres un ciclo completamente offline.
 
+### Modo Cloud SQL
+
+- deja `APP_DB_ENV=cloudsql`;
+- configura `DB_CLOUDSQL_*`;
+- el backend usa el conector JDBC oficial de Cloud SQL;
+- si Cloud SQL sigue en PostgreSQL 16 y usas este esquema con `FORCE RLS`, activa `APP_DB_CLOUDSQL_PG16_NO_FORCE_RLS_ENABLED=true` como compatibilidad temporal;
+- si frontend y backend quedan en URLs `*.run.app` distintas, configura `APP_AUTH_COOKIE_SAME_SITE=None`.
+
 ## Flujo recomendado para base local
 
 1. Levantar `Producto/databasepanol/docker-compose.yaml`.
@@ -174,3 +207,11 @@ docker compose up --build
 ```
 
 con `APP_DB_ENV=docker`.
+
+Stack local de rendimiento:
+
+```powershell
+.\Producto\tests\load\scripts\start-local-perf-stack.ps1
+```
+
+Esto levanta la BD local, reconstruye `backend` y `frontend` sin cache, deja Prometheus y Grafana arriba y aplica los seeds locales de carga.

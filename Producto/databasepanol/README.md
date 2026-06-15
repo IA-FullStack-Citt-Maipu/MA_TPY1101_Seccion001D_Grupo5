@@ -118,6 +118,16 @@ psql -f Producto/databasepanol/seeds/00_local_initial_flow_seed.sql
 
 Esto agrega catalogo base, stock inicial, movimientos demo y tres usuarios QA locales de prueba.
 
+## Seed adicional para rendimiento
+
+Para ampliar el catalogo local antes de correr k6, puedes aplicar tambien:
+
+```bash
+psql -f Producto/databasepanol/seeds/01_local_perf_catalog_seed.sql
+```
+
+Este seed agrega implementos extra orientados a consultas de catalogo y stock sin tocar datos productivos.
+
 ## Regla de cambios
 
 - Nuevas migraciones se crean en `Producto/databasepanol/migrations/v25/`.

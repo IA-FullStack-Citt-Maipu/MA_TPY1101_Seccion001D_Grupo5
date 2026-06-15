@@ -51,7 +51,11 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
+  metrics:
+    distribution:
+      percentiles-histogram:
+        "[http.server.requests]": true
 
 ---
 spring:
@@ -62,6 +66,11 @@ spring:
     url: jdbc:postgresql://${DB_DOCKER_HOST:${DB_HOST:localhost}}:${DB_DOCKER_PORT:${DB_PORT:5432}}/${DB_DOCKER_NAME:${DB_NAME:panol}}?sslmode=${DB_DOCKER_SSL_MODE:${DB_SSL_MODE:disable}}
     username: ${DB_DOCKER_USER:${DB_USER:postgres}}
     password: ${DB_DOCKER_PASSWORD:${DB_PASSWORD:postgres}}
+    hikari:
+      max-lifetime: ${DB_DOCKER_HIKARI_MAX_LIFETIME_MS:600000}
+      connection-timeout: ${DB_DOCKER_HIKARI_CONNECTION_TIMEOUT_MS:20000}
+      idle-timeout: ${DB_DOCKER_HIKARI_IDLE_TIMEOUT_MS:300000}
+      minimum-idle: ${DB_DOCKER_HIKARI_MIN_IDLE:2}
 
 ---
 spring:
@@ -72,3 +81,19 @@ spring:
     url: jdbc:postgresql://${DB_SUPABASE_HOST:${DB_HOST:aws-1-us-east-1.pooler.supabase.com}}:${DB_SUPABASE_PORT:${DB_PORT:5432}}/${DB_SUPABASE_NAME:${DB_NAME:postgres}}?sslmode=${DB_SUPABASE_SSL_MODE:${DB_SSL_MODE:require}}
     username: ${DB_SUPABASE_USER:${DB_USER:postgres}}
     password: ${DB_SUPABASE_PASSWORD:${DB_PASSWORD:postgres}}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: cloudsql
+  datasource:
+    url: "jdbc:postgresql:///${DB_CLOUDSQL_NAME:${DB_NAME:panol}}?socketFactory=com.google.cloud.sql.postgres.SocketFactory&cloudSqlInstance=${DB_CLOUDSQL_INSTANCE_CONNECTION_NAME}&ipTypes=${DB_CLOUDSQL_IP_TYPES:PUBLIC}"
+    username: ${DB_CLOUDSQL_USER:${DB_USER:postgres}}
+    password: ${DB_CLOUDSQL_PASSWORD:${DB_PASSWORD:postgres}}
+    hikari:
+      minimum-idle: ${DB_CLOUDSQL_HIKARI_MIN_IDLE:2}
+      maximum-pool-size: ${DB_CLOUDSQL_HIKARI_MAX_POOL_SIZE:10}
+      connection-timeout: ${DB_CLOUDSQL_HIKARI_CONNECTION_TIMEOUT_MS:30000}
+      idle-timeout: ${DB_CLOUDSQL_HIKARI_IDLE_TIMEOUT_MS:600000}
+      max-lifetime: ${DB_CLOUDSQL_HIKARI_MAX_LIFETIME_MS:1800000}
