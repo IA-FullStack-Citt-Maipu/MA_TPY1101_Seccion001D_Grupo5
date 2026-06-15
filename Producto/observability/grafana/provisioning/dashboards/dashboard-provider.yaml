@@ -3,9 +3,10 @@ apiVersion: 1
 providers:
   - name: default
     orgId: 1
-    folder: ""
+    folder: "Pañol Salud"
     type: file
     disableDeletion: false
     allowUiUpdates: true
+    updateIntervalSeconds: 30
     options:
       path: /var/lib/grafana/dashboards

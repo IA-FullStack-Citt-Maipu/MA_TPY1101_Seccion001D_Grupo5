@@ -59,10 +59,14 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--web.enable-remote-write-receiver"
     ports:
       - "9090:9090"
     volumes:
       - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
     networks:
       - panol-local
 
@@ -79,6 +83,7 @@ services:
       - "3000:3000"
     volumes:
       - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
     networks:
       - panol-local
@@ -89,3 +94,4 @@ networks:
 
 volumes:
   grafana-data:
+  prometheus-data:

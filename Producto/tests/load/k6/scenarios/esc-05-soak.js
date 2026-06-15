@@ -5,7 +5,7 @@ import coordinadorFlow from '../flows/coordinador.js';
 import directorFlow from '../flows/director.js';
 import docenteFlow from '../flows/docente.js';
 
-const BASE_URL = 'http://localhost:18080';
+const BASE_URL = __ENV.BASE_URL || 'http://localhost:18080';
 
 export const options = {
   thresholds: {
