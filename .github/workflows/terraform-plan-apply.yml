@@ -58,48 +58,32 @@ jobs:
         env:
           GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID_DEV }}
           GCP_REGION: ${{ vars.GCP_REGION_DEV }}
+          FALLBACK_BACKEND_IMAGE: ${{ vars.BACKEND_IMAGE_DEV }}
+          FALLBACK_FRONTEND_IMAGE: ${{ vars.FRONTEND_IMAGE_DEV }}
         run: |
           set -euo pipefail
 
           resolve_image() {
             local service_name="$1"
-            local payload
-            payload="$(gcloud run services describe "$service_name" \
+            gcloud run services describe "$service_name" \
               --project "$GCP_PROJECT_ID" \
               --region "$GCP_REGION" \
-              --format=json)"
-
-            python - <<'PY' <<<"$payload"
-import json
-import sys
-
-data = json.load(sys.stdin)
-paths = [
-    ("template", "containers", 0, "image"),
-    ("spec", "template", "spec", "containers", 0, "image"),
-    ("spec", "template", "containers", 0, "image"),
-]
-
-for path in paths:
-    current = data
-    try:
-        for key in path:
-            current = current[key]
-        if current:
-            print(current)
-            raise SystemExit(0)
-    except (KeyError, IndexError, TypeError):
-        pass
-
-raise SystemExit(1)
-PY
+              --format='value(spec.template.spec.containers[0].image)' 2>/dev/null || true
           }
 
           backend_image="$(resolve_image "panol-backend-dev")"
           frontend_image="$(resolve_image "panol-frontend-dev")"
 
+          if [ -z "$backend_image" ]; then
+            backend_image="$FALLBACK_BACKEND_IMAGE"
+          fi
+
+          if [ -z "$frontend_image" ]; then
+            frontend_image="$FALLBACK_FRONTEND_IMAGE"
+          fi
+
           if [ -z "$backend_image" ] || [ -z "$frontend_image" ]; then
-            echo "Unable to resolve current dev service images from Cloud Run." >&2
+            echo "Unable to resolve current dev service images from Cloud Run or fallback variables." >&2
             exit 1
           fi
 
@@ -130,7 +114,6 @@ PY
           APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE_DEV }}
           JWT_ISSUER_URI: ${{ vars.JWT_ISSUER_URI_DEV }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY_DEV }}
-          BOT_DOMAIN: ${{ vars.BOT_DOMAIN_DEV }}
           BOT_MIN_INSTANCES: ${{ vars.BOT_MIN_INSTANCES_DEV }}
           BOT_MAX_INSTANCES: ${{ vars.BOT_MAX_INSTANCES_DEV }}
           BOT_TIMEOUT_SECONDS: ${{ vars.BOT_TIMEOUT_SECONDS_DEV }}
@@ -153,7 +136,7 @@ PY
             APP_AUTH_TOKEN_REVOCATION_CLEANUP_ENABLED APP_AUTH_TOKEN_REVOCATION_CLEANUP_INITIAL_DELAY_MS
             APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE
             JWT_ISSUER_URI VITE_SUPABASE_PUBLISHABLE_KEY
-            BOT_IMAGE BOT_DOMAIN BOT_MIN_INSTANCES BOT_MAX_INSTANCES BOT_TIMEOUT_SECONDS BOT_CONCURRENCY
+            BOT_IMAGE BOT_MIN_INSTANCES BOT_MAX_INSTANCES BOT_TIMEOUT_SECONDS BOT_CONCURRENCY
             GEMINI_MODEL BOT_LLM_TIMEOUT_SECONDS BOT_BACKEND_TIMEOUT_SECONDS BOT_BACKEND_RETRY_COUNT
             DB_SUPABASE_PASSWORD APP_AUTH_JWT_SECRET APP_SECURITY_AI_AGENT_SECRET GOOGLE_API_KEY
           )
@@ -209,7 +192,7 @@ PY
           TF_VAR_google_api_key_secret_value: ${{ secrets.GOOGLE_API_KEY_DEV }}
           TF_VAR_runtime_sa_user_members: '["serviceAccount:${{ secrets.GCP_SERVICE_ACCOUNT_DEV }}"]'
           TF_VAR_backend_domain: "api.dev.panol.cl"
-          TF_VAR_bot_domain: ${{ vars.BOT_DOMAIN_DEV }}
+          TF_VAR_bot_domain: ""
           TF_VAR_frontend_domain: "dev.panol.cl"
           TF_VAR_bot_min_instances: ${{ vars.BOT_MIN_INSTANCES_DEV }}
           TF_VAR_bot_max_instances: ${{ vars.BOT_MAX_INSTANCES_DEV }}

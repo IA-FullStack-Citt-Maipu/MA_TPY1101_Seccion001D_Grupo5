@@ -59,13 +59,36 @@ jobs:
           echo "tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
           echo "repo=${{ vars.GCP_ARTIFACT_REGISTRY_LOCATION_DEV }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID_DEV }}/panol-apps-dev" >> "$GITHUB_OUTPUT"
 
-      - name: Compute runtime URLs (dev)
-        id: runtime
+      - name: Compute backend URL (dev)
+        id: backend_runtime
         run: |
           BACKEND_URL="https://api.dev.panol.cl"
-          BOT_URL="https://${{ vars.BOT_DOMAIN_DEV }}"
           echo "backend_url=${BACKEND_URL}" >> "$GITHUB_OUTPUT"
-          echo "bot_url=${BOT_URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve current frontend image (dev)
+        id: current_frontend
+        env:
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID_DEV }}
+          GCP_REGION: ${{ vars.GCP_REGION_DEV }}
+          FALLBACK_FRONTEND_IMAGE: ${{ vars.FRONTEND_IMAGE_DEV }}
+        run: |
+          set -euo pipefail
+
+          frontend_image="$(gcloud run services describe "panol-frontend-dev" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --format='value(spec.template.spec.containers[0].image)' 2>/dev/null || true)"
+
+          if [ -z "$frontend_image" ]; then
+            frontend_image="$FALLBACK_FRONTEND_IMAGE"
+          fi
+
+          if [ -z "$frontend_image" ]; then
+            echo "Unable to resolve current frontend image from Cloud Run or fallback variable." >&2
+            exit 1
+          fi
+
+          echo "image=$frontend_image" >> "$GITHUB_OUTPUT"
 
       - name: Validate required inputs (dev)
         env:
@@ -73,7 +96,6 @@ jobs:
           GCP_REGION: ${{ vars.GCP_REGION_DEV }}
           GCP_ARTIFACT_REGISTRY_LOCATION: ${{ vars.GCP_ARTIFACT_REGISTRY_LOCATION_DEV }}
           GCP_TFSTATE_BUCKET: ${{ vars.GCP_TFSTATE_BUCKET_DEV }}
-          BOT_DOMAIN: ${{ vars.BOT_DOMAIN_DEV }}
           BOT_MIN_INSTANCES: ${{ vars.BOT_MIN_INSTANCES_DEV }}
           BOT_MAX_INSTANCES: ${{ vars.BOT_MAX_INSTANCES_DEV }}
           BOT_TIMEOUT_SECONDS: ${{ vars.BOT_TIMEOUT_SECONDS_DEV }}
@@ -98,7 +120,7 @@ jobs:
           set -euo pipefail
           required=(
             GCP_PROJECT_ID GCP_REGION GCP_ARTIFACT_REGISTRY_LOCATION GCP_TFSTATE_BUCKET
-            BOT_DOMAIN BOT_MIN_INSTANCES BOT_MAX_INSTANCES BOT_TIMEOUT_SECONDS BOT_CONCURRENCY
+            BOT_MIN_INSTANCES BOT_MAX_INSTANCES BOT_TIMEOUT_SECONDS BOT_CONCURRENCY
             GEMINI_MODEL BOT_LLM_TIMEOUT_SECONDS BOT_BACKEND_TIMEOUT_SECONDS BOT_BACKEND_RETRY_COUNT
             SUPABASE_DB_HOST SUPABASE_DB_PORT SUPABASE_DB_NAME SUPABASE_DB_USER
             APP_AUTH_JWT_ISSUER APP_AUTH_JWT_EXPIRATION_SECONDS JWT_ISSUER_URI VITE_SUPABASE_PUBLISHABLE_KEY
@@ -131,7 +153,7 @@ jobs:
           TF_VAR_artifact_registry_location: ${{ vars.GCP_ARTIFACT_REGISTRY_LOCATION_DEV }}
           TF_VAR_backend_image: ${{ steps.meta.outputs.repo }}/backend:${{ steps.meta.outputs.tag }}
           TF_VAR_bot_image: ${{ steps.meta.outputs.repo }}/bot:${{ steps.meta.outputs.tag }}
-          TF_VAR_frontend_image: ${{ steps.meta.outputs.repo }}/frontend:${{ steps.meta.outputs.tag }}
+          TF_VAR_frontend_image: ${{ steps.current_frontend.outputs.image }}
           TF_VAR_supabase_db_host: ${{ vars.SUPABASE_DB_HOST_DEV }}
           TF_VAR_supabase_db_port: ${{ vars.SUPABASE_DB_PORT_DEV }}
           TF_VAR_supabase_db_name: ${{ vars.SUPABASE_DB_NAME_DEV }}
@@ -156,7 +178,7 @@ jobs:
           TF_VAR_google_api_key_secret_value: ${{ secrets.GOOGLE_API_KEY_DEV }}
           TF_VAR_runtime_sa_user_members: '["serviceAccount:${{ secrets.GCP_SERVICE_ACCOUNT_DEV }}"]'
           TF_VAR_backend_domain: "api.dev.panol.cl"
-          TF_VAR_bot_domain: ${{ vars.BOT_DOMAIN_DEV }}
+          TF_VAR_bot_domain: ""
           TF_VAR_frontend_domain: "dev.panol.cl"
           TF_VAR_bot_min_instances: ${{ vars.BOT_MIN_INSTANCES_DEV }}
           TF_VAR_bot_max_instances: ${{ vars.BOT_MAX_INSTANCES_DEV }}
@@ -192,14 +214,6 @@ jobs:
             -t "${{ steps.meta.outputs.repo }}/backend:${{ steps.meta.outputs.tag }}" \
             ./Producto
 
-      - name: Build frontend image
-        run: |
-          docker build \
-            --build-arg VITE_API_BASE_URL="${{ steps.runtime.outputs.backend_url }}" \
-            --build-arg VITE_BOT_API_BASE_URL="${{ steps.runtime.outputs.bot_url }}" \
-            -t "${{ steps.meta.outputs.repo }}/frontend:${{ steps.meta.outputs.tag }}" \
-            ./Producto/frontendpanol
-
       - name: Build bot image
         run: |
           docker build \
@@ -207,11 +221,87 @@ jobs:
             -t "${{ steps.meta.outputs.repo }}/bot:${{ steps.meta.outputs.tag }}" \
             ./Producto/bot-panol
 
-      - name: Push images
+      - name: Push backend and bot images
         run: |
           docker push "${{ steps.meta.outputs.repo }}/backend:${{ steps.meta.outputs.tag }}"
-          docker push "${{ steps.meta.outputs.repo }}/frontend:${{ steps.meta.outputs.tag }}"
           docker push "${{ steps.meta.outputs.repo }}/bot:${{ steps.meta.outputs.tag }}"
+
+      - name: Terraform apply backend and bot (dev)
+        working-directory: infra/terraform/environments/dev
+        env:
+          TF_VAR_gcp_project_id: ${{ vars.GCP_PROJECT_ID_DEV }}
+          TF_VAR_region: ${{ vars.GCP_REGION_DEV }}
+          TF_VAR_environment: dev
+          TF_VAR_artifact_registry_location: ${{ vars.GCP_ARTIFACT_REGISTRY_LOCATION_DEV }}
+          TF_VAR_backend_image: ${{ steps.meta.outputs.repo }}/backend:${{ steps.meta.outputs.tag }}
+          TF_VAR_bot_image: ${{ steps.meta.outputs.repo }}/bot:${{ steps.meta.outputs.tag }}
+          TF_VAR_frontend_image: ${{ steps.current_frontend.outputs.image }}
+          TF_VAR_supabase_db_host: ${{ vars.SUPABASE_DB_HOST_DEV }}
+          TF_VAR_supabase_db_port: ${{ vars.SUPABASE_DB_PORT_DEV }}
+          TF_VAR_supabase_db_name: ${{ vars.SUPABASE_DB_NAME_DEV }}
+          TF_VAR_supabase_db_user: ${{ vars.SUPABASE_DB_USER_DEV }}
+          TF_VAR_app_security_enabled: ${{ vars.APP_SECURITY_ENABLED_DEV }}
+          TF_VAR_app_auth_max_failed_attempts: ${{ vars.APP_AUTH_MAX_FAILED_ATTEMPTS_DEV }}
+          TF_VAR_app_auth_lock_minutes: ${{ vars.APP_AUTH_LOCK_MINUTES_DEV }}
+          TF_VAR_app_auth_jwt_issuer: ${{ vars.APP_AUTH_JWT_ISSUER_DEV }}
+          TF_VAR_app_auth_jwt_expiration_seconds: ${{ vars.APP_AUTH_JWT_EXPIRATION_SECONDS_DEV }}
+          TF_VAR_app_auth_refresh_expiration_seconds: ${{ vars.APP_AUTH_REFRESH_EXPIRATION_SECONDS_DEV }}
+          TF_VAR_app_auth_cookie_secure: ${{ vars.APP_AUTH_COOKIE_SECURE_DEV }}
+          TF_VAR_app_auth_cookie_same_site: ${{ vars.APP_AUTH_COOKIE_SAME_SITE_DEV }}
+          TF_VAR_app_auth_token_revocation_cleanup_enabled: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_ENABLED_DEV }}
+          TF_VAR_app_auth_token_revocation_cleanup_initial_delay_ms: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_INITIAL_DELAY_MS_DEV }}
+          TF_VAR_app_auth_token_revocation_cleanup_delay_ms: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS_DEV }}
+          TF_VAR_app_auth_token_revocation_cleanup_batch_size: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE_DEV }}
+          TF_VAR_jwt_issuer_uri: ${{ vars.JWT_ISSUER_URI_DEV }}
+          TF_VAR_vite_supabase_publishable_key: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY_DEV }}
+          TF_VAR_db_supabase_password_secret_value: ${{ secrets.DB_SUPABASE_PASSWORD_DEV }}
+          TF_VAR_app_auth_jwt_secret_value: ${{ secrets.APP_AUTH_JWT_SECRET_DEV }}
+          TF_VAR_app_security_ai_agent_secret_value: ${{ secrets.APP_SECURITY_AI_AGENT_SECRET_DEV }}
+          TF_VAR_google_api_key_secret_value: ${{ secrets.GOOGLE_API_KEY_DEV }}
+          TF_VAR_runtime_sa_user_members: '["serviceAccount:${{ secrets.GCP_SERVICE_ACCOUNT_DEV }}"]'
+          TF_VAR_backend_domain: "api.dev.panol.cl"
+          TF_VAR_bot_domain: ""
+          TF_VAR_frontend_domain: "dev.panol.cl"
+          TF_VAR_backend_min_instances: "1"
+          TF_VAR_backend_max_instances: "1"
+          TF_VAR_bot_min_instances: ${{ vars.BOT_MIN_INSTANCES_DEV }}
+          TF_VAR_bot_max_instances: ${{ vars.BOT_MAX_INSTANCES_DEV }}
+          TF_VAR_bot_timeout_seconds: ${{ vars.BOT_TIMEOUT_SECONDS_DEV }}
+          TF_VAR_bot_concurrency: ${{ vars.BOT_CONCURRENCY_DEV }}
+          TF_VAR_gemini_model: ${{ vars.GEMINI_MODEL_DEV }}
+          TF_VAR_bot_llm_timeout_seconds: ${{ vars.BOT_LLM_TIMEOUT_SECONDS_DEV }}
+          TF_VAR_bot_backend_timeout_seconds: ${{ vars.BOT_BACKEND_TIMEOUT_SECONDS_DEV }}
+          TF_VAR_bot_backend_retry_count: ${{ vars.BOT_BACKEND_RETRY_COUNT_DEV }}
+          TF_VAR_frontend_min_instances: "0"
+          TF_VAR_frontend_max_instances: "1"
+        run: |
+          terraform apply -auto-approve \
+            -target=module.backend_service \
+            -target=module.bot_service
+
+      - name: Resolve bot runtime URL (dev)
+        id: bot_runtime
+        working-directory: infra/terraform/environments/dev
+        run: |
+          set -euo pipefail
+          bot_url="$(terraform output -raw bot_service_uri)"
+          if [ -z "$bot_url" ]; then
+            echo "Unable to resolve bot Cloud Run URL after intermediate apply." >&2
+            exit 1
+          fi
+          echo "bot_url=$bot_url" >> "$GITHUB_OUTPUT"
+
+      - name: Build frontend image
+        run: |
+          docker build \
+            --build-arg VITE_API_BASE_URL="${{ steps.backend_runtime.outputs.backend_url }}" \
+            --build-arg VITE_BOT_API_BASE_URL="${{ steps.bot_runtime.outputs.bot_url }}" \
+            -t "${{ steps.meta.outputs.repo }}/frontend:${{ steps.meta.outputs.tag }}" \
+            ./Producto/frontendpanol
+
+      - name: Push frontend image
+        run: |
+          docker push "${{ steps.meta.outputs.repo }}/frontend:${{ steps.meta.outputs.tag }}"
 
       - name: Terraform apply full (dev)
         working-directory: infra/terraform/environments/dev
@@ -247,7 +337,7 @@ jobs:
           TF_VAR_google_api_key_secret_value: ${{ secrets.GOOGLE_API_KEY_DEV }}
           TF_VAR_runtime_sa_user_members: '["serviceAccount:${{ secrets.GCP_SERVICE_ACCOUNT_DEV }}"]'
           TF_VAR_backend_domain: "api.dev.panol.cl"
-          TF_VAR_bot_domain: ${{ vars.BOT_DOMAIN_DEV }}
+          TF_VAR_bot_domain: ""
           TF_VAR_frontend_domain: "dev.panol.cl"
           TF_VAR_backend_min_instances: "1"
           TF_VAR_backend_max_instances: "1"

@@ -134,7 +134,6 @@ gcloud iam service-accounts add-iam-policy-binding "$SA_PROD" \
 - `APP_AUTH_JWT_EXPIRATION_SECONDS_DEV`
 - `JWT_ISSUER_URI_DEV`
 - `VITE_SUPABASE_PUBLISHABLE_KEY_DEV`
-- `BOT_DOMAIN_DEV`
 - `GEMINI_MODEL_DEV`
 - `BOT_MIN_INSTANCES_DEV`
 - `BOT_MAX_INSTANCES_DEV`
@@ -143,6 +142,9 @@ gcloud iam service-accounts add-iam-policy-binding "$SA_PROD" \
 - `BOT_LLM_TIMEOUT_SECONDS_DEV`
 - `BOT_BACKEND_TIMEOUT_SECONDS_DEV`
 - `BOT_BACKEND_RETRY_COUNT_DEV`
+
+`BOT_DOMAIN_DEV` queda opcional mientras `dev` opere temporalmente con la URL
+`run.app` del bot.
 
 ### PROD
 
@@ -177,21 +179,31 @@ gcloud iam service-accounts add-iam-policy-binding "$SA_PROD" \
 ## 7) Flujo de deploy
 
 - `push` a `dev`:
-  - `deploy-gcp.yml` construye y publica `backend`, `frontend` y `bot`
-  - luego ejecuta Terraform sobre `dev`
+  - `deploy-gcp.yml` construye y publica `backend` y `bot`
+  - aplica Terraform sobre `dev` para dejar disponible el bot en Cloud Run
+  - resuelve la URL `run.app` del bot
+  - builda y publica `frontend` con `VITE_BOT_API_BASE_URL` apuntando a esa URL
+  - ejecuta el `apply` final de Terraform en `dev`
 - `workflow_dispatch` en `terraform-plan-apply.yml`:
   - permite `plan/apply` en `dev` o `prod`
 
 ## 8) Contratos importantes
 
 - El frontend debe buildarse con `VITE_API_BASE_URL` y `VITE_BOT_API_BASE_URL`.
-- El bot usa dominio publico propio por entorno:
-  - `bot.dev.panol.cl`
+- En `dev`, el bot usa temporalmente su `run.app` y no depende de `bot.dev.panol.cl`.
+- En `prod`, el bot mantiene dominio publico propio:
   - `bot.panol.cl`
 - `BACKEND_CLIENT_SECRET` del bot reutiliza `APP_SECURITY_AI_AGENT_SECRET`.
 - `JWT_SECRET_KEY` del bot reutiliza `APP_AUTH_JWT_SECRET`.
 
-## 9) Optimizaciones y buenas practicas
+## 9) Incidente conocido en dev
+
+- El bloqueo original no estaba en la creacion de `panol-bot-dev`.
+- El fallo ocurria al crear el `DomainMapping` de `bot.dev.panol.cl` por falta de
+  autorizacion del dominio en GCP/Search Console.
+- Mientras esa autorizacion no exista, `dev` se despliega usando `run.app`.
+
+## 10) Optimizaciones y buenas practicas
 
 - Secretos no se guardan en `terraform.tfvars` versionados.
 - Las ejecuciones en progreso se cancelan cuando llega un commit mas nuevo a `dev`.
