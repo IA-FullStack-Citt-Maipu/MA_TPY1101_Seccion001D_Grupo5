@@ -3,6 +3,7 @@ package com.panol_project.backendpanol.modules.auth.application;
 import com.panol_project.backendpanol.modules.auth.application.dto.LoginCommand;
 import com.panol_project.backendpanol.modules.auth.application.dto.ChangeCurrentPasswordCommand;
 import com.panol_project.backendpanol.modules.auth.application.dto.AuthenticatedUserSummary;
+import com.panol_project.backendpanol.modules.auth.application.dto.BotAccessTokenResult;
 import com.panol_project.backendpanol.modules.auth.application.dto.CurrentUserSessionSummary;
 import com.panol_project.backendpanol.modules.auth.application.dto.LoginResult;
 import com.panol_project.backendpanol.modules.auth.application.dto.RefreshResult;
@@ -28,6 +29,7 @@ import java.util.LinkedHashMap;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.beans.factory.annotation.Value;
@@ -49,6 +51,7 @@ public class AuthService {
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final HexFormat HEX_FORMAT = HexFormat.of();
+    private static final Set<String> BOT_ALLOWED_ROLES = Set.of("COORDINADOR", "DIRECTOR");
 
     private final UserAuthPort userAuthRepository;
     private final RefreshSessionPort refreshSessionPort;
@@ -62,6 +65,8 @@ public class AuthService {
     private final int tokenExpirationSeconds;
     private final int refreshTokenExpirationSeconds;
     private final String jwtIssuer;
+    private final int botTokenExpirationSeconds;
+    private final String botTokenAudience;
 
     public AuthService(
             UserAuthPort userAuthRepository,
@@ -75,7 +80,9 @@ public class AuthService {
             @Value("${app.auth.lock-minutes:15}") int lockMinutes,
             @Value("${app.auth.jwt.expiration-seconds:3600}") int tokenExpirationSeconds,
             @Value("${app.auth.refresh.expiration-seconds:604800}") int refreshTokenExpirationSeconds,
-            @Value("${app.auth.jwt.issuer:panol-backend}") String jwtIssuer
+            @Value("${app.auth.jwt.issuer:panol-backend}") String jwtIssuer,
+            @Value("${app.auth.bot-token.expiration-seconds:300}") int botTokenExpirationSeconds,
+            @Value("${app.auth.bot-token.audience:bot-panol}") String botTokenAudience
     ) {
         this.userAuthRepository = userAuthRepository;
         this.refreshSessionPort = refreshSessionPort;
@@ -89,6 +96,8 @@ public class AuthService {
         this.tokenExpirationSeconds = tokenExpirationSeconds;
         this.refreshTokenExpirationSeconds = refreshTokenExpirationSeconds;
         this.jwtIssuer = jwtIssuer;
+        this.botTokenExpirationSeconds = botTokenExpirationSeconds;
+        this.botTokenAudience = botTokenAudience == null ? "bot-panol" : botTokenAudience.trim();
     }
 
     @Transactional
@@ -271,6 +280,25 @@ public class AuthService {
         return toAuthenticatedUserSummary(user);
     }
 
+    @Transactional(readOnly = true)
+    public BotAccessTokenResult issueBotAccessToken(UUID userUuid) {
+        AuthUser user = requireUserByUuid(userUuid);
+        String normalizedRole = normalizeRole(user.roleName());
+        if (!BOT_ALLOWED_ROLES.contains(normalizedRole)) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "AUTH_BOT_TOKEN_FORBIDDEN", "No autorizado para usar el asistente");
+        }
+
+        IssuedAccessToken botToken = issueAccessToken(
+                user.uuid(),
+                normalizedRole,
+                botTokenExpirationSeconds,
+                botTokenAudience,
+                "bot-panol"
+        );
+
+        return new BotAccessTokenResult(botToken.token(), botTokenExpirationSeconds);
+    }
+
     @Transactional
     public AuthenticatedUserSummary updateCurrentUserEmail(UUID userUuid, UpdateCurrentEmailCommand command) {
         AuthUser user = requireUserByUuid(userUuid);
@@ -362,18 +390,36 @@ public class AuthService {
     }
 
     private IssuedAccessToken issueAccessToken(UUID userUuid, String normalizedRole) {
+        return issueAccessToken(userUuid, normalizedRole, tokenExpirationSeconds, null, null);
+    }
+
+    private IssuedAccessToken issueAccessToken(
+            UUID userUuid,
+            String normalizedRole,
+            int expirationSeconds,
+            String audience,
+            String tokenUse
+    ) {
         Instant now = Instant.now();
-        Instant exp = now.plusSeconds(tokenExpirationSeconds);
+        Instant exp = now.plusSeconds(expirationSeconds);
         String jti = UUID.randomUUID().toString();
 
-        JwtClaimsSet claims = JwtClaimsSet.builder()
+        JwtClaimsSet.Builder claimsBuilder = JwtClaimsSet.builder()
                 .issuer(jwtIssuer)
                 .issuedAt(now)
                 .expiresAt(exp)
                 .subject(userUuid.toString())
                 .id(jti)
-                .claim("role", normalizedRole)
-                .build();
+                .claim("role", normalizedRole);
+
+        if (audience != null && !audience.isBlank()) {
+            claimsBuilder.audience(List.of(audience));
+        }
+        if (tokenUse != null && !tokenUse.isBlank()) {
+            claimsBuilder.claim("token_use", tokenUse);
+        }
+
+        JwtClaimsSet claims = claimsBuilder.build();
 
         String token = jwtEncoder.encode(
                         JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims))

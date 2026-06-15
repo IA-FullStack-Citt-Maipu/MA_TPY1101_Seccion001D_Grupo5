@@ -14,17 +14,21 @@ def _make_signed_jwt(
     role: str = "COORDINADOR",
     subject: str = "11111111-1111-1111-1111-111111111111",
     issuer: str = "panol-backend",
+    audience: str = "bot-panol",
     secret: str = "test-secret-key-with-at-least-32-bytes",
     expires_in_seconds: int = 3600,
+    token_use: str = "bot-panol",
 ) -> str:
     now = datetime.now(timezone.utc)
     payload = {
         "iss": issuer,
         "sub": subject,
         "role": role,
+        "aud": audience,
         "iat": int(now.timestamp()),
         "nbf": int(now.timestamp()),
         "exp": int((now + timedelta(seconds=expires_in_seconds)).timestamp()),
+        "token_use": token_use,
     }
     return jwt.encode(payload, secret, algorithm="HS256")
 
@@ -33,7 +37,7 @@ def _configure_jwt_settings(monkeypatch) -> None:  # type: ignore[no-untyped-def
     monkeypatch.setattr(settings, "JWT_SECRET_KEY", "test-secret-key-with-at-least-32-bytes")
     monkeypatch.setattr(settings, "BOT_SECRET_KEY", "")
     monkeypatch.setattr(settings, "JWT_ISSUER", "panol-backend")
-    monkeypatch.setattr(settings, "JWT_AUDIENCE", "")
+    monkeypatch.setattr(settings, "JWT_AUDIENCE", "bot-panol")
     monkeypatch.setattr(settings, "JWT_LEEWAY_SECONDS", 1)
 
 
@@ -91,6 +95,24 @@ def test_chat_with_invalid_token_returns_401(monkeypatch) -> None:  # type: igno
     response = client.post(
         "/api/v1/chat",
         headers={"Authorization": "Bearer invalid.token.here"},
+        json={"message": "hola"},
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {
+        "detail": "TOKEN_INVALID",
+        "message": "Se requiere un token de autorizacion valido.",
+    }
+
+
+def test_chat_with_wrong_token_use_returns_401(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    _configure_jwt_settings(monkeypatch)
+    client = TestClient(app)
+    token = _make_signed_jwt(token_use="web-access")
+
+    response = client.post(
+        "/api/v1/chat",
+        headers={"Authorization": f"Bearer {token}"},
         json={"message": "hola"},
     )
 

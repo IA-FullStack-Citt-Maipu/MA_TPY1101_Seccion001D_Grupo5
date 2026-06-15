@@ -1,6 +1,11 @@
 import { startTransition, useEffect, useRef, useState } from "react";
 import type { ChatHistoryMessage, ChatMessage, ChatRole } from "../components/chat/chat.types";
-import { botService } from "../services/botService";
+import { botService, isBotUnauthorizedError } from "../services/botService";
+
+interface BotAccessTokenCacheEntry {
+  token: string;
+  expiresAtMs: number;
+}
 
 function createTimestamp(date = new Date()): string {
   return new Intl.DateTimeFormat("es-CL", {
@@ -48,6 +53,7 @@ export function useChatAssistant() {
   const conversationIdRef = useRef<string | null>(null);
   const historyRef = useRef<ChatHistoryMessage[]>([]);
   const isTypingRef = useRef(false);
+  const botAccessTokenRef = useRef<BotAccessTokenCacheEntry | null>(null);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -65,6 +71,31 @@ export function useChatAssistant() {
     });
   }
 
+  function invalidateBotAccessToken() {
+    botAccessTokenRef.current = null;
+  }
+
+  function hasFreshBotAccessToken() {
+    const cachedToken = botAccessTokenRef.current;
+    if (!cachedToken) {
+      return false;
+    }
+    return cachedToken.expiresAtMs > Date.now() + 5_000;
+  }
+
+  async function resolveBotAccessToken(forceRefresh = false): Promise<string> {
+    if (!forceRefresh && hasFreshBotAccessToken()) {
+      return botAccessTokenRef.current!.token;
+    }
+
+    const response = await botService.requestBotAccessToken();
+    botAccessTokenRef.current = {
+      token: response.token,
+      expiresAtMs: Date.now() + (response.expiresInSeconds * 1000),
+    };
+    return response.token;
+  }
+
   async function sendMessage(text: string): Promise<void> {
     const trimmedText = text.trim();
     if (!trimmedText || isTypingRef.current) {
@@ -79,11 +110,28 @@ export function useChatAssistant() {
     setIsTyping(true);
 
     try {
-      const response = await botService.sendChatMessage({
-        message: trimmedText,
-        conversationId: conversationIdRef.current,
-        history: priorHistory,
-      });
+      let authToken = await resolveBotAccessToken();
+      let response;
+
+      try {
+        response = await botService.sendChatMessage({
+          message: trimmedText,
+          conversationId: conversationIdRef.current,
+          history: priorHistory,
+        }, authToken);
+      } catch (error) {
+        if (!isBotUnauthorizedError(error)) {
+          throw error;
+        }
+
+        invalidateBotAccessToken();
+        authToken = await resolveBotAccessToken(true);
+        response = await botService.sendChatMessage({
+          message: trimmedText,
+          conversationId: conversationIdRef.current,
+          history: priorHistory,
+        }, authToken);
+      }
 
       const assistantMessage = createMessage("assistant", resolveAssistantText(response.response));
       historyRef.current = [
@@ -98,6 +146,7 @@ export function useChatAssistant() {
         appendUiMessage(assistantMessage);
       });
     } catch (error) {
+      invalidateBotAccessToken();
       const assistantErrorMessage = createMessage("assistant", resolveErrorText(error));
       startTransition(() => {
         appendUiMessage(assistantErrorMessage);

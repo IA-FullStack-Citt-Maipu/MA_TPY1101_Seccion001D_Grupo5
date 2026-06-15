@@ -30,6 +30,10 @@ Frontend para gestion operativa de inventario consumiendo API v2 del backend.
 
 - Widget disponible para roles `COORDINADOR` y `DIRECTOR`.
 - El frontend consume `POST /api/v1/chat` del microservicio `bot-panol`.
+- Antes de llamar al bot, el frontend solicita `POST /api/v2/auth/me/bot-token`
+  al backend autenticado por cookies.
+- Ese token puente vive solo en memoria y se envia como
+  `Authorization: Bearer <token>` al bot.
 - La base del bot se configura con `VITE_BOT_API_BASE_URL`.
 - Si `VITE_BOT_API_BASE_URL` no existe, el cliente usa `VITE_API_BASE_URL` como fallback.
 
@@ -67,6 +71,8 @@ Frontend para gestion operativa de inventario consumiendo API v2 del backend.
 - `utils/auth.ts` conserva solo `auth_user` como snapshot no sensible.
 - `services/apiClient.ts` usa `withCredentials: true` y hace refresh silencioso
   ante `401`.
+- El token puente del bot no se persiste; si expira, el frontend pide uno nuevo
+  al backend y reintenta la llamada al asistente una vez.
 
 ### Implementos
 

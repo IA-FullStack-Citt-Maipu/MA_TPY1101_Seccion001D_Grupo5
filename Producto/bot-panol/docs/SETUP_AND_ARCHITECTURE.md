@@ -26,7 +26,7 @@ inventario y generar respuestas contextuales con Gemini.
 | `BOT_SECRET_KEY` | No | Fallback legacy para validar JWT si `JWT_SECRET_KEY` no esta definido. Preferir `JWT_SECRET_KEY`. | `your_bot_fallback_secret_here` |
 | `JWT_SECRET_KEY` | Si | Secreto HS256 usado para validar los JWT emitidos por `backendpanol`. Debe coincidir con `APP_AUTH_JWT_SECRET`. | `your_backend_jwt_secret_here` |
 | `JWT_ISSUER` | Si | Issuer esperado en el JWT. Debe coincidir con `APP_AUTH_JWT_ISSUER`. | `panol-backend` |
-| `JWT_AUDIENCE` | No | Audience esperado del JWT. Dejar vacio si no se valida. | `` |
+| `JWT_AUDIENCE` | No | Audience esperado del token puente emitido por backend para el bot. El valor recomendado y default actual es `bot-panol`. | `bot-panol` |
 | `JWT_LEEWAY_SECONDS` | No | Tolerancia en segundos para validaciones de tiempo del JWT. | `30` |
 | `MAX_ITERATIONS` | No | Limite de recursion del grafo LangGraph. | `10` |
 | `MAX_HISTORY_MESSAGES` | No | Cantidad maxima de mensajes previos que se reinyectan en el contexto. | `20` |
@@ -44,6 +44,7 @@ El entrypoint local recomendado es el `docker-compose.yaml` de `Producto/`.
    - `BACKEND_CLIENT_SECRET`
    - `JWT_SECRET_KEY`
    - `JWT_ISSUER`
+   - `JWT_AUDIENCE` si necesitas sobreescribir el default `bot-panol`
 3. Desde la carpeta `Producto/`, levantar el stack completo:
 
 ```bash
@@ -65,8 +66,19 @@ El servicio `bot` toma parte de su configuracion desde:
 
 ### `POST /api/v1/chat`
 
-Endpoint principal del asistente. Requiere header `Authorization: Bearer <jwt>`
-con rol `COORDINADOR` o `DIRECTOR`.
+Endpoint principal del asistente. Requiere header
+`Authorization: Bearer <token-puente>`.
+
+Contrato vigente:
+
+- el frontend autentica la sesion web usando cookies HTTP-only del backend;
+- luego solicita `POST /api/v2/auth/me/bot-token`;
+- el backend emite un JWT efimero con `aud = bot-panol` y `token_use = bot-panol`;
+- el frontend envia ese token puente al bot en el header `Authorization`;
+- el bot valida firma, `iss`, `aud`, `token_use`, expiracion y rol (`COORDINADOR` o
+  `DIRECTOR`).
+
+El bot no depende de leer JWT desde `localStorage` ni `sessionStorage`.
 
 Request:
 

@@ -60,6 +60,11 @@ def verify_and_decode_jwt(token: str) -> dict[str, Any]:
 
     if not isinstance(claims, dict):
         raise TokenValidationError("Invalid JWT claims payload.")
+
+    token_use = claims.get("token_use")
+    if token_use != "bot-panol":
+        raise TokenValidationError("Invalid JWT token purpose.")
+
     return claims
 
 

@@ -43,6 +43,8 @@ Comunes:
 - `APP_AUTH_JWT_ISSUER`
 - `APP_AUTH_JWT_EXPIRATION_SECONDS`
 - `APP_AUTH_REFRESH_EXPIRATION_SECONDS`
+- `APP_AUTH_BOT_TOKEN_EXPIRATION_SECONDS`
+- `APP_AUTH_BOT_TOKEN_AUDIENCE`
 - `APP_AUTH_COOKIE_SECURE`
 - `APP_AUTH_COOKIE_SAME_SITE`
 - `APP_AUTH_JWT_SECRET`
@@ -80,6 +82,12 @@ jOOQ (build-time):
 - `APP_AUTH_REFRESH_EXPIRATION_SECONDS`
   - TTL de la sesion refresh y del `Max-Age` persistente de la cookie refresh.
   - Default: `604800` segundos.
+- `APP_AUTH_BOT_TOKEN_EXPIRATION_SECONDS`
+  - TTL del token puente emitido para `bot-panol`.
+  - Default: `300` segundos.
+- `APP_AUTH_BOT_TOKEN_AUDIENCE`
+  - Audience esperado por `bot-panol` para validar el token puente.
+  - Default: `bot-panol`.
 - `APP_AUTH_COOKIE_SECURE`
   - Si `true`, el navegador solo enviara las cookies por HTTPS.
   - En localhost HTTP normalmente debe ser `false`.

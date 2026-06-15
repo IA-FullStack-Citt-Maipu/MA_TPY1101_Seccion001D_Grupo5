@@ -39,17 +39,21 @@ def integration_config() -> dict[str, str]:
 @pytest.fixture(scope="session")
 def backend_token(integration_config: dict[str, str]) -> str:
     with httpx.Client(base_url=integration_config["backend_url"], timeout=20.0) as client:
-        response = client.post(
+        login_response = client.post(
             "/api/v2/auth/login",
             json={
                 "rut": integration_config["rut"],
                 "password": integration_config["password"],
             },
         )
-    assert response.status_code == 200
-    body = response.json()
-    assert isinstance(body.get("accessToken"), str)
-    return body["accessToken"]
+        assert login_response.status_code == 200
+
+        bot_token_response = client.post("/api/v2/auth/me/bot-token")
+
+    assert bot_token_response.status_code == 200
+    body = bot_token_response.json()
+    assert isinstance(body.get("token"), str)
+    return body["token"]
 
 
 @pytest.fixture(autouse=True)

@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     BOT_SECRET_KEY: str = Field(default="")
     JWT_SECRET_KEY: str = Field(default="")
     JWT_ISSUER: str = Field(default="panol-backend")
-    JWT_AUDIENCE: str = Field(default="")
+    JWT_AUDIENCE: str = Field(default="bot-panol")
     JWT_LEEWAY_SECONDS: int = Field(default=30, ge=0, le=300)
     MAX_ITERATIONS: int = Field(default=10, ge=1, le=100)
     MAX_HISTORY_MESSAGES: int = Field(default=20, ge=1, le=100)
