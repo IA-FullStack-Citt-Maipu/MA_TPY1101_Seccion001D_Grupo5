@@ -70,42 +70,21 @@ jobs:
         env:
           GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID_DEV }}
           GCP_REGION: ${{ vars.GCP_REGION_DEV }}
+          FALLBACK_FRONTEND_IMAGE: ${{ vars.FRONTEND_IMAGE_DEV }}
         run: |
           set -euo pipefail
 
-          payload="$(gcloud run services describe "panol-frontend-dev" \
+          frontend_image="$(gcloud run services describe "panol-frontend-dev" \
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
-            --format=json)"
-
-          frontend_image="$(python - <<'PY' <<<"$payload"
-import json
-import sys
-
-data = json.load(sys.stdin)
-paths = [
-    ("template", "containers", 0, "image"),
-    ("spec", "template", "spec", "containers", 0, "image"),
-    ("spec", "template", "containers", 0, "image"),
-]
-
-for path in paths:
-    current = data
-    try:
-        for key in path:
-            current = current[key]
-        if current:
-            print(current)
-            raise SystemExit(0)
-    except (KeyError, IndexError, TypeError):
-        pass
-
-raise SystemExit(1)
-PY
-          )"
+            --format='value(spec.template.spec.containers[0].image)' 2>/dev/null || true)"
 
           if [ -z "$frontend_image" ]; then
-            echo "Unable to resolve current frontend image from Cloud Run." >&2
+            frontend_image="$FALLBACK_FRONTEND_IMAGE"
+          fi
+
+          if [ -z "$frontend_image" ]; then
+            echo "Unable to resolve current frontend image from Cloud Run or fallback variable." >&2
             exit 1
           fi
 
