@@ -5,6 +5,7 @@ environment              = "dev"
 artifact_registry_location = "us-central1"
 
 backend_image            = "us-central1-docker.pkg.dev/replace-me-dev-project/panol-apps-dev/backend:latest"
+bot_image                = "us-central1-docker.pkg.dev/replace-me-dev-project/panol-apps-dev/bot:latest"
 frontend_image           = "us-central1-docker.pkg.dev/replace-me-dev-project/panol-apps-dev/frontend:latest"
 
 supabase_db_host         = "aws-1-us-east-1.pooler.supabase.com"
@@ -28,6 +29,7 @@ jwt_issuer_uri                    = "https://replace-me.supabase.co/auth/v1"
 vite_supabase_publishable_key     = "sb_publishable_replace_me"
 
 backend_domain           = "api.dev.panol.cl"
+bot_domain               = ""
 frontend_domain          = "dev.panol.cl"
 
 # Dev profile with warm backend instance to avoid login cold starts
@@ -35,6 +37,15 @@ backend_min_instances    = 1
 backend_max_instances    = 1
 backend_timeout_seconds  = 120
 backend_concurrency      = 40
+
+bot_min_instances        = 0
+bot_max_instances        = 2
+bot_timeout_seconds      = 120
+bot_concurrency          = 10
+gemini_model             = "gemini-2.5-flash-lite"
+bot_llm_timeout_seconds  = 20
+bot_backend_timeout_seconds = 10
+bot_backend_retry_count  = 0
 
 # Frontend can still scale to zero without impacting auth latency
 frontend_min_instances   = 0
@@ -46,3 +57,5 @@ frontend_concurrency     = 40
 # Keep them empty in tfvars when not needed.
 db_supabase_password_secret_value  = ""
 app_auth_jwt_secret_value          = ""
+app_security_ai_agent_secret_value = ""
+google_api_key_secret_value        = ""

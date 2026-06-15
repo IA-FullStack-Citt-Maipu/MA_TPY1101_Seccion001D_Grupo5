@@ -1,5 +1,6 @@
 package com.panol_project.backendpanol.modules.auth.api;
 
+import com.panol_project.backendpanol.modules.auth.api.dto.BotAccessTokenResponse;
 import com.panol_project.backendpanol.modules.auth.api.dto.CurrentUserResponse;
 import com.panol_project.backendpanol.modules.auth.api.dto.CurrentUserSessionResponse;
 import com.panol_project.backendpanol.modules.auth.api.dto.LoginRequest;
@@ -101,6 +102,13 @@ public class AuthV2Controller {
     @PreAuthorize("isAuthenticated()")
     CurrentUserResponse getCurrentUser(Authentication authentication) {
         return toCurrentUserResponse(authService.getCurrentUser(resolveCurrentUserUuid(authentication)));
+    }
+
+    @PostMapping("/me/bot-token")
+    @PreAuthorize("hasAnyRole('COORDINADOR','DIRECTOR')")
+    BotAccessTokenResponse issueBotAccessToken(Authentication authentication) {
+        var result = authService.issueBotAccessToken(resolveCurrentUserUuid(authentication));
+        return new BotAccessTokenResponse(result.token(), result.expiresInSeconds());
     }
 
     @GetMapping("/me/sessions")

@@ -76,6 +76,6 @@ Provisiona servicio Cloud Run con:
 
 ## Convenciones operativas
 
-- `backend_domain` y `frontend_domain` vacíos => usa `run.app` y omite domain mapping.
+- `backend_domain`, `bot_domain` y `frontend_domain` vacíos => usa `run.app` y omite domain mapping.
 - No commitear `terraform.tfvars` reales.
 - No almacenar secretos en `variables.tf`, `tfvars`, ni README.

@@ -1,6 +1,6 @@
-﻿# GitHub Actions Auto Deploy (GCP + Terraform + WIF)
+# GitHub Actions Auto Deploy (GCP + Terraform + WIF)
 
-Este documento describe el bootstrap para enlazar este repositorio con GCP sin usar llaves JSON (Workload Identity Federation).
+Este documento describe el bootstrap para enlazar este repositorio con GCP usando Workload Identity Federation, Terraform y despliegue de tres servicios Cloud Run: `backend`, `frontend` y `bot`.
 
 ## 1) Crear Service Accounts (dev/staging-perf/prod)
 
@@ -18,7 +18,7 @@ gcloud iam service-accounts create gha-deploy-staging-perf \
   --display-name="GitHub Deploy Staging Perf"
 ```
 
-## 2) Permisos mínimos de deploy
+## 2) Permisos minimos de deploy
 
 ```bash
 # DEV
@@ -58,7 +58,7 @@ gcloud projects add-iam-policy-binding "$PROJECT_STAGING_PERF" --member="service
 
 ## 3) Crear Workload Identity Pool + Provider
 
-Haz esto en un proyecto de identidad (puede ser dev o uno compartido):
+Haz esto en un proyecto de identidad, que puede ser `dev` o uno compartido:
 
 ```bash
 IDENTITY_PROJECT_ID="PANOL_DEV_PROJECT_ID"
@@ -82,7 +82,7 @@ gcloud iam workload-identity-pools providers create-oidc "$PROVIDER_ID" \
   --attribute-condition="assertion.repository=='$GITHUB_ORG/$GITHUB_REPO'"
 ```
 
-Obtén el resource name del provider:
+Obtén luego el resource name del provider:
 
 ```bash
 gcloud iam workload-identity-pools providers describe "$PROVIDER_ID" \
@@ -92,7 +92,7 @@ gcloud iam workload-identity-pools providers describe "$PROVIDER_ID" \
   --format="value(name)"
 ```
 
-## 4) Permitir impersonación desde GitHub hacia SAs
+## 4) Permitir impersonacion desde GitHub hacia las Service Accounts
 
 ```bash
 WIF_PRINCIPAL="principalSet://iam.googleapis.com/projects/IDENTITY_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/attribute.repository/IA-FullStack-Citt-Maipu/MA_TPY1101_Seccion001D_Grupo5"
@@ -113,38 +113,69 @@ gcloud iam service-accounts add-iam-policy-binding "$SA_STAGING_PERF" \
   --member="$WIF_PRINCIPAL"
 ```
 
-## 5) Configurar GitHub Secrets (Repository)
+## 5) Configurar GitHub Secrets
 
-- `GCP_WIF_PROVIDER_DEV`: resource name del provider
-- `GCP_SERVICE_ACCOUNT_DEV`: `gha-deploy-dev@...`
+### DEV
+ 
+- `GCP_WIF_PROVIDER_DEV`
+- `GCP_SERVICE_ACCOUNT_DEV`
 - `DB_SUPABASE_PASSWORD_DEV`
-- `JWT_ISSUER_URI_DEV`
-- `VITE_SUPABASE_PUBLISHABLE_KEY_DEV`
+- `APP_AUTH_JWT_SECRET_DEV`
+- `APP_SECURITY_AI_AGENT_SECRET_DEV`
+- `GOOGLE_API_KEY_DEV`
+ 
+### STAGING-PERF
 
-- `GCP_WIF_PROVIDER_STAGING_PERF`: resource name del provider
-- `GCP_SERVICE_ACCOUNT_STAGING_PERF`: `gha-deploy-staging-perf@...`
+- `GCP_WIF_PROVIDER_STAGING_PERF`
+- `GCP_SERVICE_ACCOUNT_STAGING_PERF`
 - `DB_CLOUDSQL_PASSWORD_STAGING_PERF`
 - `APP_AUTH_JWT_SECRET_STAGING_PERF`
 
-- `GCP_WIF_PROVIDER_PROD`: resource name del provider
-- `GCP_SERVICE_ACCOUNT_PROD`: `gha-deploy-prod@...`
+### PROD
+ 
+- `GCP_WIF_PROVIDER_PROD`
+- `GCP_SERVICE_ACCOUNT_PROD`
 - `DB_SUPABASE_PASSWORD_PROD`
-- `JWT_ISSUER_URI_PROD`
-- `VITE_SUPABASE_PUBLISHABLE_KEY_PROD`
+- `APP_AUTH_JWT_SECRET_PROD`
+- `APP_SECURITY_AI_AGENT_SECRET_PROD`
+- `GOOGLE_API_KEY_PROD`
 
-## 6) Configurar GitHub Variables (Repository)
+## 6) Configurar GitHub Variables
 
-DEV:
+### DEV
+
 - `GCP_PROJECT_ID_DEV`
-- `GCP_REGION_DEV` (ej: `us-central1`)
-- `GCP_ARTIFACT_REGISTRY_LOCATION_DEV` (ej: `us-central1`)
+- `GCP_REGION_DEV`
+- `GCP_ARTIFACT_REGISTRY_LOCATION_DEV`
 - `GCP_TFSTATE_BUCKET_DEV`
+- `BACKEND_IMAGE_DEV`
+- `FRONTEND_IMAGE_DEV`
+- `BOT_IMAGE_DEV`
 - `SUPABASE_DB_HOST_DEV`
 - `SUPABASE_DB_PORT_DEV`
 - `SUPABASE_DB_NAME_DEV`
 - `SUPABASE_DB_USER_DEV`
+- `APP_SECURITY_ENABLED_DEV`
+- `APP_AUTH_MAX_FAILED_ATTEMPTS_DEV`
+- `APP_AUTH_LOCK_MINUTES_DEV`
+- `APP_AUTH_JWT_ISSUER_DEV`
+- `APP_AUTH_JWT_EXPIRATION_SECONDS_DEV`
+- `JWT_ISSUER_URI_DEV`
+- `VITE_SUPABASE_PUBLISHABLE_KEY_DEV`
+- `GEMINI_MODEL_DEV`
+- `BOT_MIN_INSTANCES_DEV`
+- `BOT_MAX_INSTANCES_DEV`
+- `BOT_TIMEOUT_SECONDS_DEV`
+- `BOT_CONCURRENCY_DEV`
+- `BOT_LLM_TIMEOUT_SECONDS_DEV`
+- `BOT_BACKEND_TIMEOUT_SECONDS_DEV`
+- `BOT_BACKEND_RETRY_COUNT_DEV`
 
-STAGING-PERF:
+`BOT_DOMAIN_DEV` queda opcional mientras `dev` opere temporalmente con la URL
+`run.app` del bot.
+ 
+### STAGING-PERF
+
 - `GCP_PROJECT_ID_STAGING_PERF`
 - `GCP_REGION_STAGING_PERF`
 - `GCP_ARTIFACT_REGISTRY_LOCATION_STAGING_PERF`
@@ -169,26 +200,73 @@ STAGING-PERF:
 - `APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS_STAGING_PERF`
 - `APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE_STAGING_PERF`
 
-PROD:
+### PROD
+
 - `GCP_PROJECT_ID_PROD`
 - `GCP_REGION_PROD`
 - `GCP_ARTIFACT_REGISTRY_LOCATION_PROD`
 - `GCP_TFSTATE_BUCKET_PROD`
+- `BACKEND_IMAGE_PROD`
+- `FRONTEND_IMAGE_PROD`
+- `BOT_IMAGE_PROD`
 - `SUPABASE_DB_HOST_PROD`
 - `SUPABASE_DB_PORT_PROD`
 - `SUPABASE_DB_NAME_PROD`
 - `SUPABASE_DB_USER_PROD`
+- `APP_SECURITY_ENABLED_PROD`
+- `APP_AUTH_MAX_FAILED_ATTEMPTS_PROD`
+- `APP_AUTH_LOCK_MINUTES_PROD`
+- `APP_AUTH_JWT_ISSUER_PROD`
+- `APP_AUTH_JWT_EXPIRATION_SECONDS_PROD`
+- `JWT_ISSUER_URI_PROD`
+- `VITE_SUPABASE_PUBLISHABLE_KEY_PROD`
+- `BOT_DOMAIN_PROD`
+- `GEMINI_MODEL_PROD`
+- `BOT_MIN_INSTANCES_PROD`
+- `BOT_MAX_INSTANCES_PROD`
+- `BOT_TIMEOUT_SECONDS_PROD`
+- `BOT_CONCURRENCY_PROD`
+- `BOT_LLM_TIMEOUT_SECONDS_PROD`
+- `BOT_BACKEND_TIMEOUT_SECONDS_PROD`
+- `BOT_BACKEND_RETRY_COUNT_PROD`
 
 ## 7) Flujo de deploy
 
 - `push` a `dev`: despliegue automático a `dev`.
+- `push` a `dev`:
+  - `deploy-gcp.yml` construye y publica `backend` y `bot`
+  - aplica Terraform sobre `dev` para dejar disponible el bot en Cloud Run
+  - resuelve la URL `run.app` del bot
+  - builda y publica `frontend` con `VITE_BOT_API_BASE_URL` apuntando a esa URL
+  - ejecuta el `apply` final de Terraform en `dev`
 - `workflow_dispatch` con `environment=staging-perf`: despliegue manual aislado para performance.
 - `workflow_dispatch` con `environment=prod`: despliegue manual a `prod`.
+- `workflow_dispatch` en `terraform-plan-apply.yml`:
+  - permite `plan/apply` en `dev`, `staging-perf` o `prod`
 
-## 8) Optimizaciones de costo aplicadas
+## 8) Contratos importantes
 
-- Secretos no se versionan en cada push (evita costos innecesarios en Secret Manager).
-- Ejecuciones en progreso se cancelan al llegar un commit más nuevo a `dev` (`concurrency cancel-in-progress`).
+- El frontend debe buildarse con `VITE_API_BASE_URL` y `VITE_BOT_API_BASE_URL`.
+- En `dev`, el bot usa temporalmente su `run.app` y no depende de `bot.dev.panol.cl`.
+- En `prod`, el bot mantiene dominio publico propio:
+  - `bot.panol.cl`
+- `BACKEND_CLIENT_SECRET` del bot reutiliza `APP_SECURITY_AI_AGENT_SECRET`.
+- `JWT_SECRET_KEY` del bot reutiliza `APP_AUTH_JWT_SECRET`.
 
-Workflow creado:
+## 9) Incidente conocido en dev
+
+- El bloqueo original no estaba en la creacion de `panol-bot-dev`.
+- El fallo ocurria al crear el `DomainMapping` de `bot.dev.panol.cl` por falta de
+  autorizacion del dominio en GCP/Search Console.
+- Mientras esa autorizacion no exista, `dev` se despliega usando `run.app`.
+
+## 10) Optimizaciones y buenas practicas
+
+- Secretos no se guardan en `terraform.tfvars` versionados.
+- Las ejecuciones en progreso se cancelan cuando llega un commit mas nuevo a `dev`.
+- Si se agrega un cuarto servicio, primero se actualizan Terraform, GitHub Variables/Secrets y luego los workflows.
+
+Workflows relevantes:
+
 - `.github/workflows/deploy-gcp.yml`
+- `.github/workflows/terraform-plan-apply.yml`

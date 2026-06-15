@@ -114,6 +114,7 @@ jobs:
           GCP_ARTIFACT_REGISTRY_LOCATION: ${{ vars.GCP_ARTIFACT_REGISTRY_LOCATION_DEV }}
           GCP_TFSTATE_BUCKET: ${{ vars.GCP_TFSTATE_BUCKET_DEV }}
           BACKEND_IMAGE: ${{ steps.current_images.outputs.backend_image }}
+          BOT_IMAGE: ${{ vars.BOT_IMAGE_DEV }}
           FRONTEND_IMAGE: ${{ steps.current_images.outputs.frontend_image }}
           SUPABASE_DB_HOST: ${{ vars.SUPABASE_DB_HOST_DEV }}
           SUPABASE_DB_PORT: ${{ vars.SUPABASE_DB_PORT_DEV }}
@@ -130,8 +131,18 @@ jobs:
           APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE_DEV }}
           JWT_ISSUER_URI: ${{ vars.JWT_ISSUER_URI_DEV }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY_DEV }}
+          BOT_MIN_INSTANCES: ${{ vars.BOT_MIN_INSTANCES_DEV }}
+          BOT_MAX_INSTANCES: ${{ vars.BOT_MAX_INSTANCES_DEV }}
+          BOT_TIMEOUT_SECONDS: ${{ vars.BOT_TIMEOUT_SECONDS_DEV }}
+          BOT_CONCURRENCY: ${{ vars.BOT_CONCURRENCY_DEV }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL_DEV }}
+          BOT_LLM_TIMEOUT_SECONDS: ${{ vars.BOT_LLM_TIMEOUT_SECONDS_DEV }}
+          BOT_BACKEND_TIMEOUT_SECONDS: ${{ vars.BOT_BACKEND_TIMEOUT_SECONDS_DEV }}
+          BOT_BACKEND_RETRY_COUNT: ${{ vars.BOT_BACKEND_RETRY_COUNT_DEV }}
           DB_SUPABASE_PASSWORD: ${{ secrets.DB_SUPABASE_PASSWORD_DEV }}
           APP_AUTH_JWT_SECRET: ${{ secrets.APP_AUTH_JWT_SECRET_DEV }}
+          APP_SECURITY_AI_AGENT_SECRET: ${{ secrets.APP_SECURITY_AI_AGENT_SECRET_DEV }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY_DEV }}
         run: |
           set -euo pipefail
           required=(
@@ -142,7 +153,9 @@ jobs:
             APP_AUTH_TOKEN_REVOCATION_CLEANUP_ENABLED APP_AUTH_TOKEN_REVOCATION_CLEANUP_INITIAL_DELAY_MS
             APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE
             JWT_ISSUER_URI VITE_SUPABASE_PUBLISHABLE_KEY
-            DB_SUPABASE_PASSWORD APP_AUTH_JWT_SECRET
+            BOT_IMAGE BOT_MIN_INSTANCES BOT_MAX_INSTANCES BOT_TIMEOUT_SECONDS BOT_CONCURRENCY
+            GEMINI_MODEL BOT_LLM_TIMEOUT_SECONDS BOT_BACKEND_TIMEOUT_SECONDS BOT_BACKEND_RETRY_COUNT
+            DB_SUPABASE_PASSWORD APP_AUTH_JWT_SECRET APP_SECURITY_AI_AGENT_SECRET GOOGLE_API_KEY
           )
           for key in "${required[@]}"; do
             if [ -z "${!key:-}" ]; then
@@ -170,6 +183,7 @@ jobs:
           TF_VAR_environment: dev
           TF_VAR_artifact_registry_location: ${{ vars.GCP_ARTIFACT_REGISTRY_LOCATION_DEV }}
           TF_VAR_backend_image: ${{ steps.current_images.outputs.backend_image }}
+          TF_VAR_bot_image: ${{ vars.BOT_IMAGE_DEV }}
           TF_VAR_frontend_image: ${{ steps.current_images.outputs.frontend_image }}
           TF_VAR_supabase_db_host: ${{ vars.SUPABASE_DB_HOST_DEV }}
           TF_VAR_supabase_db_port: ${{ vars.SUPABASE_DB_PORT_DEV }}
@@ -191,9 +205,20 @@ jobs:
           TF_VAR_vite_supabase_publishable_key: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY_DEV }}
           TF_VAR_db_supabase_password_secret_value: ${{ secrets.DB_SUPABASE_PASSWORD_DEV }}
           TF_VAR_app_auth_jwt_secret_value: ${{ secrets.APP_AUTH_JWT_SECRET_DEV }}
+          TF_VAR_app_security_ai_agent_secret_value: ${{ secrets.APP_SECURITY_AI_AGENT_SECRET_DEV }}
+          TF_VAR_google_api_key_secret_value: ${{ secrets.GOOGLE_API_KEY_DEV }}
           TF_VAR_runtime_sa_user_members: '["serviceAccount:${{ secrets.GCP_SERVICE_ACCOUNT_DEV }}"]'
           TF_VAR_backend_domain: "api.dev.panol.cl"
+          TF_VAR_bot_domain: ""
           TF_VAR_frontend_domain: "dev.panol.cl"
+          TF_VAR_bot_min_instances: ${{ vars.BOT_MIN_INSTANCES_DEV }}
+          TF_VAR_bot_max_instances: ${{ vars.BOT_MAX_INSTANCES_DEV }}
+          TF_VAR_bot_timeout_seconds: ${{ vars.BOT_TIMEOUT_SECONDS_DEV }}
+          TF_VAR_bot_concurrency: ${{ vars.BOT_CONCURRENCY_DEV }}
+          TF_VAR_gemini_model: ${{ vars.GEMINI_MODEL_DEV }}
+          TF_VAR_bot_llm_timeout_seconds: ${{ vars.BOT_LLM_TIMEOUT_SECONDS_DEV }}
+          TF_VAR_bot_backend_timeout_seconds: ${{ vars.BOT_BACKEND_TIMEOUT_SECONDS_DEV }}
+          TF_VAR_bot_backend_retry_count: ${{ vars.BOT_BACKEND_RETRY_COUNT_DEV }}
         run: terraform plan -out=tfplan
 
       - name: Terraform apply (dev - manual only)
@@ -383,6 +408,7 @@ jobs:
           GCP_ARTIFACT_REGISTRY_LOCATION: ${{ vars.GCP_ARTIFACT_REGISTRY_LOCATION_PROD }}
           GCP_TFSTATE_BUCKET: ${{ vars.GCP_TFSTATE_BUCKET_PROD }}
           BACKEND_IMAGE: ${{ vars.BACKEND_IMAGE_PROD }}
+          BOT_IMAGE: ${{ vars.BOT_IMAGE_PROD }}
           FRONTEND_IMAGE: ${{ vars.FRONTEND_IMAGE_PROD }}
           SUPABASE_DB_HOST: ${{ vars.SUPABASE_DB_HOST_PROD }}
           SUPABASE_DB_PORT: ${{ vars.SUPABASE_DB_PORT_PROD }}
@@ -390,17 +416,41 @@ jobs:
           SUPABASE_DB_USER: ${{ vars.SUPABASE_DB_USER_PROD }}
           APP_AUTH_JWT_ISSUER: ${{ vars.APP_AUTH_JWT_ISSUER_PROD }}
           APP_AUTH_JWT_EXPIRATION_SECONDS: ${{ vars.APP_AUTH_JWT_EXPIRATION_SECONDS_PROD }}
+          APP_AUTH_REFRESH_EXPIRATION_SECONDS: ${{ vars.APP_AUTH_REFRESH_EXPIRATION_SECONDS_PROD }}
+          APP_AUTH_COOKIE_SECURE: ${{ vars.APP_AUTH_COOKIE_SECURE_PROD }}
+          APP_AUTH_COOKIE_SAME_SITE: ${{ vars.APP_AUTH_COOKIE_SAME_SITE_PROD }}
+          APP_AUTH_TOKEN_REVOCATION_CLEANUP_ENABLED: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_ENABLED_PROD }}
+          APP_AUTH_TOKEN_REVOCATION_CLEANUP_INITIAL_DELAY_MS: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_INITIAL_DELAY_MS_PROD }}
+          APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS_PROD }}
+          APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE_PROD }}
           JWT_ISSUER_URI: ${{ vars.JWT_ISSUER_URI_PROD }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY_PROD }}
+          BOT_DOMAIN: ${{ vars.BOT_DOMAIN_PROD }}
+          BOT_MIN_INSTANCES: ${{ vars.BOT_MIN_INSTANCES_PROD }}
+          BOT_MAX_INSTANCES: ${{ vars.BOT_MAX_INSTANCES_PROD }}
+          BOT_TIMEOUT_SECONDS: ${{ vars.BOT_TIMEOUT_SECONDS_PROD }}
+          BOT_CONCURRENCY: ${{ vars.BOT_CONCURRENCY_PROD }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL_PROD }}
+          BOT_LLM_TIMEOUT_SECONDS: ${{ vars.BOT_LLM_TIMEOUT_SECONDS_PROD }}
+          BOT_BACKEND_TIMEOUT_SECONDS: ${{ vars.BOT_BACKEND_TIMEOUT_SECONDS_PROD }}
+          BOT_BACKEND_RETRY_COUNT: ${{ vars.BOT_BACKEND_RETRY_COUNT_PROD }}
           DB_SUPABASE_PASSWORD: ${{ secrets.DB_SUPABASE_PASSWORD_PROD }}
           APP_AUTH_JWT_SECRET: ${{ secrets.APP_AUTH_JWT_SECRET_PROD }}
+          APP_SECURITY_AI_AGENT_SECRET: ${{ secrets.APP_SECURITY_AI_AGENT_SECRET_PROD }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY_PROD }}
         run: |
           set -euo pipefail
           required=(
             GCP_PROJECT_ID GCP_REGION GCP_ARTIFACT_REGISTRY_LOCATION GCP_TFSTATE_BUCKET
-            BACKEND_IMAGE FRONTEND_IMAGE SUPABASE_DB_HOST SUPABASE_DB_PORT SUPABASE_DB_NAME SUPABASE_DB_USER
-            APP_AUTH_JWT_ISSUER APP_AUTH_JWT_EXPIRATION_SECONDS JWT_ISSUER_URI VITE_SUPABASE_PUBLISHABLE_KEY
-            DB_SUPABASE_PASSWORD APP_AUTH_JWT_SECRET
+            BACKEND_IMAGE BOT_IMAGE FRONTEND_IMAGE SUPABASE_DB_HOST SUPABASE_DB_PORT SUPABASE_DB_NAME SUPABASE_DB_USER
+            APP_AUTH_JWT_ISSUER APP_AUTH_JWT_EXPIRATION_SECONDS APP_AUTH_REFRESH_EXPIRATION_SECONDS
+            APP_AUTH_COOKIE_SECURE APP_AUTH_COOKIE_SAME_SITE
+            APP_AUTH_TOKEN_REVOCATION_CLEANUP_ENABLED APP_AUTH_TOKEN_REVOCATION_CLEANUP_INITIAL_DELAY_MS
+            APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE
+            JWT_ISSUER_URI VITE_SUPABASE_PUBLISHABLE_KEY
+            BOT_DOMAIN BOT_MIN_INSTANCES BOT_MAX_INSTANCES BOT_TIMEOUT_SECONDS BOT_CONCURRENCY
+            GEMINI_MODEL BOT_LLM_TIMEOUT_SECONDS BOT_BACKEND_TIMEOUT_SECONDS BOT_BACKEND_RETRY_COUNT
+            DB_SUPABASE_PASSWORD APP_AUTH_JWT_SECRET APP_SECURITY_AI_AGENT_SECRET GOOGLE_API_KEY
           )
           for key in "${required[@]}"; do
             if [ -z "${!key:-}" ]; then
@@ -428,6 +478,7 @@ jobs:
           TF_VAR_environment: prod
           TF_VAR_artifact_registry_location: ${{ vars.GCP_ARTIFACT_REGISTRY_LOCATION_PROD }}
           TF_VAR_backend_image: ${{ vars.BACKEND_IMAGE_PROD }}
+          TF_VAR_bot_image: ${{ vars.BOT_IMAGE_PROD }}
           TF_VAR_frontend_image: ${{ vars.FRONTEND_IMAGE_PROD }}
           TF_VAR_supabase_db_host: ${{ vars.SUPABASE_DB_HOST_PROD }}
           TF_VAR_supabase_db_port: ${{ vars.SUPABASE_DB_PORT_PROD }}
@@ -438,13 +489,31 @@ jobs:
           TF_VAR_app_auth_lock_minutes: ${{ vars.APP_AUTH_LOCK_MINUTES_PROD }}
           TF_VAR_app_auth_jwt_issuer: ${{ vars.APP_AUTH_JWT_ISSUER_PROD }}
           TF_VAR_app_auth_jwt_expiration_seconds: ${{ vars.APP_AUTH_JWT_EXPIRATION_SECONDS_PROD }}
+          TF_VAR_app_auth_refresh_expiration_seconds: ${{ vars.APP_AUTH_REFRESH_EXPIRATION_SECONDS_PROD }}
+          TF_VAR_app_auth_cookie_secure: ${{ vars.APP_AUTH_COOKIE_SECURE_PROD }}
+          TF_VAR_app_auth_cookie_same_site: ${{ vars.APP_AUTH_COOKIE_SAME_SITE_PROD }}
+          TF_VAR_app_auth_token_revocation_cleanup_enabled: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_ENABLED_PROD }}
+          TF_VAR_app_auth_token_revocation_cleanup_initial_delay_ms: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_INITIAL_DELAY_MS_PROD }}
+          TF_VAR_app_auth_token_revocation_cleanup_delay_ms: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS_PROD }}
+          TF_VAR_app_auth_token_revocation_cleanup_batch_size: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE_PROD }}
           TF_VAR_jwt_issuer_uri: ${{ vars.JWT_ISSUER_URI_PROD }}
           TF_VAR_vite_supabase_publishable_key: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY_PROD }}
           TF_VAR_db_supabase_password_secret_value: ${{ secrets.DB_SUPABASE_PASSWORD_PROD }}
           TF_VAR_app_auth_jwt_secret_value: ${{ secrets.APP_AUTH_JWT_SECRET_PROD }}
+          TF_VAR_app_security_ai_agent_secret_value: ${{ secrets.APP_SECURITY_AI_AGENT_SECRET_PROD }}
+          TF_VAR_google_api_key_secret_value: ${{ secrets.GOOGLE_API_KEY_PROD }}
           TF_VAR_runtime_sa_user_members: '["serviceAccount:${{ secrets.GCP_SERVICE_ACCOUNT_PROD }}"]'
           TF_VAR_backend_domain: ""
+          TF_VAR_bot_domain: ${{ vars.BOT_DOMAIN_PROD }}
           TF_VAR_frontend_domain: ""
+          TF_VAR_bot_min_instances: ${{ vars.BOT_MIN_INSTANCES_PROD }}
+          TF_VAR_bot_max_instances: ${{ vars.BOT_MAX_INSTANCES_PROD }}
+          TF_VAR_bot_timeout_seconds: ${{ vars.BOT_TIMEOUT_SECONDS_PROD }}
+          TF_VAR_bot_concurrency: ${{ vars.BOT_CONCURRENCY_PROD }}
+          TF_VAR_gemini_model: ${{ vars.GEMINI_MODEL_PROD }}
+          TF_VAR_bot_llm_timeout_seconds: ${{ vars.BOT_LLM_TIMEOUT_SECONDS_PROD }}
+          TF_VAR_bot_backend_timeout_seconds: ${{ vars.BOT_BACKEND_TIMEOUT_SECONDS_PROD }}
+          TF_VAR_bot_backend_retry_count: ${{ vars.BOT_BACKEND_RETRY_COUNT_PROD }}
         run: terraform plan -out=tfplan
 
       - name: Terraform apply (prod)

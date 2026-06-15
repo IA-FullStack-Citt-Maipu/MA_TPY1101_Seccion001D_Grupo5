@@ -1,0 +1,94 @@
+# ==============================
+# Python bytecode and caches
+# ==============================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.hypothesis/
+.nox/
+.tox/
+
+# ==============================
+# Virtual environments
+# ==============================
+.venv/
+venv/
+ENV/
+env/
+
+# ==============================
+# Build, packaging, artifacts
+# ==============================
+build/
+dist/
+site/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+*.whl
+
+# ==============================
+# Coverage and test output
+# ==============================
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+junit.xml
+pytestdebug.log
+
+# ==============================
+# Runtime / logs / local state
+# ==============================
+*.log
+*.pid
+*.seed
+*.out
+*.err
+*.stackdump
+logs/
+tmp/
+temp/
+*.tmp
+
+# Local sqlite/checkpoint-like files
+*.db
+*.sqlite
+*.sqlite3
+
+# ==============================
+# Environment and secrets
+# ==============================
+.env
+.env.*
+!.env.example
+
+# ==============================
+# IDE / editor
+# ==============================
+.idea/
+.vscode/
+*.iml
+*.suo
+*.user
+*.userossc
+*.sln.docstates
+
+# ==============================
+# OS junk files
+# ==============================
+.DS_Store
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ==============================
+# Notebooks / local experiments
+# ==============================
+.ipynb_checkpoints/
