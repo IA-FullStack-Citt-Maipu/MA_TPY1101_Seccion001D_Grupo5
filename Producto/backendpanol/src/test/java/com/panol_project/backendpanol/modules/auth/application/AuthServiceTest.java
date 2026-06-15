@@ -14,6 +14,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.panol_project.backendpanol.modules.auth.application.dto.AuthenticatedUserSummary;
+import com.panol_project.backendpanol.modules.auth.application.dto.BotAccessTokenResult;
 import com.panol_project.backendpanol.modules.auth.application.dto.ChangeCurrentPasswordCommand;
 import com.panol_project.backendpanol.modules.auth.application.dto.CurrentUserSessionSummary;
 import com.panol_project.backendpanol.modules.auth.application.dto.LoginCommand;
@@ -44,6 +45,7 @@ import org.springframework.security.crypto.bcrypt.BCrypt;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
@@ -468,6 +470,62 @@ class AuthServiceTest {
     }
 
     @Test
+    void issueBotAccessTokenDebeEmitirJwtConAudienceDelBot() {
+        UUID userUuid = UUID.randomUUID();
+        AuthUser authUser = new AuthUser(
+                userUuid,
+                "12345678",
+                "Coordinadora Bot",
+                "bot@panol.test",
+                BCrypt.hashpw("secret123", BCrypt.gensalt()),
+                "coordinador",
+                0,
+                null
+        );
+
+        when(userAuthPort.findAuthUserByUuid(userUuid)).thenReturn(Optional.of(authUser));
+        when(jwtEncoder.encode(any())).thenReturn(Jwt.withTokenValue("bot-bridge-token")
+                .header("alg", "HS256")
+                .subject(userUuid.toString())
+                .claim("aud", List.of("bot-panol"))
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(300))
+                .build());
+
+        AuthService service = buildService();
+
+        BotAccessTokenResult result = service.issueBotAccessToken(userUuid);
+
+        assertEquals("bot-bridge-token", result.token());
+        assertEquals(300, result.expiresInSeconds());
+        verify(jwtEncoder).encode(any(JwtEncoderParameters.class));
+    }
+
+    @Test
+    void issueBotAccessTokenDebeRechazarRolesNoPermitidos() {
+        UUID userUuid = UUID.randomUUID();
+        AuthUser authUser = new AuthUser(
+                userUuid,
+                "12345678",
+                "Docente Bot",
+                "docente.bot@panol.test",
+                BCrypt.hashpw("secret123", BCrypt.gensalt()),
+                "DOCENTE",
+                0,
+                null
+        );
+
+        when(userAuthPort.findAuthUserByUuid(userUuid)).thenReturn(Optional.of(authUser));
+
+        AuthService service = buildService();
+
+        ApiException ex = assertThrows(ApiException.class, () -> service.issueBotAccessToken(userUuid));
+
+        assertEquals("AUTH_BOT_TOKEN_FORBIDDEN", ex.getCode());
+        verifyNoInteractions(jwtEncoder);
+    }
+
+    @Test
     void updateCurrentUserEmailDebeActualizarYRegistrarEvento() {
         UUID userUuid = UUID.randomUUID();
         AuthUser authUser = new AuthUser(
@@ -588,7 +646,9 @@ class AuthServiceTest {
                 15,
                 3600,
                 604800,
-                "panol-backend"
+                "panol-backend",
+                300,
+                "bot-panol"
         );
     }
 

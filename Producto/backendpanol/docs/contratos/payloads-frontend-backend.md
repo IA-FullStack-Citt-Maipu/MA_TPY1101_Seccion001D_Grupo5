@@ -131,7 +131,31 @@ Notas:
 }
 ```
 
-## 7) Cambio de correo del usuario actual
+## 7) Token puente para `bot-panol`
+
+### Request (`POST /api/v2/auth/me/bot-token`)
+
+- Sin body.
+- Requiere autenticacion por cookie `panol_access_token`.
+- Solo disponible para roles `COORDINADOR` y `DIRECTOR`.
+
+### Response 200
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiJ9...",
+  "expiresInSeconds": 300
+}
+```
+
+Notas:
+- El token se usa solo para llamar `POST /api/v1/chat` del microservicio
+  `bot-panol`.
+- El frontend no debe persistirlo en `localStorage` ni `sessionStorage`.
+- El token incluye `aud = bot-panol` y no reemplaza al access token web basado
+  en cookies.
+
+## 8) Cambio de correo del usuario actual
 
 ### Request (`PATCH /api/v2/auth/me/email`)
 
@@ -149,7 +173,7 @@ Error funcional esperado:
 
 - `AUTH_EMAIL_ALREADY_IN_USE`
 
-## 8) Cambio de contrasena del usuario actual
+## 9) Cambio de contrasena del usuario actual
 
 ### Request (`PATCH /api/v2/auth/me/password`)
 
@@ -172,7 +196,7 @@ Errores funcionales esperados:
 - `AUTH_NEW_PASSWORD_TOO_SHORT`
 - `AUTH_PASSWORD_REUSE_NOT_ALLOWED`
 
-## 9) Sesiones activas del usuario actual
+## 10) Sesiones activas del usuario actual
 
 ### Response (`GET /api/v2/auth/me/sessions`)
 
@@ -207,11 +231,14 @@ Error funcional esperado:
 
 - `404` cuando la sesion no existe o no pertenece al usuario autenticado.
 
-## 10) Consumo en frontend
+## 11) Consumo en frontend
 
 - `src/services/apiClient.ts` espera en errores: `code`, `message`, `timestamp`.
 - `src/services/authService.ts` consume `POST /api/v2/auth/login` y persiste
   solo `auth_user` como snapshot no sensible.
+- `src/services/botService.ts` solicita `POST /api/v2/auth/me/bot-token` usando
+  la sesion por cookies y luego llama `POST /api/v1/chat` con
+  `Authorization: Bearer <token-puente>`.
 - `src/services/apiClient.ts` trabaja con `withCredentials: true` y hace
   refresh silencioso contra `POST /api/v2/auth/refresh` cuando recibe `401`.
 - `src/services/profileService.ts` consume `GET /api/v2/auth/me`,

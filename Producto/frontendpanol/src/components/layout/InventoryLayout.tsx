@@ -21,6 +21,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import type { ReactNode } from "react";
 import { useInactivityPollingGate } from "../../hooks/useInactivityPollingGate";
+import { ChatWidget } from "../chat/ChatWidget";
 import { fetchImplements } from "../../services/implementService";
 import {
   fetchNotificationsPage,
@@ -656,6 +657,8 @@ export function InventoryLayout({
   const { pollingPaused } = useInactivityPollingGate();
   const pendingNotificationReadStateRef = useRef<Map<string, boolean>>(new Map());
   const notificationSyncTimeoutRef = useRef<number | null>(null);
+  const normalizedRole = normalizeUserRole(role);
+  const canUseChatAssistant = normalizedRole === "COORDINADOR" || normalizedRole === "DIRECTOR";
 
   useEffect(() => {
     function onResize() {
@@ -848,6 +851,7 @@ export function InventoryLayout({
         />
         <main className="app-shell__main">{children}</main>
       </div>
+      {canUseChatAssistant ? <ChatWidget /> : null}
       {sidebarOpen ? <button type="button" className="sidebar-overlay" aria-label="Cerrar menu lateral" onClick={() => setSidebarOpen(false)} /> : null}
     </div>
   );

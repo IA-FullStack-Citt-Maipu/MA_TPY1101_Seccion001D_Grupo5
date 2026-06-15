@@ -24,6 +24,8 @@
 app:
   security:
     enabled: ${APP_SECURITY_ENABLED:true}
+    ai-agent:
+      secret: ${APP_SECURITY_AI_AGENT_SECRET}
   outbox:
     system-user-uuid: ${APP_OUTBOX_SYSTEM_USER_UUID:99999999-9999-9999-9999-999999999999}
     cleanup:
@@ -64,6 +66,9 @@ app:
       initial-delay-ms: ${APP_AUTH_TOKEN_REVOCATION_CLEANUP_INITIAL_DELAY_MS:300000}
       delay-ms: ${APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS:1800000}
       batch-size: ${APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE:500}
+    bot-token:
+      expiration-seconds: ${APP_AUTH_BOT_TOKEN_EXPIRATION_SECONDS:300}
+      audience: ${APP_AUTH_BOT_TOKEN_AUDIENCE:bot-panol}
     jwt:
       issuer: ${APP_AUTH_JWT_ISSUER:panol-backend}
       secret: ${APP_AUTH_JWT_SECRET:panol-secret-key-change-in-prod-1234567890123}
