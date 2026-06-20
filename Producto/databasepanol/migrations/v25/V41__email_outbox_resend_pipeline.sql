@@ -128,7 +128,7 @@ DECLARE
     v_requester_role TEXT;
     v_docente_title TEXT := 'Solicitud enviada';
     v_docente_message TEXT := format('Tu solicitud %s fue registrada y quedo pendiente de revision.', p_loan_uuid);
-    v_coordinator_title TEXT := 'Nueva solicitud de prestamo';
+    v_coordinator_title TEXT := 'Nueva solicitud de préstamo';
     v_coordinator_message TEXT;
     v_created_at TIMESTAMPTZ := now();
 BEGIN

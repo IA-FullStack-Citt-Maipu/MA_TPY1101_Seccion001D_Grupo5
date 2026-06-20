@@ -62,7 +62,7 @@ public class EmailTemplateRenderer {
         }
         return switch (emailType) {
             case "loan.request_registered.docente" -> "Solicitud enviada | Panol";
-            case "loan.request_submitted.coordinador" -> "Nueva solicitud de prestamo | Panol";
+            case "loan.request_submitted.coordinador" -> "Nueva solicitud de préstamo | Panol";
             case "loan.request_updated.coordinador" -> "Solicitud pendiente actualizada | Panol";
             case "loan.status_changed.docente" -> "Actualizacion de prestamo | Panol";
             case "implement.stock_alert.coordinador", "implement.stock_alert.director" -> "Alerta de stock | Panol";

@@ -1,11 +1,11 @@
 package com.panol_project.backendpanol.modules.email.application;
 
 import com.panol_project.backendpanol.modules.email.domain.EmailDeliveryException;
+import com.panol_project.backendpanol.modules.email.domain.EmailDeliveryPort;
 import com.panol_project.backendpanol.modules.email.domain.EmailOutboxEntry;
 import com.panol_project.backendpanol.modules.email.domain.EmailOutboxRepository;
 import com.panol_project.backendpanol.modules.email.domain.EmailOutboxStatus;
 import com.panol_project.backendpanol.modules.email.domain.RenderedEmail;
-import com.panol_project.backendpanol.modules.email.infrastructure.ResendEmailClient;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.slf4j.Logger;
@@ -20,18 +20,18 @@ public class EmailOutboxWorker {
 
     private final EmailOutboxRepository repository;
     private final EmailTemplateRenderer renderer;
-    private final ResendEmailClient resendEmailClient;
+    private final EmailDeliveryPort emailDeliveryPort;
     private final EmailProperties properties;
 
     public EmailOutboxWorker(
             EmailOutboxRepository repository,
             EmailTemplateRenderer renderer,
-            ResendEmailClient resendEmailClient,
+            EmailDeliveryPort emailDeliveryPort,
             EmailProperties properties
     ) {
         this.repository = repository;
         this.renderer = renderer;
-        this.resendEmailClient = resendEmailClient;
+        this.emailDeliveryPort = emailDeliveryPort;
         this.properties = properties;
     }
 
@@ -45,7 +45,7 @@ public class EmailOutboxWorker {
         for (EmailOutboxEntry entry : entries) {
             try {
                 RenderedEmail renderedEmail = renderer.render(entry.emailType(), entry.templateData());
-                String providerMessageId = resendEmailClient.send(
+                String providerMessageId = emailDeliveryPort.send(
                         entry.recipientEmail(),
                         renderedEmail.subject(),
                         renderedEmail.html()

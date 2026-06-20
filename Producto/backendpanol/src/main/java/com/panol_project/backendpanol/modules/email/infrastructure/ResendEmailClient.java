@@ -2,6 +2,7 @@ package com.panol_project.backendpanol.modules.email.infrastructure;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.panol_project.backendpanol.modules.email.application.EmailProperties;
+import com.panol_project.backendpanol.modules.email.domain.EmailDeliveryPort;
 import com.panol_project.backendpanol.modules.email.domain.EmailDeliveryException;
 import java.util.List;
 import org.springframework.http.HttpHeaders;
@@ -13,7 +14,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
 @Component
-public class ResendEmailClient {
+public class ResendEmailClient implements EmailDeliveryPort {
 
     private final EmailProperties properties;
     private final RestClient restClient;
@@ -26,6 +27,7 @@ public class ResendEmailClient {
                 .build();
     }
 
+    @Override
     public String send(String recipientEmail, String subject, String html) {
         if (!"resend".equalsIgnoreCase(properties.getProvider())) {
             throw new EmailDeliveryException("Proveedor de email no soportado: " + properties.getProvider());
