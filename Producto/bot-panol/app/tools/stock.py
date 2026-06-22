@@ -31,22 +31,6 @@ def consultar_stock(implement_uuid: str) -> dict[str, Any]:
     if not isinstance(individuals, list):
         individuals = []
 
-    preview = []
-    for individual in individuals[:5]:
-        if not isinstance(individual, dict):
-            continue
-        preview.append(
-            {
-                "uuid": individual.get("uuid"),
-                "asset_code": individual.get("asset_code"),
-                "status": individual.get("status"),
-                "condition": individual.get("condition"),
-                "notes": individual.get("notes"),
-                "current_location_uuid": individual.get("current_location_uuid"),
-                "active": individual.get("active"),
-            }
-        )
-
     output = {
         "ok": True,
         "source": "backend",
@@ -62,7 +46,6 @@ def consultar_stock(implement_uuid: str) -> dict[str, Any]:
                 "damaged": counters.get("damaged"),
             },
             "individuals_count": len(individuals),
-            "individuals_preview": preview,
         },
     }
     record_tool_call("consultar_stock", "success", 200, perf_counter() - started_at)

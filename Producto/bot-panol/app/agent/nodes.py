@@ -5,6 +5,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from time import perf_counter
 
 from app.agent.state import AgentState
+from app.client.context import get_user_role
 from app.config import settings
 from app.observability.logger import log_event
 from app.observability.metrics import record_llm_call
@@ -28,7 +29,8 @@ def _build_model(*, with_tools: bool) -> object:
     if not with_tools:
         return llm
 
-    tools = list(get_tools())
+    role = get_user_role()
+    tools = list(get_tools(role))
     return llm.bind_tools(tools)
 
 

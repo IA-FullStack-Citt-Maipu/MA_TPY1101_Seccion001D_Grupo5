@@ -10,6 +10,7 @@ def _initial_state() -> dict:
     return {
         "messages": [HumanMessage(content="hola")],
         "user_role": "COORDINADOR",
+        "user_uuid": "11111111-1111-1111-1111-111111111111",
         "conversation_id": "test-conversation",
         "tools_used": [],
     }

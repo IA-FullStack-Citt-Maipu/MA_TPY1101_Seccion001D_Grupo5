@@ -164,7 +164,7 @@ def test_chat_with_allowed_role_returns_tools_used_in_execution_order(monkeypatc
                 "conversation_id": state["conversation_id"],
             }
 
-    monkeypatch.setattr("app.api.v1.chat.get_graph", lambda: FakeGraph())
+    monkeypatch.setattr("app.api.v1.chat.get_graph", lambda _role=None: FakeGraph())
 
     response = client.post(
         "/api/v1/chat",
@@ -191,7 +191,7 @@ def test_chat_returns_503_when_llm_is_unavailable(monkeypatch) -> None:  # type:
         def invoke(self, state, config=None):
             raise LLMServiceUnavailableError("provider down")
 
-    monkeypatch.setattr("app.api.v1.chat.get_graph", lambda: FailingGraph())
+    monkeypatch.setattr("app.api.v1.chat.get_graph", lambda _role=None: FailingGraph())
 
     response = client.post(
         "/api/v1/chat",
@@ -204,3 +204,49 @@ def test_chat_returns_503_when_llm_is_unavailable(monkeypatch) -> None:  # type:
         "detail": "LLM_UNAVAILABLE",
         "message": "El servicio de IA no esta disponible temporalmente.",
     }
+
+
+def test_chat_blocks_write_requests_before_invoking_graph(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    _configure_jwt_settings(monkeypatch)
+    client = TestClient(app)
+    token = _make_signed_jwt(role="COORDINADOR")
+
+    class UnexpectedGraph:
+        def invoke(self, state, config=None):
+            raise AssertionError("graph should not be invoked")
+
+    monkeypatch.setattr("app.api.v1.chat.get_graph", lambda _role=None: UnexpectedGraph())
+
+    response = client.post(
+        "/api/v1/chat",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"message": "Aprueba este prestamo ahora mismo"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["tools_used"] == []
+    assert "solo puedo ayudarte con consultas de lectura" in body["response"].lower()
+
+
+def test_chat_blocks_sensitive_traceability_requests_for_director(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    _configure_jwt_settings(monkeypatch)
+    client = TestClient(app)
+    token = _make_signed_jwt(role="DIRECTOR")
+
+    class UnexpectedGraph:
+        def invoke(self, state, config=None):
+            raise AssertionError("graph should not be invoked")
+
+    monkeypatch.setattr("app.api.v1.chat.get_graph", lambda _role=None: UnexpectedGraph())
+
+    response = client.post(
+        "/api/v1/chat",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"message": "Quien movio este implemento y que notas internas dejo?"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["tools_used"] == []
+    assert "datos sensibles" in body["response"].lower()
