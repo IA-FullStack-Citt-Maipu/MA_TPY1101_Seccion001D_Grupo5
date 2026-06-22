@@ -223,6 +223,22 @@ export function InventoryItemDetailPage({
   const [labelIndividualUuid, setLabelIndividualUuid] = useState<string | null>(null);
   const [labelPreviewUrl, setLabelPreviewUrl] = useState<string | null>(null);
   const [labelBusy, setLabelBusy] = useState(false);
+  const locationNameByUuid = new Map(locations.map((location) => [location.uuid, location.name] as const));
+  const labelIndividual =
+    labelScope === "INDIVIDUAL"
+      ? (stockDetail?.individuals ?? []).find((individual) => individual.uuid === labelIndividualUuid) ?? null
+      : null;
+  const labelDisplayCode =
+    labelScope === "INDIVIDUAL"
+      ? labelIndividual?.asset_code?.trim() || null
+      : implement?.barcode?.trim() || null;
+
+  function resolveLocationName(locationUuid: string | null): string {
+    if (!locationUuid) {
+      return "Sin ubicación";
+    }
+    return locationNameByUuid.get(locationUuid) ?? "Sin ubicación";
+  }
 
   useEffect(() => {
     const hasModalOpen =
@@ -360,7 +376,7 @@ export function InventoryItemDetailPage({
     }
 
     const stamp = Date.now();
-    return Array.from({ length: quantity }).map((_, idx) => `IMP-${implementUuid.slice(0, 8)}-${stamp}-${idx + 1}`);
+    return Array.from({ length: quantity }).map((_, idx) => `IND-${stamp}-${String(idx + 1).padStart(2, "0")}`);
   }
 
   async function registerInventoryTrace(action: ManualMovementType, quantity: number, notes: string) {
@@ -749,20 +765,19 @@ export function InventoryItemDetailPage({
                   <div className="table-wrapper">
                     <table className="category-table">
                       <thead>
-                        <tr><th>ID individual</th><th>Código</th><th>Estado</th><th>Condición</th><th>Ubicación</th><th>Acciones</th></tr>
+                        <tr><th>Código</th><th>Estado</th><th>Condición</th><th>Ubicación</th><th>Acciones</th></tr>
                       </thead>
                       <tbody>
                         {(stockDetail?.individuals ?? []).map((individual: IndividualItem) => (
                           <tr key={individual.uuid}>
-                            <td>{individual.uuid}</td>
-                            <td>{individual.asset_code}</td>
+                            <td>{individual.asset_code || "-"}</td>
                             <td>
                               <span className={`badge ${individual.status === "available" ? "badge--active" : individual.status === "damaged" ? "badge--danger" : "badge--inactive"}`}>
                                 {statusLabel(individual.status)}
                               </span>
                             </td>
                             <td><span className="badge badge--active">{conditionLabel(individual.condition)}</span></td>
-                            <td>{individual.current_location_uuid ?? "-"}</td>
+                            <td>{resolveLocationName(individual.current_location_uuid)}</td>
                             <td className="table-actions">
                               <button type="button" className="button button--table button--ghost" disabled={stockBusy} onClick={() => openIndividualEditor(individual)}><Edit3 size={14} />Editar</button>
                               <button type="button" className="button button--table button--ghost" disabled={stockBusy || individual.status === "available"} onClick={() => handleMarkIndividualAvailable(individual)}><CircleCheck size={14} />Marcar disponible</button>
@@ -980,7 +995,6 @@ export function InventoryItemDetailPage({
                             <thead>
                               <tr>
                                 <th />
-                                <th>ID</th>
                                 <th>Código</th>
                                 <th>Estado</th>
                               </tr>
@@ -1001,8 +1015,7 @@ export function InventoryItemDetailPage({
                                       }
                                     />
                                   </td>
-                                  <td>{individual.uuid}</td>
-                                  <td>{individual.asset_code}</td>
+                                  <td>{individual.asset_code || "-"}</td>
                                   <td>{statusLabel(individual.status)}</td>
                                 </tr>
                               ))}
@@ -1106,7 +1119,6 @@ export function InventoryItemDetailPage({
                     <thead>
                       <tr>
                         <th />
-                        <th>ID</th>
                         <th>Código</th>
                         <th>Estado</th>
                       </tr>
@@ -1121,8 +1133,7 @@ export function InventoryItemDetailPage({
                               onChange={() => toggleMovementIndividual(individual.uuid)}
                             />
                           </td>
-                          <td>{individual.uuid}</td>
-                          <td>{individual.asset_code}</td>
+                          <td>{individual.asset_code || "-"}</td>
                           <td>{statusLabel(individual.status)}</td>
                         </tr>
                       ))}
@@ -1213,7 +1224,7 @@ export function InventoryItemDetailPage({
         <div className="modal-overlay" role="dialog" aria-modal="true">
           <div className="modal" style={{ width: "min(100%, 820px)" }}>
             <h3>Vista previa código de barras</h3>
-            <p>{labelScope === "INDIVIDUAL" ? `Unidad individual #${labelIndividualUuid ?? "-"}` : "Código general del implemento"}</p>
+            <p>{labelScope === "INDIVIDUAL" ? (labelDisplayCode ? `Unidad individual ${labelDisplayCode}` : "Unidad individual") : "Código general del implemento"}</p>
             <div className="barcode-preview-surface">
               {labelBusy ? (
                 <div className="field-hint" style={{ padding: 12 }}>Cargando vista previa...</div>
@@ -1221,31 +1232,24 @@ export function InventoryItemDetailPage({
                 <div className="barcode-preview-label">
                   <strong>{implement.name}</strong>
                   <small>{labelScope === "INDIVIDUAL" ? "Unidad individual" : "Código general"}</small>
-                  <svg
-                    viewBox={`0 0 ${buildPseudoBarcodeBars(
-                      labelScope === "INDIVIDUAL"
-                        ? ((stockDetail?.individuals ?? []).find((row: IndividualItem) => row.uuid === labelIndividualUuid)?.asset_code ??
-                          `IND-${labelIndividualUuid ?? ""}`)
-                        : (implement.barcode ?? `IMP-${implement.uuid}`)
-                    ).width} 36`}
-                    preserveAspectRatio="none"
-                    className="barcode-preview-svg"
-                  >
-                    {buildPseudoBarcodeBars(
-                      labelScope === "INDIVIDUAL"
-                        ? ((stockDetail?.individuals ?? []).find((row: IndividualItem) => row.uuid === labelIndividualUuid)?.asset_code ??
-                          `IND-${labelIndividualUuid ?? ""}`)
-                        : (implement.barcode ?? `IMP-${implement.uuid}`)
-                    ).bars.map((bar, idx) => (
-                      <rect key={`bar-${idx}`} x={bar.x} y={2} width={bar.w} height={30} fill="#1b1b1b" />
-                    ))}
-                  </svg>
-                  <span className="barcode-preview-code">
-                    {labelScope === "INDIVIDUAL"
-                      ? ((stockDetail?.individuals ?? []).find((row: IndividualItem) => row.uuid === labelIndividualUuid)?.asset_code ??
-                        `IND-${labelIndividualUuid ?? ""}`)
-                      : (implement.barcode ?? `IMP-${implement.uuid}`)}
-                  </span>
+                  {labelDisplayCode ? (
+                    <>
+                      <svg
+                        viewBox={`0 0 ${buildPseudoBarcodeBars(labelDisplayCode).width} 36`}
+                        preserveAspectRatio="none"
+                        className="barcode-preview-svg"
+                      >
+                        {buildPseudoBarcodeBars(labelDisplayCode).bars.map((bar, idx) => (
+                          <rect key={`bar-${idx}`} x={bar.x} y={2} width={bar.w} height={30} fill="#1b1b1b" />
+                        ))}
+                      </svg>
+                      <span className="barcode-preview-code">{labelDisplayCode}</span>
+                    </>
+                  ) : (
+                    <div className="field-hint" style={{ paddingTop: 12 }}>
+                      No hay un código visible configurado para esta etiqueta.
+                    </div>
+                  )}
                 </div>
               )}
             </div>

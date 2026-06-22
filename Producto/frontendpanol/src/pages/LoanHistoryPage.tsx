@@ -87,10 +87,6 @@ function formatKpiDate(value: string | null): string {
     .replace(".", "");
 }
 
-function buildLoanCode(uuid: string): string {
-  return `#PS-${uuid.slice(0, 6).toUpperCase()}`;
-}
-
 function normalizeStatusLabel(status: string): string {
   const labels: Record<string, string> = {
     pending: "Pendiente",
@@ -275,8 +271,6 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
       }
 
       const searchableText = [
-        loan.uuid,
-        buildLoanCode(loan.uuid),
         loan.room?.name ?? "",
         loan.subject?.name ?? "",
         ...loan.items.map((item) => item.implement_name),
@@ -491,7 +485,6 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
           <table className="teacher-loans-table">
             <thead>
               <tr>
-                <th>ID / UUID</th>
                 <th>Fecha y hora</th>
                 <th>Sala / Lab</th>
                 <th>Resumen de implementos</th>
@@ -502,25 +495,19 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="teacher-loans-table__empty">
+                  <td colSpan={5} className="teacher-loans-table__empty">
                     Cargando historial de prestamos...
                   </td>
                 </tr>
               ) : pagedLoans.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="teacher-loans-table__empty">
+                  <td colSpan={5} className="teacher-loans-table__empty">
                     No hay prestamos que coincidan con los filtros seleccionados.
                   </td>
                 </tr>
               ) : (
                 pagedLoans.map((loan) => (
                   <tr key={loan.uuid}>
-                    <td>
-                      <div className="teacher-loans-id-cell">
-                        <strong>{buildLoanCode(loan.uuid)}</strong>
-                        <span>{loan.uuid}</span>
-                      </div>
-                    </td>
                     <td>{formatLoanDate(loan.scheduled_at)}</td>
                     <td>{loan.room?.name ?? "Sin sala"}</td>
                     <td className="teacher-loans-summary-cell">{summarizeItems(loan.items)}</td>
@@ -620,8 +607,7 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
           <div className="modal teacher-loans-delete-modal">
             <h3>Eliminar prestamo</h3>
             <p>
-              Seguro que quieres eliminar la solicitud {buildLoanCode(loanToDelete.uuid)}? Escribe{" "}
-              <strong>"{DELETE_CONFIRM_TEXT}"</strong> para confirmar.
+              Seguro que quieres eliminar esta solicitud? Escribe <strong>"{DELETE_CONFIRM_TEXT}"</strong> para confirmar.
             </p>
             <label htmlFor="loan-delete-confirmation">Confirmacion</label>
             <input

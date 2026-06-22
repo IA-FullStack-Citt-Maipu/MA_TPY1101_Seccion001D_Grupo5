@@ -47,10 +47,6 @@ function formatDateForInput(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-function buildLoanCode(uuid: string): string {
-  return `#LN-${uuid.slice(0, 6).toUpperCase()}`;
-}
-
 function formatSchedule(value: string): string {
   const date = parseDate(value);
   if (!date) {
@@ -220,8 +216,6 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
       }
 
       const rowText = [
-        loan.uuid,
-        loan.requester_uuid,
         loan.room?.name ?? "",
         loan.subject?.name ?? "",
         ...loan.items.map((item) => item.implement_name),
@@ -430,7 +424,7 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
             <Search size={16} />
             <input
               type="search"
-              placeholder="Buscar por UUID, solicitante o implemento..."
+              placeholder="Buscar por sala, asignatura o implemento..."
               value={searchTerm}
               onChange={(event) => {
                 setSearchTerm(event.target.value);
@@ -502,7 +496,6 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
             <thead>
               <tr>
                 <th>Estado</th>
-                <th>UUID / Solicitante</th>
                 <th>Fecha y hora</th>
                 <th>Ubicacion / Materia</th>
                 <th>Detalle items</th>
@@ -512,13 +505,13 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="coordinator-loans-empty">
+                  <td colSpan={5} className="coordinator-loans-empty">
                     Cargando solicitudes...
                   </td>
                 </tr>
               ) : pagedLoans.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="coordinator-loans-empty">
+                  <td colSpan={5} className="coordinator-loans-empty">
                     No hay prestamos que coincidan con los filtros seleccionados.
                   </td>
                 </tr>
@@ -530,12 +523,6 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
                     <tr key={loan.uuid}>
                       <td>
                         <span className={statusClassName(loan.status)}>{normalizeStatusLabel(loan.status)}</span>
-                      </td>
-                      <td>
-                        <div className="coordinator-loans-id-cell">
-                          <strong>{buildLoanCode(loan.uuid)}</strong>
-                          <span>{loan.requester_uuid}</span>
-                        </div>
                       </td>
                       <td>{formatSchedule(loan.scheduled_at)}</td>
                       <td>
@@ -651,9 +638,7 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
         <div className="modal-overlay">
           <div className="modal">
             <h3>Rechazar prestamo</h3>
-            <p>
-              Escribe el motivo de rechazo para la solicitud <strong>{buildLoanCode(rejectingLoan.uuid)}</strong>.
-            </p>
+            <p>Escribe el motivo de rechazo para esta solicitud.</p>
             <label htmlFor="rejection-reason">Motivo</label>
             <textarea
               id="rejection-reason"
@@ -690,9 +675,7 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
         <div className="modal-overlay">
           <div className="modal">
             <h3>Completar prestamo</h3>
-            <p>
-              Puedes agregar una nota opcional antes de cerrar la solicitud <strong>{buildLoanCode(completingLoan.uuid)}</strong>.
-            </p>
+            <p>Puedes agregar una nota opcional antes de cerrar esta solicitud.</p>
             <label htmlFor="completion-notes">Notas</label>
             <textarea
               id="completion-notes"

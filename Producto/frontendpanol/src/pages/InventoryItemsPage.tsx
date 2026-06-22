@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, ClipboardCheck, Eye, PencilLine, Plus, Search, ShieldAlert, TriangleAlert, X } from "lucide-react";
+import { Boxes, ChevronDown, ChevronLeft, ChevronRight, ClipboardCheck, Eye, PencilLine, Plus, Search, ShieldAlert, TriangleAlert, X } from "lucide-react";
 import { InventoryLayout } from "../components/layout/InventoryLayout";
 import { fetchImplements } from "../services/implementService";
 import { fetchActiveCategories } from "../services/activeCategoryService";
@@ -202,8 +202,7 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
     return allImplements.filter((row) => {
       const nameMatch = row.name?.toLowerCase().includes(query);
       const barcodeMatch = row.barcode?.toLowerCase().includes(query) ?? false;
-      const uuidMatch = row.uuid.toLowerCase().includes(query);
-      const queryMatch = query.length === 0 || nameMatch || barcodeMatch || uuidMatch;
+      const queryMatch = query.length === 0 || nameMatch || barcodeMatch;
 
       const categoryMatch =
         selectedCategoryUuids.length === 0 || (row.category?.uuid != null && selectedCategoryUuids.includes(row.category.uuid));
@@ -341,7 +340,7 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
                 <input
                   id="catalog-filter-name"
                   type="search"
-                  placeholder="Filtrar por nombre o ID..."
+                  placeholder="Filtrar por nombre o codigo de barras..."
                   value={searchFilter}
                   onChange={(event) => setSearchFilter(event.target.value)}
                 />
@@ -371,14 +370,13 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
                   {!categoriesLoading && categoryOptions.map((category) => {
                     const checked = selectedCategoryUuids.includes(category.uuid);
                     return (
-                      <label key={category.uuid} className="inventory-multiselect__option">
+                      <label key={category.uuid} className={checked ? "inventory-multiselect__option is-selected" : "inventory-multiselect__option"}>
+                        <span>{category.name}</span>
                         <input
                           type="checkbox"
                           checked={checked}
                           onChange={() => toggleCategorySelection(category.uuid)}
                         />
-                        <span>{category.name}</span>
-                        {checked ? <Check size={14} /> : null}
                       </label>
                     );
                   })}
@@ -407,14 +405,13 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
                   {STOCK_FILTER_OPTIONS.map((status) => {
                     const checked = selectedStockStatuses.includes(status);
                     return (
-                      <label key={status} className="inventory-multiselect__option">
+                      <label key={status} className={checked ? "inventory-multiselect__option is-selected" : "inventory-multiselect__option"}>
+                        <span>{STOCK_FILTER_LABELS[status]}</span>
                         <input
                           type="checkbox"
                           checked={checked}
                           onChange={() => toggleStockStatusSelection(status)}
                         />
-                        <span>{STOCK_FILTER_LABELS[status]}</span>
-                        {checked ? <Check size={14} /> : null}
                       </label>
                     );
                   })}
@@ -533,9 +530,7 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
                             />
                             <div className="inventory-item-cell__copy">
                               <strong>{row.name}</strong>
-                              <span className="inventory-item-cell__id">
-                                ID: {(row.barcode ?? row.uuid.slice(0, 8)).toUpperCase()}
-                              </span>
+                              {row.barcode ? <span className="inventory-item-cell__id">Codigo: {row.barcode.toUpperCase()}</span> : null}
                             </div>
                           </div>
                         </td>

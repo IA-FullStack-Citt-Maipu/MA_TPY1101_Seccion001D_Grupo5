@@ -448,7 +448,6 @@ export function LoanCreatePage({
         implement.name,
         implement.category?.name ?? "",
         implement.barcode ?? "",
-        implement.uuid,
       ]
         .join(" ")
         .toLowerCase();
@@ -469,7 +468,7 @@ export function LoanCreatePage({
   const visiblePageNumbers = useMemo(() => {
     const windowSize = 5;
     let start = Math.max(1, safeResultsPage - 2);
-    let end = Math.min(totalResultPages, start + windowSize - 1);
+    const end = Math.min(totalResultPages, start + windowSize - 1);
     start = Math.max(1, end - windowSize + 1);
     return Array.from({ length: end - start + 1 }, (_, index) => start + index);
   }, [safeResultsPage, totalResultPages]);
@@ -897,9 +896,6 @@ export function LoanCreatePage({
           <p className="text-muted">Cargando datos de la solicitud para modificacion...</p>
         </div>
       ) : null}
-      {isEditMode && editingLoan ? (
-        <div className="field-hint">Editando solicitud {editingLoan.uuid}</div>
-      ) : null}
 
       {editBlockedMessage ? (
         <div className="panel">
@@ -1070,7 +1066,7 @@ export function LoanCreatePage({
                 id="loan-search-input"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Buscar por nombre, categoria o ID"
+                placeholder="Buscar por nombre, categoria o codigo"
                 disabled={saving}
               />
             </label>

@@ -352,10 +352,9 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
             ) : (
               filteredMovements.map((m: InventoryMovementDetail) => {
                 const implementInfo = m.implement_uuid ? implementByUuid.get(m.implement_uuid) : undefined;
-                const shortUuid = m.implement_uuid ? m.implement_uuid.slice(0, 8) : "sin-uuid";
                 return (
                   <tr key={m.uuid} className="table-row-hover">
-                    <td>{implementInfo?.name ?? `Implemento #${shortUuid}`}</td>
+                    <td>{implementInfo?.name ?? "Implemento no disponible"}</td>
                     <td>{implementInfo?.category?.name ?? "Sin categoría"}</td>
                     <td>{new Date(m.timestamp).toLocaleString()}</td>
                     <td>

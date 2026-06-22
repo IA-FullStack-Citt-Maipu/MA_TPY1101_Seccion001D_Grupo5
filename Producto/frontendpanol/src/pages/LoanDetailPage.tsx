@@ -6,7 +6,6 @@ import {
   CheckCircle2,
   ClipboardList,
   Clock3,
-  Copy,
   Edit3,
   Info,
   MapPin,
@@ -210,7 +209,6 @@ export function LoanDetailPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreatedBanner, setShowCreatedBanner] = useState(false);
-  const [copyFeedback, setCopyFeedback] = useState<"" | "ok" | "error">("");
   const [stateDates, setStateDates] = useState<LoanStateDates | null>(null);
   const [timeline, setTimeline] = useState<LoanStatusTimelineEntry[]>([]);
   const [loadingTraceability, setLoadingTraceability] = useState(false);
@@ -511,21 +509,6 @@ export function LoanDetailPage({
     }
   }
 
-  async function copyLoanUuid() {
-    if (!loan) {
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(loan.uuid);
-      setCopyFeedback("ok");
-      window.setTimeout(() => setCopyFeedback(""), 1200);
-    } catch {
-      setCopyFeedback("error");
-      window.setTimeout(() => setCopyFeedback(""), 1500);
-    }
-  }
-
   function openDeleteModal() {
     setDeleteConfirmationInput("");
     setDeleteNotes("");
@@ -595,20 +578,8 @@ export function LoanDetailPage({
         <>
           <section className="teacher-loan-detail-header">
             <div>
-              <p className="teacher-loan-detail-header__eyebrow">UUID DE SOLICITUD</p>
-              <div className="teacher-loan-detail-header__uuid">
-                <h1>{loan.uuid}</h1>
-                <button
-                  type="button"
-                  className="teacher-loan-detail-copy-btn"
-                  onClick={copyLoanUuid}
-                  aria-label="Copiar UUID"
-                >
-                  <Copy size={16} />
-                </button>
-              </div>
-              {copyFeedback === "ok" ? <small>UUID copiado.</small> : null}
-              {copyFeedback === "error" ? <small>No se pudo copiar.</small> : null}
+              <p className="teacher-loan-detail-header__eyebrow">Solicitud de prestamo</p>
+              <h1>Detalle de solicitud</h1>
             </div>
             <span className={statusClassName(loan.status)}>{normalizeStatusLabel(loan.status)}</span>
           </section>
@@ -765,10 +736,7 @@ export function LoanDetailPage({
                               <div className="teacher-loan-detail-item-cell__thumb">
                                 <Package2 size={18} />
                               </div>
-                              <div>
-                                <strong>{item.implement_name}</strong>
-                                <small>{item.implement_uuid}</small>
-                              </div>
+                              <strong>{item.implement_name}</strong>
                             </div>
                           </td>
                           <td>{item.requested_quantity}</td>

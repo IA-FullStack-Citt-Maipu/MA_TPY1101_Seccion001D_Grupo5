@@ -139,6 +139,18 @@ textarea {
   display: grid;
   place-items: center;
   color: var(--brand-700);
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+}
+
+.topbar__icon:hover,
+.topbar__icon:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(26, 98, 203, 0.28);
+  background: #eef4ff;
+  color: #0c2f75;
+  box-shadow: 0 10px 20px rgba(26, 98, 203, 0.16);
+  outline: none;
 }
 
 .topbar__avatar {
@@ -4439,8 +4451,16 @@ a:focus-visible {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   font-size: 14px;
   font-family: "Inter", sans-serif;
+  text-align: left;
+}
+
+.inventory-multiselect__trigger span {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.2;
 }
 
 .inventory-multiselect__menu {
@@ -4455,27 +4475,44 @@ a:focus-visible {
   border-radius: var(--radius-md);
   background: #ffffff;
   box-shadow: 0 10px 24px rgba(12, 47, 117, 0.12);
-  padding: 6px;
+  padding: 8px;
+  overscroll-behavior: contain;
 }
 
 .inventory-multiselect__option {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
+  display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 12px;
   border-radius: 8px;
-  padding: 8px;
+  padding: 10px 12px;
+  min-height: 44px;
   cursor: pointer;
   font-size: 13px;
+  transition: background-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+
+.inventory-multiselect__option span {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.25;
+  text-wrap: balance;
 }
 
 .inventory-multiselect__option input {
   margin: 0;
   accent-color: #0c2f75;
+  flex-shrink: 0;
 }
 
 .inventory-multiselect__option:hover {
   background: #f4f6fb;
+}
+
+.inventory-multiselect__option.is-selected {
+  background: #eef4ff;
+  color: #0c2f75;
+  box-shadow: inset 0 0 0 1px rgba(26, 98, 203, 0.14);
 }
 
 .inventory-multiselect__hint {
@@ -10135,6 +10172,12 @@ a:focus-visible {
 
 :root[data-theme="dark"] .inventory-multiselect__option:hover {
   background: rgba(55, 112, 247, 0.09);
+}
+
+:root[data-theme="dark"] .inventory-multiselect__option.is-selected {
+  background: rgba(96, 165, 250, 0.16);
+  color: #dbeafe;
+  box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.24);
 }
 
 :root[data-theme="dark"] .inventory-multiselect__hint,

@@ -7,7 +7,6 @@ import type { InventoryMovementDetail } from "../types/implement";
 interface MonitoringRow {
   eventId: string;
   aggregateType: string;
-  aggregateId: string | null;
   eventType: string;
   payloadPreview: string;
   occurredAt: string;
@@ -20,7 +19,6 @@ function mapMovementToRow(movement: InventoryMovementDetail): MonitoringRow {
   return {
     eventId: movement.uuid,
     aggregateType: "implement",
-    aggregateId: movement.implement_uuid,
     eventType: movement.action,
     payloadPreview: JSON.stringify({
       notes: movement.notes,
@@ -112,7 +110,7 @@ export function OutboxMonitoringPage({ embedded = false }: { embedded?: boolean 
     const normalized = query.trim().toLowerCase();
     if (!normalized) return rows;
     return rows.filter((row) => {
-      const rowText = [row.eventId, row.aggregateType, row.aggregateId ?? "", row.eventType, row.payloadPreview]
+      const rowText = [row.aggregateType, row.eventType, row.payloadPreview]
         .join(" ")
         .toLowerCase();
       return rowText.includes(normalized);
@@ -169,7 +167,7 @@ export function OutboxMonitoringPage({ embedded = false }: { embedded?: boolean 
             <Search size={15} />
             <input
               type="search"
-              placeholder="Buscar por event_id, agregado o tipo..."
+              placeholder="Buscar por agregado, tipo o contenido..."
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
@@ -183,7 +181,6 @@ export function OutboxMonitoringPage({ embedded = false }: { embedded?: boolean 
           <table className="outbox-monitoring-table">
             <thead>
               <tr>
-                <th>Event ID</th>
                 <th>Aggregate</th>
                 <th>Event type</th>
                 <th>Payload</th>
@@ -195,7 +192,7 @@ export function OutboxMonitoringPage({ embedded = false }: { embedded?: boolean 
             <tbody>
               {!loading && filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="outbox-monitoring-empty">
+                  <td colSpan={6} className="outbox-monitoring-empty">
                     <AlertTriangle size={15} />
                     Sin eventos para los filtros aplicados.
                   </td>
@@ -204,11 +201,9 @@ export function OutboxMonitoringPage({ embedded = false }: { embedded?: boolean 
               {!loading
                 ? filteredRows.map((row) => (
                     <tr key={row.eventId}>
-                      <td>{shorten(row.eventId, 18)}</td>
                       <td>
                         <div className="outbox-monitoring-aggregate-cell">
                           <strong>{row.aggregateType}</strong>
-                          <small>{shorten(row.aggregateId ?? "-", 16)}</small>
                         </div>
                       </td>
                       <td>{prettyEventName(row.eventType)}</td>

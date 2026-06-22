@@ -674,7 +674,6 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
           <article className="loan-delivery-main">
             <header className="loan-delivery-main__meta">
               <div>
-                <p><strong>Prestamo:</strong> {loan.uuid}</p>
                 <p><strong>Sala:</strong> {loan.room?.name ?? "Sin sala"}</p>
                 <p><strong>Programado:</strong> {formatDateTime(loan.scheduled_at)}</p>
               </div>

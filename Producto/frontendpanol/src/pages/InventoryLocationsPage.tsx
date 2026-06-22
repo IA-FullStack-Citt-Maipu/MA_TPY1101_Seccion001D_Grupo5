@@ -226,7 +226,6 @@ export function InventoryLocationsPage({ embedded = false }: { embedded?: boolea
           <table className="category-table">
             <thead>
               <tr>
-                <th>UUID</th>
                 <th>Nombre</th>
                 <th>Descripcion</th>
                 <th>Estado</th>
@@ -236,16 +235,15 @@ export function InventoryLocationsPage({ embedded = false }: { embedded?: boolea
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="table-hint">Cargando ubicaciones...</td>
+                  <td colSpan={4} className="table-hint">Cargando ubicaciones...</td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="table-hint">No hay ubicaciones para el filtro actual.</td>
+                  <td colSpan={4} className="table-hint">No hay ubicaciones para el filtro actual.</td>
                 </tr>
               ) : (
                 filtered.map((location) => (
                   <tr key={location.uuid ?? location.name}>
-                    <td>{location.uuid ?? "-"}</td>
                     <td>{location.name}</td>
                     <td>{location.description ?? "-"}</td>
                     <td>

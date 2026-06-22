@@ -14,3 +14,5 @@
 \ir ./V38__token_revocation_cleanup_index.sql
 \ir ./V39__notification_inbox_v1.sql
 \ir ./V40__notification_role_routing_and_stock_alerts.sql
+\ir ./V41__email_outbox_resend_pipeline.sql
+\ir ./V42__fix_loan_request_notification_title.sql

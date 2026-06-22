@@ -192,7 +192,6 @@ function LoanCalendarDayDrawer({
               </div>
               <strong>{loan.room?.name ?? "Sin sala"}</strong>
               <p>{loan.subject?.name ?? "Sin asignatura"}</p>
-              <p className="loan-calendar-loan-card__meta">{loan.requester_uuid}</p>
               <p className="loan-calendar-loan-card__items">
                 <Package2 size={14} />
                 {summarizeItems(loan)}
