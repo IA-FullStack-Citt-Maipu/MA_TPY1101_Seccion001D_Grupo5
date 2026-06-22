@@ -29,6 +29,7 @@ import com.panol_project.backendpanol.shared.error.ApiException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Delayed;
@@ -121,7 +122,7 @@ class SolicitarPrestamoPersistenceTest {
                 requesterUuid,
                 roomUuid,
                 subjectUuid,
-                OffsetDateTime.parse("2026-06-22T10:15:00-04:00"),
+                futureAt(1, 10, 15),
                 null,
                 null,
                 List.of(new SolicitarPrestamoItemCommand(implementUuid, 3))
@@ -208,7 +209,7 @@ class SolicitarPrestamoPersistenceTest {
                             requesterUuid,
                             roomUuid,
                             subjectUuid,
-                            OffsetDateTime.parse("2026-06-23T11:00:00-04:00"),
+                            futureAt(2, 11, 0),
                             null,
                             null,
                             List.of(new SolicitarPrestamoItemCommand(implementUuid, 1))
@@ -253,7 +254,7 @@ class SolicitarPrestamoPersistenceTest {
                 requesterUuid,
                 roomUuid,
                 subjectUuid,
-                OffsetDateTime.parse("2026-06-24T09:30:00-04:00"),
+                futureAt(3, 9, 30),
                 null,
                 null,
                 List.of(new SolicitarPrestamoItemCommand(implementUuid, 2))
@@ -277,8 +278,8 @@ class SolicitarPrestamoPersistenceTest {
                 requesterUuid,
                 roomUuid,
                 subjectUuid,
-                OffsetDateTime.parse("2026-06-25T10:00:00-04:00"),
-                OffsetDateTime.parse("2026-06-25T12:00:00-04:00"),
+                futureAt(4, 10, 0),
+                futureAt(4, 12, 0),
                 null,
                 List.of(new SolicitarPrestamoItemCommand(implementUuid, 1))
         ));
@@ -288,8 +289,8 @@ class SolicitarPrestamoPersistenceTest {
                 requesterUuid,
                 roomUuid,
                 subjectUuid,
-                OffsetDateTime.parse("2026-06-25T15:00:00-04:00"),
-                OffsetDateTime.parse("2026-06-25T17:00:00-04:00"),
+                futureAt(4, 15, 0),
+                futureAt(4, 17, 0),
                 null,
                 List.of(new SolicitarPrestamoItemCommand(implementUuid, 1))
         ));
@@ -313,8 +314,8 @@ class SolicitarPrestamoPersistenceTest {
                 requesterUuid,
                 roomUuid,
                 subjectUuid,
-                OffsetDateTime.parse("2026-06-26T10:00:00-04:00"),
-                OffsetDateTime.parse("2026-06-26T12:00:00-04:00"),
+                futureAt(5, 10, 0),
+                futureAt(5, 12, 0),
                 null,
                 List.of(new SolicitarPrestamoItemCommand(implementUuid, 1))
         ));
@@ -324,8 +325,8 @@ class SolicitarPrestamoPersistenceTest {
                 requesterUuid,
                 roomUuid,
                 subjectUuid,
-                OffsetDateTime.parse("2026-06-26T11:00:00-04:00"),
-                OffsetDateTime.parse("2026-06-26T13:00:00-04:00"),
+                futureAt(5, 11, 0),
+                futureAt(5, 13, 0),
                 null,
                 List.of(new SolicitarPrestamoItemCommand(implementUuid, 1))
         )));
@@ -472,6 +473,15 @@ class SolicitarPrestamoPersistenceTest {
 
     private String notificationMessage(String requesterName) {
         return "El docente " + requesterName + " ha enviado una nueva solicitud";
+    }
+
+    private OffsetDateTime futureAt(int daysFromNow, int hour, int minute) {
+        return OffsetDateTime.now(ZoneOffset.ofHours(-4))
+                .plusDays(daysFromNow)
+                .withHour(hour)
+                .withMinute(minute)
+                .withSecond(0)
+                .withNano(0);
     }
 
     private void cleanupLoans() {
