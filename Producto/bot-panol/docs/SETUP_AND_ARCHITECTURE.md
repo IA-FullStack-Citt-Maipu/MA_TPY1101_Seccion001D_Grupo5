@@ -6,6 +6,20 @@
 HTTP basada en FastAPI y utiliza LangGraph para orquestar consultas al backend de
 inventario y generar respuestas contextuales con Gemini.
 
+## Capacidades vigentes del asistente
+
+El bot esta orientado exclusivamente a consultas de lectura y actualmente puede:
+
+- identificar implementos bajo stock minimo;
+- listar prestamos programados para hoy o para una fecha especifica;
+- consultar disponibilidad y distribucion de stock de un implemento;
+- listar prestamos vencidos (`overdue`);
+- contar cuantos prestamos historicos ha tenido un producto;
+- recomendar reposicion con una regla operativa simple;
+- resumir el inventario agrupado por categoria.
+
+No implementa la HU-72 de ranking semestral.
+
 ## Requisitos Previos
 
 - Docker Desktop o Docker Engine con Compose habilitado.
@@ -79,6 +93,15 @@ Contrato vigente:
   `DIRECTOR`).
 
 El bot no depende de leer JWT desde `localStorage` ni `sessionStorage`.
+
+### Politica conversacional vigente
+
+- El bot bloquea antes del LLM solicitudes de escritura, cambios de estado o
+  intentos de bypass de permisos.
+- `COORDINADOR` recibe lectura operativa controlada.
+- `DIRECTOR` recibe solo resumenes agregados y ejecutivos.
+- El bot no expone `requester_uuid`, `performed_by`, `notes`, `asset_code` ni
+  trazabilidad fina hacia el modelo ni en la respuesta final.
 
 Request:
 
