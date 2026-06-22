@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from app.agent.graph import get_graph
 from app.agent.nodes import LLMServiceUnavailableError, extract_text_content
+from app.agent.policy import evaluate_message_policy
 from app.agent.prompts import build_system_prompt
 from app.auth.jwt_auth import (
     TokenValidationError,
@@ -15,7 +16,7 @@ from app.auth.jwt_auth import (
     extract_role_from_claims,
     verify_and_decode_jwt,
 )
-from app.client.context import get_request_id, set_token
+from app.client.context import get_request_id, set_token, set_user_role, set_user_uuid
 from app.config import settings
 from app.observability.logger import log_event
 
@@ -83,6 +84,12 @@ def _extract_executed_tools(messages: list[BaseMessage]) -> list[str]:
     return tools_used
 
 
+def _build_policy_source_text(payload: ChatRequest) -> str:
+    relevant_history = [item.content for item in payload.history[-5:] if item.role == "user"]
+    relevant_history.append(payload.message)
+    return " ".join(relevant_history)
+
+
 @router.post("/chat", response_model=ChatResponse)
 def chat(payload: ChatRequest, authorization: str | None = Header(default=None)) -> ChatResponse | JSONResponse:
     request_id = get_request_id()
@@ -108,11 +115,30 @@ def chat(payload: ChatRequest, authorization: str | None = Header(default=None))
         return _forbidden("ROLE_NOT_ALLOWED")
 
     conversation_id = payload.conversation_id or str(uuid4())
+    user_uuid = str(claims.get("sub") or "").strip()
     set_token(token)
+    set_user_role(role)
+    set_user_uuid(user_uuid)
+
+    policy_decision = evaluate_message_policy(role, _build_policy_source_text(payload))
+    if not policy_decision.allowed:
+        log_event(
+            "chat_policy_blocked",
+            request_id=request_id,
+            conversation_id=conversation_id,
+            user_role=role,
+            policy_code=policy_decision.code,
+        )
+        return ChatResponse(
+            response=policy_decision.message or "No puedo responder esa solicitud dentro del alcance permitido.",
+            conversation_id=conversation_id,
+            tools_used=[],
+        )
 
     initial_state = {
         "messages": _build_messages(role, payload),
         "user_role": role,
+        "user_uuid": user_uuid,
         "conversation_id": conversation_id,
         "tools_used": [],
     }
@@ -124,7 +150,7 @@ def chat(payload: ChatRequest, authorization: str | None = Header(default=None))
         user_role=role,
     )
     try:
-        graph = get_graph()
+        graph = get_graph(role)
         result = graph.invoke(
             initial_state,
             config={"recursion_limit": settings.MAX_ITERATIONS},

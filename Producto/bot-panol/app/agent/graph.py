@@ -54,7 +54,11 @@ def build_graph(tools: list[Any] | None = None) -> Any:
 
 
 _GRAPH = build_graph()
+_ROLE_GRAPHS: dict[str, Any] = {"COORDINADOR": _GRAPH}
 
 
-def get_graph() -> Any:
-    return _GRAPH
+def get_graph(role: str = "COORDINADOR") -> Any:
+    normalized_role = (role or "").strip().upper() or "COORDINADOR"
+    if normalized_role not in _ROLE_GRAPHS:
+        _ROLE_GRAPHS[normalized_role] = build_graph(tools=list(get_tools(normalized_role)))
+    return _ROLE_GRAPHS[normalized_role]
