@@ -272,7 +272,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 .set(LOAN_STATUS_HISTORY.CHANGED_AT, now)
                 .execute();
 
-        dsl.fetch("select public.fn_notify_new_loan_request(?::uuid)", command.requesterUuid());
+        dsl.fetch("select public.fn_notify_new_loan_request(?::uuid, ?::uuid)", command.requesterUuid(), loanUuid);
 
         return new LoanAggregate(
                 insertedLoan.getUuid(),
@@ -325,6 +325,12 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 .set(LOAN_STATUS_HISTORY.NOTES, resolveStatusNotes("Solicitud modificada por docente", command.notes()))
                 .set(LOAN_STATUS_HISTORY.CHANGED_AT, OffsetDateTime.now())
                 .execute();
+
+        dsl.fetch(
+                "select public.fn_notify_pending_loan_updated(?::uuid, ?::uuid)",
+                command.requesterUuid(),
+                current.loanUuid()
+        );
 
         return new LoanAggregate(
                 current.loanUuid(),

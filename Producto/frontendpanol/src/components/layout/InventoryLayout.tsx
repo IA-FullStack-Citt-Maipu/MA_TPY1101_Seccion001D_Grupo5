@@ -1,6 +1,7 @@
-﻿import {
+import {
   Bell,
   Boxes,
+  Check,
   CircleHelp,
   ClipboardList,
   Headset,
@@ -12,16 +13,33 @@
   Menu,
   Search,
   Settings,
+  RotateCcw,
   Users,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import type { ReactNode } from "react";
+import { useInactivityPollingGate } from "../../hooks/useInactivityPollingGate";
 import { ChatWidget } from "../chat/ChatWidget";
 import { fetchImplements } from "../../services/implementService";
+import {
+  fetchNotificationsPage,
+  markNotificationAsRead,
+  markNotificationsAsRead,
+  markNotificationsAsUnread,
+} from "../../services/notificationService";
 import type { ImplementSummary } from "../../types/implement";
+import type { NotificationInboxItem, NotificationInboxPage } from "../../types/notification";
 import { normalizeUserRole, type UserRole } from "../../utils/auth";
+import {
+  dispatchNotificationReadStateStaged,
+  dispatchNotificationsChanged,
+  formatNotificationRelativeTime,
+  formatNotificationTimestamp,
+  NOTIFICATIONS_CHANGED_EVENT,
+  resolveNotificationHref,
+} from "../../utils/notifications";
 
 interface MenuItem {
   label: string;
@@ -62,6 +80,7 @@ export type InventorySection =
   | "loan-create"
   | "agenda"
   | "reports"
+  | "notifications"
   | "support"
   | "settings"
   | "director-dashboard"
@@ -72,6 +91,79 @@ export type NavigationMode = "inventory" | "director";
 export interface BreadcrumbPart {
   label: string;
   href?: string;
+}
+
+const NOTIFICATION_PREVIEW_SIZE = 5;
+const NOTIFICATION_TOGGLE_SYNC_DELAY_MS = 10000;
+const EMPTY_NOTIFICATION_PAGE: NotificationInboxPage = {
+  items: [],
+  page: 1,
+  size: NOTIFICATION_PREVIEW_SIZE,
+  totalItems: 0,
+  totalPages: 0,
+  hasNext: false,
+  hasPrevious: false,
+  unreadCount: 0,
+};
+
+function markNotificationPageItemAsRead(pageData: NotificationInboxPage, notificationUuid: string): NotificationInboxPage {
+  const targetItem = pageData.items.find((item) => item.uuid === notificationUuid);
+  if (!targetItem || targetItem.read) {
+    return pageData;
+  }
+
+  return {
+    ...pageData,
+    items: pageData.items.map((item) => (
+      item.uuid === notificationUuid ? { ...item, read: true } : item
+    )),
+    unreadCount: Math.max(0, pageData.unreadCount - 1),
+  };
+}
+
+function toggleNotificationPageItemReadState(pageData: NotificationInboxPage, notificationUuid: string): NotificationInboxPage {
+  const targetItem = pageData.items.find((item) => item.uuid === notificationUuid);
+  if (!targetItem) {
+    return pageData;
+  }
+
+  const nextRead = !targetItem.read;
+  const unreadCount = nextRead
+    ? Math.max(0, pageData.unreadCount - 1)
+    : pageData.unreadCount + 1;
+
+  return {
+    ...pageData,
+    items: pageData.items.map((item) => (
+      item.uuid === notificationUuid ? { ...item, read: nextRead } : item
+    )),
+    unreadCount,
+  };
+}
+
+function applyPendingNotificationReadStates(
+  pageData: NotificationInboxPage,
+  pendingStates: Map<string, boolean>,
+): NotificationInboxPage {
+  if (pendingStates.size === 0) {
+    return pageData;
+  }
+
+  let unreadDelta = 0;
+  const items = pageData.items.map((item) => {
+    const pendingRead = pendingStates.get(item.uuid);
+    const read = typeof pendingRead === "boolean" ? pendingRead : item.read;
+    if (read !== item.read) {
+      unreadDelta += read ? -1 : 1;
+    }
+    return read === item.read ? item : { ...item, read };
+  });
+
+  return {
+    ...pageData,
+    items,
+    unreadCount: Math.max(0, pageData.unreadCount + unreadDelta),
+  };
 }
 
 
@@ -196,6 +288,13 @@ export function TopBar({
   searchPlaceholder = "Buscar implementos...",
   showSearch = true,
   notificationCount = 0,
+  notificationItems = [],
+  notificationsLoading = false,
+  notificationsError = null,
+  onNotificationsOpen = () => {},
+  onNotificationMarkAsRead,
+  onNotificationSelect,
+  onNotificationsViewAll = () => {},
   userName = "Usuario",
   userRole = "COORDINADOR",
 }: {
@@ -206,6 +305,13 @@ export function TopBar({
   searchPlaceholder?: string;
   showSearch?: boolean;
   notificationCount?: number;
+  notificationItems?: NotificationInboxItem[];
+  notificationsLoading?: boolean;
+  notificationsError?: string | null;
+  onNotificationsOpen?: () => void;
+  onNotificationMarkAsRead?: (notification: NotificationInboxItem) => void | Promise<void>;
+  onNotificationSelect?: (notification: NotificationInboxItem) => void | Promise<void>;
+  onNotificationsViewAll?: () => void;
   userName?: string;
   userRole?: string;
 }) {
@@ -214,8 +320,10 @@ export function TopBar({
   const [suggestions, setSuggestions] = useState<ImplementSummary[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [hoverIndex, setHoverIndex] = useState<number>(-1);
   const searchRef = useRef<HTMLDivElement | null>(null);
+  const notificationsRef = useRef<HTMLDivElement | null>(null);
   const safeUserName = typeof userName === "string" && userName.trim().length > 0 ? userName : "Usuario";
   const userInitials = safeUserName
     .split(" ")
@@ -269,6 +377,27 @@ export function TopBar({
 
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
+
+  useEffect(() => {
+    function onClickOutside(event: MouseEvent) {
+      if (!notificationsRef.current) return;
+      if (!notificationsRef.current.contains(event.target as Node)) {
+        setNotificationsOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
+
+  useEffect(() => {
+    function handleHashChange() {
+      setNotificationsOpen(false);
+    }
+
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
 
   const shouldShowSuggestions = useMemo(
@@ -341,15 +470,147 @@ export function TopBar({
           ) : null}
         </div>
       ) : (
-        <div aria-hidden="true" />
+        <div className="topbar__search-spacer" aria-hidden="true" />
       )}
 
       <div className="topbar__user">
         <div className="topbar__actions">
-          <button type="button" className="topbar__icon topbar__icon--notify" aria-label="Notificaciones">
-            <Bell size={18} />
-            {notificationCount > 0 ? <span className="topbar__notify-badge">{notificationCount}</span> : null}
-          </button>
+          <div className="topbar__notifications" ref={notificationsRef}>
+            <button
+              type="button"
+              className={notificationsOpen ? "topbar__icon topbar__icon--notify is-active" : "topbar__icon topbar__icon--notify"}
+              aria-label="Notificaciones"
+              aria-expanded={notificationsOpen}
+              onClick={() => {
+                setNotificationsOpen((previous) => {
+                  const nextOpen = !previous;
+                  if (nextOpen) {
+                    onNotificationsOpen();
+                  }
+                  return nextOpen;
+                });
+              }}
+            >
+              <Bell size={18} />
+              {notificationCount > 0 ? <span className="topbar__notify-badge">{notificationCount > 99 ? "99+" : notificationCount}</span> : null}
+            </button>
+            {notificationsOpen ? (
+              <div className="notifications-dropdown" role="dialog" aria-label="Bandeja de notificaciones">
+                <div className="notifications-dropdown__header">
+                  <div>
+                    <strong>Notificaciones</strong>
+                    <p>{notificationCount} pendientes</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="button button--table"
+                    onClick={() => {
+                      setNotificationsOpen(false);
+                      onNotificationsViewAll();
+                    }}
+                  >
+                    Ver todas
+                  </button>
+                </div>
+                <div className="notifications-dropdown__body">
+                  {notificationsLoading ? (
+                    <div className="notifications-dropdown__state">
+                      <p>Cargando notificaciones...</p>
+                    </div>
+                  ) : notificationsError ? (
+                    <div className="notifications-dropdown__state">
+                      <p>{notificationsError}</p>
+                      <button type="button" className="button button--table" onClick={onNotificationsOpen}>
+                        Reintentar
+                      </button>
+                    </div>
+                  ) : notificationItems.length === 0 ? (
+                    <div className="notifications-dropdown__state">
+                      <p>No tienes notificaciones nuevas.</p>
+                    </div>
+                  ) : (
+                    <div className="notifications-dropdown__list">
+                      {notificationItems.map((notification) => {
+                        const href = resolveNotificationHref(notification);
+                        const quickMarkAsReadButton = (
+                          <button
+                            type="button"
+                            className="notifications-dropdown__quick-action"
+                            aria-label={notification.read
+                              ? `Marcar como no leida ${notification.title}`
+                              : `Marcar como leida ${notification.title}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void onNotificationMarkAsRead?.(notification);
+                            }}
+                          >
+                            {notification.read ? <RotateCcw size={15} /> : <Check size={15} />}
+                          </button>
+                        );
+                        const itemContent = (
+                          <>
+                            <div className="notifications-dropdown__title-row">
+                              <div className="notifications-dropdown__title">
+                                <span className={notification.read ? "notifications-dropdown__dot" : "notifications-dropdown__dot is-unread"} aria-hidden="true" />
+                                <div>
+                                  <strong>{notification.title}</strong>
+                                  <p>{notification.message}</p>
+                                </div>
+                              </div>
+                              {!notification.read ? <span className="notifications-dropdown__badge">Nueva</span> : null}
+                            </div>
+                            <div className="notifications-dropdown__meta">
+                              <time dateTime={notification.createdAt} title={formatNotificationTimestamp(notification.createdAt)}>
+                                {formatNotificationRelativeTime(notification.createdAt)}
+                              </time>
+                              <span>{href ? "Ver detalle" : "Informativa"}</span>
+                            </div>
+                          </>
+                        );
+
+                        if (!href) {
+                          return (
+                            <div
+                              key={notification.uuid}
+                              className={notification.read ? "notifications-dropdown__item is-static" : "notifications-dropdown__item is-unread is-static"}
+                            >
+                              <div className="notifications-dropdown__item-shell">
+                                <div className="notifications-dropdown__item-main">
+                                  {itemContent}
+                                </div>
+                                {quickMarkAsReadButton}
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div
+                            key={notification.uuid}
+                            className={notification.read ? "notifications-dropdown__item" : "notifications-dropdown__item is-unread"}
+                          >
+                            <div className="notifications-dropdown__item-shell">
+                              <button
+                                type="button"
+                                className="notifications-dropdown__item-main notifications-dropdown__item--button"
+                                onClick={() => {
+                                  setNotificationsOpen(false);
+                                  void onNotificationSelect?.(notification);
+                                }}
+                              >
+                                {itemContent}
+                              </button>
+                              {quickMarkAsReadButton}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </div>
           <button type="button" className="topbar__icon" aria-label="Soporte" onClick={onOpenSupport}>
             <CircleHelp size={18} />
           </button>
@@ -373,7 +634,6 @@ export function InventoryLayout({
   onOpenSupport = () => {},
   searchPlaceholder = "Buscar implementos...",
   showSearch = true,
-  notificationCount = 0,
   userName = "Usuario",
   role = "COORDINADOR",
   userRoleLabel = "COORDINADOR",
@@ -386,12 +646,17 @@ export function InventoryLayout({
   onOpenSupport?: () => void;
   searchPlaceholder?: string;
   showSearch?: boolean;
-  notificationCount?: number;
   userName?: string;
   role?: string;
   userRoleLabel?: string;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [notificationPreview, setNotificationPreview] = useState<NotificationInboxPage>(EMPTY_NOTIFICATION_PAGE);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [notificationsError, setNotificationsError] = useState<string | null>(null);
+  const { pollingPaused } = useInactivityPollingGate();
+  const pendingNotificationReadStateRef = useRef<Map<string, boolean>>(new Map());
+  const notificationSyncTimeoutRef = useRef<number | null>(null);
   const normalizedRole = normalizeUserRole(role);
   const canUseChatAssistant = normalizedRole === "COORDINADOR" || normalizedRole === "DIRECTOR";
 
@@ -406,11 +671,155 @@ export function InventoryLayout({
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  const refreshNotifications = useCallback(async (showLoading: boolean) => {
+    if (showLoading) {
+      setNotificationsLoading(true);
+    }
+
+    try {
+      const page = await fetchNotificationsPage({ page: 1, size: NOTIFICATION_PREVIEW_SIZE });
+      setNotificationPreview(applyPendingNotificationReadStates(page, pendingNotificationReadStateRef.current));
+      setNotificationsError(null);
+    } catch {
+      setNotificationsError("No fue posible cargar las notificaciones.");
+    } finally {
+      if (showLoading) {
+        setNotificationsLoading(false);
+      }
+    }
+  }, []);
+
+  const flushPendingNotificationReadStates = useCallback(async () => {
+    if (notificationSyncTimeoutRef.current !== null) {
+      window.clearTimeout(notificationSyncTimeoutRef.current);
+      notificationSyncTimeoutRef.current = null;
+    }
+
+    const snapshot = new Map(pendingNotificationReadStateRef.current);
+    if (snapshot.size === 0) {
+      return;
+    }
+
+    pendingNotificationReadStateRef.current.clear();
+
+    const markAsReadUuids: string[] = [];
+    const markAsUnreadUuids: string[] = [];
+
+    snapshot.forEach((read, uuid) => {
+      if (read) {
+        markAsReadUuids.push(uuid);
+      } else {
+        markAsUnreadUuids.push(uuid);
+      }
+    });
+
+    try {
+      if (markAsReadUuids.length > 0) {
+        await markNotificationsAsRead(markAsReadUuids);
+      }
+      if (markAsUnreadUuids.length > 0) {
+        await markNotificationsAsUnread(markAsUnreadUuids);
+      }
+      dispatchNotificationsChanged();
+    } catch {
+      dispatchNotificationsChanged();
+      void refreshNotifications(false);
+    }
+  }, [refreshNotifications]);
+
+  const schedulePendingNotificationReadStateSync = useCallback(() => {
+    if (notificationSyncTimeoutRef.current !== null) {
+      window.clearTimeout(notificationSyncTimeoutRef.current);
+    }
+
+    notificationSyncTimeoutRef.current = window.setTimeout(() => {
+      void flushPendingNotificationReadStates();
+    }, NOTIFICATION_TOGGLE_SYNC_DELAY_MS);
+  }, [flushPendingNotificationReadStates]);
+
+  useEffect(() => {
+    void refreshNotifications(true);
+  }, [refreshNotifications]);
+
+  useEffect(() => {
+    function handleNotificationsChanged() {
+      void refreshNotifications(false);
+    }
+
+    window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, handleNotificationsChanged);
+    return () => window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, handleNotificationsChanged);
+  }, [refreshNotifications]);
+
+  useEffect(() => {
+    if (pollingPaused) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void refreshNotifications(false);
+    }, 180000);
+
+    return () => window.clearInterval(intervalId);
+  }, [pollingPaused, refreshNotifications]);
+
+  useEffect(() => (
+    () => {
+      if (notificationSyncTimeoutRef.current !== null) {
+        window.clearTimeout(notificationSyncTimeoutRef.current);
+      }
+      void flushPendingNotificationReadStates();
+    }
+  ), [flushPendingNotificationReadStates]);
+
   function closeSidebarOnNavigate() {
     if (window.innerWidth <= 1100) {
       setSidebarOpen(false);
     }
   }
+
+  const handleNotificationsOpen = useCallback(() => {
+    void refreshNotifications(false);
+  }, [refreshNotifications]);
+
+  const handleNotificationSelect = useCallback(async (notification: NotificationInboxItem) => {
+    const href = resolveNotificationHref(notification);
+    if (!href) {
+      return;
+    }
+
+    pendingNotificationReadStateRef.current.delete(notification.uuid);
+    setNotificationPreview((previous) => markNotificationPageItemAsRead(previous, notification.uuid));
+
+    try {
+      await markNotificationAsRead(notification.uuid);
+      dispatchNotificationsChanged();
+    } catch {
+      // El refresh posterior reconciliara el estado.
+    }
+
+    window.location.hash = href;
+  }, []);
+
+  const handleNotificationMarkAsRead = useCallback(async (notification: NotificationInboxItem) => {
+    const nextRead = !notification.read;
+    setNotificationPreview((previous) => toggleNotificationPageItemReadState(previous, notification.uuid));
+    pendingNotificationReadStateRef.current.set(notification.uuid, nextRead);
+    dispatchNotificationReadStateStaged({
+      notificationUuid: notification.uuid,
+      read: nextRead,
+    });
+    schedulePendingNotificationReadStateSync();
+
+    try {
+      // Sync deferred on purpose to batch toggle actions.
+    } catch {
+      // no-op
+    }
+  }, [schedulePendingNotificationReadStateSync]);
+
+  const handleNotificationsViewAll = useCallback(() => {
+    window.location.hash = "#/notificaciones";
+  }, []);
 
   return (
     <div className={`app-shell ${sidebarOpen ? "app-shell--sidebar-open" : ""}`}>
@@ -429,7 +838,14 @@ export function InventoryLayout({
           onOpenSupport={onOpenSupport}
           searchPlaceholder={searchPlaceholder}
           showSearch={showSearch}
-          notificationCount={notificationCount}
+          notificationCount={notificationPreview.unreadCount}
+          notificationItems={notificationPreview.items}
+          notificationsLoading={notificationsLoading}
+          notificationsError={notificationsError}
+          onNotificationsOpen={handleNotificationsOpen}
+          onNotificationMarkAsRead={handleNotificationMarkAsRead}
+          onNotificationSelect={handleNotificationSelect}
+          onNotificationsViewAll={handleNotificationsViewAll}
           userName={userName}
           userRole={userRoleLabel}
         />
@@ -440,5 +856,4 @@ export function InventoryLayout({
     </div>
   );
 }
-
 

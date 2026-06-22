@@ -22,6 +22,7 @@ import { LoanDeliveryPage } from "./pages/LoanDeliveryPage";
 import { LoanHistoryPage } from "./pages/LoanHistoryPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
+import { NotificationsPage } from "./pages/NotificationsPage";
 import { SupportPage } from "./pages/SupportPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { logout } from "./services/authService";
@@ -224,6 +225,21 @@ function App() {
         activeSection: "director-dashboard",
         breadcrumbs: [{ label: "Director" }, { label: "Panel" }],
         content: <DirectorDashboardPage embedded />,
+      };
+    }
+
+    if (currentHash.startsWith("#/notificaciones")) {
+      return {
+        key: "notifications",
+        navigationMode: directorRole ? "director" : "inventory",
+        activeSection: "notifications",
+        breadcrumbs: directorRole
+          ? [{ label: "Director", href: "#/director/dashboard" }, { label: "Notificaciones" }]
+          : teacherRole
+            ? [{ label: "Prestamos", href: "#/inventory/prestamos" }, { label: "Notificaciones" }]
+            : [{ label: "Inventario", href: "#/inventory/dashboard" }, { label: "Notificaciones" }],
+        showSearch: false,
+        content: <NotificationsPage embedded />,
       };
     }
 
@@ -531,7 +547,6 @@ function App() {
       }}
       searchPlaceholder={routeView.searchPlaceholder ?? "Buscar implementos..."}
       showSearch={routeView.showSearch ?? isCoordinator(role)}
-      notificationCount={isDirector(role) ? 3 : 0}
       userName={sessionUser?.name?.trim() || "Usuario"}
       role={role}
       userRoleLabel={getRoleDisplayLabel(role)}
