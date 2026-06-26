@@ -4,7 +4,7 @@
 
 # Payloads Frontend / Backend
 
-- Ultima actualizacion: 2026-06-10
+- Ultima actualizacion: 2026-06-26
 - Alcance: contratos JSON usados por frontend y backend
 
 ## 1) Payload de error publico (backend -> frontend)
@@ -208,7 +208,8 @@ Errores funcionales esperados:
     "persistentLogin": true,
     "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/137.0.0.0",
     "createdAt": "2026-06-13T18:20:00Z",
-    "expiresAt": "2026-06-20T18:20:00Z"
+    "accessExpiresAt": "2026-06-13T19:20:00Z",
+    "sessionExpiresAt": "2026-06-20T18:20:00Z"
   }
 ]
 ```
@@ -216,6 +217,10 @@ Errores funcionales esperados:
 Notas:
 - `id` es string por contrato, aunque internamente provenga de `bigint`.
 - `userAgent` puede venir `null`.
+- `accessExpiresAt` representa el vencimiento del access token vigente para esa
+  sesion.
+- `sessionExpiresAt` representa el vencimiento total de la sesion refresh
+  almacenada en backend.
 - Nunca se exponen `refresh_token_hash` ni `currentAccessJti`.
 
 ### Request (`DELETE /api/v2/auth/me/sessions/{sessionId}`)

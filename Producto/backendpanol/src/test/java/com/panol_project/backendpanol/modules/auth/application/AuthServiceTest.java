@@ -39,6 +39,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.bcrypt.BCrypt;
@@ -110,6 +111,54 @@ class AuthServiceTest {
         verify(refreshSessionPort).createSession(eq(userUuid), anyString(), any(OffsetDateTime.class), eq("JUnit"), eq(true), anyString(), any(OffsetDateTime.class));
         verify(auditLogPort).log("user_logged_in", userUuid, userUuid, Map.of("rut", "12345678", "role", "DIRECTOR"));
         verify(outboxService).enqueue("user", userUuid, "UserLoggedIn", userUuid, Map.of("rut", "12345678", "role", "DIRECTOR"));
+    }
+
+    @Test
+    void loginConSesionTemporalDebeUsarTtlTemporalParaRefreshSession() {
+        UUID userUuid = UUID.randomUUID();
+        String hash = BCrypt.hashpw("secret", BCrypt.gensalt());
+        AuthUser authUser = new AuthUser(
+                userUuid,
+                "12345678",
+                "Docente Temporal",
+                "docente.temporal@panol.test",
+                hash,
+                "DOCENTE",
+                0,
+                null
+        );
+
+        when(userAuthPort.findAuthUserByRut("12345678")).thenReturn(Optional.of(authUser));
+        when(jwtEncoder.encode(any())).thenReturn(Jwt.withTokenValue("token-123")
+                .header("alg", "HS256")
+                .subject(userUuid.toString())
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(3600))
+                .build());
+
+        AuthService service = buildService();
+        OffsetDateTime before = OffsetDateTime.now(ZoneOffset.UTC);
+
+        LoginResult result = service.login(new LoginCommand("12.345.678-9", "secret", false, "JUnit"));
+
+        OffsetDateTime after = OffsetDateTime.now(ZoneOffset.UTC);
+        ArgumentCaptor<OffsetDateTime> expiresAtCaptor = ArgumentCaptor.forClass(OffsetDateTime.class);
+
+        assertFalse(result.refreshToken().isBlank());
+        assertFalse(result.persistentLogin());
+        verify(refreshSessionPort).createSession(
+                eq(userUuid),
+                anyString(),
+                expiresAtCaptor.capture(),
+                eq("JUnit"),
+                eq(false),
+                anyString(),
+                any(OffsetDateTime.class)
+        );
+
+        OffsetDateTime expiresAt = expiresAtCaptor.getValue();
+        assertFalse(expiresAt.isBefore(before.plusSeconds(86400)));
+        assertFalse(expiresAt.isAfter(after.plusSeconds(86401)));
     }
 
     @Test
@@ -187,6 +236,64 @@ class AuthServiceTest {
     }
 
     @Test
+    void refreshDeSesionTemporalDebeMantenerTtlTemporal() {
+        UUID userUuid = UUID.randomUUID();
+        AuthUser authUser = new AuthUser(
+                userUuid,
+                "12345678",
+                "Docente Temporal",
+                "docente.temporal@panol.test",
+                BCrypt.hashpw("secret", BCrypt.gensalt()),
+                "DOCENTE",
+                0,
+                null
+        );
+
+        when(refreshSessionPort.findSessionByTokenHash(anyString())).thenReturn(Optional.of(new RefreshSession(
+                54L,
+                userUuid,
+                sha256("refresh-raw-token"),
+                "Browser/1.0",
+                "old-access-jti",
+                OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(30),
+                OffsetDateTime.now(ZoneOffset.UTC).plusHours(12),
+                OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(10),
+                false
+        )));
+        when(userAuthPort.findAuthUserByUuid(userUuid)).thenReturn(Optional.of(authUser));
+        when(jwtEncoder.encode(any())).thenReturn(Jwt.withTokenValue("fresh-access-token")
+                .header("alg", "HS256")
+                .subject(userUuid.toString())
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(3600))
+                .build());
+
+        AuthService service = buildService();
+        OffsetDateTime before = OffsetDateTime.now(ZoneOffset.UTC);
+
+        RefreshResult result = service.refresh("refresh-raw-token", "Browser/1.0");
+
+        OffsetDateTime after = OffsetDateTime.now(ZoneOffset.UTC);
+        ArgumentCaptor<OffsetDateTime> expiresAtCaptor = ArgumentCaptor.forClass(OffsetDateTime.class);
+
+        assertFalse(result.refreshToken().isBlank());
+        assertFalse(result.persistentLogin());
+        verify(refreshSessionPort).rotateSession(
+                eq(54L),
+                anyString(),
+                expiresAtCaptor.capture(),
+                eq("Browser/1.0"),
+                eq(false),
+                anyString(),
+                any(OffsetDateTime.class)
+        );
+
+        OffsetDateTime expiresAt = expiresAtCaptor.getValue();
+        assertFalse(expiresAt.isBefore(before.plusSeconds(86400)));
+        assertFalse(expiresAt.isAfter(after.plusSeconds(86401)));
+    }
+
+    @Test
     void refreshConSesionExpiradaDebeEliminarlaYRechazar() {
         UUID userUuid = UUID.randomUUID();
         when(refreshSessionPort.findSessionByTokenHash(anyString())).thenReturn(Optional.of(new RefreshSession(
@@ -247,6 +354,10 @@ class AuthServiceTest {
     @Test
     void getCurrentUserSessionsDebeListarYMarcarLaSesionActual() {
         UUID userUuid = UUID.randomUUID();
+        OffsetDateTime currentAccessExpiresAt = OffsetDateTime.parse("2026-06-26T03:19:00Z");
+        OffsetDateTime currentSessionExpiresAt = OffsetDateTime.parse("2026-07-03T02:34:00Z");
+        OffsetDateTime remoteAccessExpiresAt = OffsetDateTime.parse("2026-06-26T10:15:00Z");
+        OffsetDateTime remoteSessionExpiresAt = OffsetDateTime.parse("2026-06-27T09:00:00Z");
         AuthUser authUser = new AuthUser(
                 userUuid,
                 "12345678",
@@ -266,9 +377,9 @@ class AuthServiceTest {
                         sha256("current-refresh-token"),
                         "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
                         "current-jti",
-                        OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(45),
-                        OffsetDateTime.now(ZoneOffset.UTC).plusDays(7),
-                        OffsetDateTime.now(ZoneOffset.UTC).minusHours(2),
+                        currentAccessExpiresAt,
+                        currentSessionExpiresAt,
+                        OffsetDateTime.parse("2026-06-26T02:34:00Z"),
                         true
                 ),
                 new RefreshSession(
@@ -277,9 +388,9 @@ class AuthServiceTest {
                         sha256("other-refresh-token"),
                         "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
                         "other-jti",
-                        OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(15),
-                        OffsetDateTime.now(ZoneOffset.UTC).plusDays(3),
-                        OffsetDateTime.now(ZoneOffset.UTC).minusDays(1),
+                        remoteAccessExpiresAt,
+                        remoteSessionExpiresAt,
+                        OffsetDateTime.parse("2026-06-26T00:00:00Z"),
                         false
                 )
         ));
@@ -292,8 +403,12 @@ class AuthServiceTest {
         assertEquals("21", result.get(0).id());
         assertTrue(result.get(0).current());
         assertEquals("Mozilla/5.0 (Windows NT 10.0; Win64; x64)", result.get(0).userAgent());
+        assertEquals(currentAccessExpiresAt, result.get(0).accessExpiresAt());
+        assertEquals(currentSessionExpiresAt, result.get(0).sessionExpiresAt());
         assertEquals("22", result.get(1).id());
         assertFalse(result.get(1).current());
+        assertEquals(remoteAccessExpiresAt, result.get(1).accessExpiresAt());
+        assertEquals(remoteSessionExpiresAt, result.get(1).sessionExpiresAt());
     }
 
     @Test
@@ -646,6 +761,7 @@ class AuthServiceTest {
                 15,
                 3600,
                 604800,
+                86400,
                 "panol-backend",
                 300,
                 "bot-panol"

@@ -124,7 +124,8 @@ public class AuthV2Controller {
                         session.persistentLogin(),
                         session.userAgent(),
                         session.createdAt(),
-                        session.expiresAt()
+                        session.accessExpiresAt(),
+                        session.sessionExpiresAt()
                 ))
                 .toList();
     }

@@ -64,6 +64,7 @@ public class AuthService {
     private final int lockMinutes;
     private final int tokenExpirationSeconds;
     private final int refreshTokenExpirationSeconds;
+    private final int temporaryRefreshTokenExpirationSeconds;
     private final String jwtIssuer;
     private final int botTokenExpirationSeconds;
     private final String botTokenAudience;
@@ -80,6 +81,7 @@ public class AuthService {
             @Value("${app.auth.lock-minutes:15}") int lockMinutes,
             @Value("${app.auth.jwt.expiration-seconds:3600}") int tokenExpirationSeconds,
             @Value("${app.auth.refresh.expiration-seconds:604800}") int refreshTokenExpirationSeconds,
+            @Value("${app.auth.refresh.temporary-expiration-seconds:86400}") int temporaryRefreshTokenExpirationSeconds,
             @Value("${app.auth.jwt.issuer:panol-backend}") String jwtIssuer,
             @Value("${app.auth.bot-token.expiration-seconds:300}") int botTokenExpirationSeconds,
             @Value("${app.auth.bot-token.audience:bot-panol}") String botTokenAudience
@@ -95,6 +97,7 @@ public class AuthService {
         this.lockMinutes = lockMinutes;
         this.tokenExpirationSeconds = tokenExpirationSeconds;
         this.refreshTokenExpirationSeconds = refreshTokenExpirationSeconds;
+        this.temporaryRefreshTokenExpirationSeconds = temporaryRefreshTokenExpirationSeconds;
         this.jwtIssuer = jwtIssuer;
         this.botTokenExpirationSeconds = botTokenExpirationSeconds;
         this.botTokenAudience = botTokenAudience == null ? "bot-panol" : botTokenAudience.trim();
@@ -131,7 +134,8 @@ public class AuthService {
 
         IssuedAccessToken issuedAccessToken = issueAccessToken(user.uuid(), normalizedRole);
         String refreshToken = generateOpaqueToken();
-        OffsetDateTime refreshExpiresAt = OffsetDateTime.now(ZoneOffset.UTC).plusSeconds(refreshTokenExpirationSeconds);
+        OffsetDateTime refreshExpiresAt = OffsetDateTime.now(ZoneOffset.UTC)
+                .plusSeconds(resolveRefreshSessionExpirationSeconds(command.rememberMe()));
         refreshSessionPort.createSession(
                 user.uuid(),
                 hashToken(refreshToken),
@@ -178,7 +182,7 @@ public class AuthService {
         String normalizedRole = normalizeRole(user.roleName());
         IssuedAccessToken nextAccessToken = issueAccessToken(user.uuid(), normalizedRole);
         String nextRefreshToken = generateOpaqueToken();
-        OffsetDateTime nextRefreshExpiresAt = now.plusSeconds(refreshTokenExpirationSeconds);
+        OffsetDateTime nextRefreshExpiresAt = now.plusSeconds(resolveRefreshSessionExpirationSeconds(session.persistentLogin()));
 
         refreshSessionPort.rotateSession(
                 session.id(),
@@ -245,6 +249,7 @@ public class AuthService {
                         session.persistentLogin(),
                         session.userAgent(),
                         session.createdAt(),
+                        session.currentAccessExpiresAt(),
                         session.expiresAt()
                 ))
                 .toList();
@@ -475,6 +480,10 @@ public class AuthService {
         } catch (DataIntegrityViolationException ignored) {
             // Revocar una sesion remota debe ser idempotente si el jti ya fue invalidado.
         }
+    }
+
+    private int resolveRefreshSessionExpirationSeconds(boolean persistentLogin) {
+        return persistentLogin ? refreshTokenExpirationSeconds : temporaryRefreshTokenExpirationSeconds;
     }
 
     private String hashToken(String rawToken) {

@@ -190,6 +190,7 @@ class AuthV2ControllerTest {
                         true,
                         "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
                         OffsetDateTime.parse("2026-06-13T15:00:00Z"),
+                        OffsetDateTime.parse("2026-06-13T16:00:00Z"),
                         OffsetDateTime.parse("2026-06-20T15:00:00Z")
                 )
         ));
@@ -201,7 +202,9 @@ class AuthV2ControllerTest {
                 .andExpect(jsonPath("$[0].id").value("41"))
                 .andExpect(jsonPath("$[0].current").value(true))
                 .andExpect(jsonPath("$[0].persistentLogin").value(true))
-                .andExpect(jsonPath("$[0].userAgent").value("Mozilla/5.0 (Windows NT 10.0; Win64; x64)"));
+                .andExpect(jsonPath("$[0].userAgent").value("Mozilla/5.0 (Windows NT 10.0; Win64; x64)"))
+                .andExpect(jsonPath("$[0].accessExpiresAt").value("2026-06-13T16:00:00Z"))
+                .andExpect(jsonPath("$[0].sessionExpiresAt").value("2026-06-20T15:00:00Z"));
 
         verify(authService).getCurrentUserSessions(userUuid, "refresh-cookie");
     }

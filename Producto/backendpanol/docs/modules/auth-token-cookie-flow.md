@@ -1,7 +1,7 @@
 # Flujo Completo de Tokens y Cookies
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-06-13
+- Ultima verificacion: 2026-06-26
 - Fuente de verdad: `AuthService`, `AuthCookieService`,
   `RefreshSessionJooqRepository`, `AuthJooqRepository`, `SecurityConfig`,
   `TokenRevocationValidator`, `TokenRevocationCleanupWorker`
@@ -167,6 +167,7 @@ Persistencia:
 
 - si `rememberMe=true`, se emite con `Max-Age` del TTL del refresh token
 - si `rememberMe=false`, queda como cookie de sesion del navegador
+  y su fila en `user_session` usa el TTL temporal configurado
 
 ### Ejemplo de emision
 
@@ -199,8 +200,12 @@ Eso permite que el navegador elimine la cookie correcta.
   - TTL del access token.
   - Default: `3600` segundos.
 - `APP_AUTH_REFRESH_EXPIRATION_SECONDS`
-  - TTL del refresh token y de la sesion en `user_session`.
+  - TTL del refresh token persistente y de la sesion en `user_session`
+    cuando `rememberMe=true`.
   - Default: `604800` segundos.
+- `APP_AUTH_REFRESH_TEMPORARY_EXPIRATION_SECONDS`
+  - TTL server-side de la sesion temporal cuando `rememberMe=false`.
+  - Default: `86400` segundos.
 - `APP_AUTH_COOKIE_SECURE`
   - controla si las cookies salen con atributo `Secure`.
   - `false` en localhost HTTP.
@@ -268,6 +273,8 @@ El criterio de borrado es simple:
    - genera refresh token opaco
    - calcula `SHA-256(refreshToken)`
 4. Inserta una fila en `public.user_session`.
+   - si `rememberMe=true`, usa el TTL persistente
+   - si `rememberMe=false`, usa el TTL temporal
 5. Responde:
    - body con `role`, `expiresInSeconds` y `user`
    - cookie `panol_access_token`
@@ -298,6 +305,9 @@ El criterio de borrado es simple:
      - `expires_at`
      - `device_info.currentAccessJti`
      - `device_info.currentAccessExpiresAt`
+   - conserva el mismo tipo de sesion:
+     - persistente -> TTL persistente
+     - temporal -> TTL temporal
 7. Responde `204` con cookies nuevas.
 
 ### 4. Logout de la sesion actual
