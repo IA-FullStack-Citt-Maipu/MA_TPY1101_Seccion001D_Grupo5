@@ -55,6 +55,7 @@ const coordinatorMenu: MenuItem[] = [
   { label: "Ubicaciones", icon: MapPin, href: "#/inventory/locations", activeSections: ["locations"] },
   { label: "Movimientos", icon: ClipboardList, href: "#/inventory/moves", activeSections: ["moves"] },
   { label: "Prestamos", icon: Handshake, href: "#/inventory/prestamos", activeSections: ["coordinator-loans"] },
+  { label: "Nueva solicitud", icon: ClipboardList, href: "#/inventory/prestamos/nuevo", activeSections: ["loan-create"] },
   { label: "Agenda", icon: History, href: "#/inventory/prestamos/calendario", activeSections: ["agenda"] },
 ];
 
@@ -849,7 +850,7 @@ export function InventoryLayout({
           userName={userName}
           userRole={userRoleLabel}
         />
-        <main className="app-shell__main">{children}</main>
+        <main className={canUseChatAssistant ? "app-shell__main app-shell__main--with-chat-assistant" : "app-shell__main"}>{children}</main>
       </div>
       {canUseChatAssistant ? <ChatWidget /> : null}
       {sidebarOpen ? <button type="button" className="sidebar-overlay" aria-label="Cerrar menu lateral" onClick={() => setSidebarOpen(false)} /> : null}

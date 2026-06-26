@@ -22,6 +22,9 @@ public record LoanV2Response(
         @JsonProperty("created_at")
         OffsetDateTime createdAt,
 
+        @JsonProperty("completed_at")
+        OffsetDateTime completedAt,
+
         LoanRoomV2Response room,
 
         LoanSubjectV2Response subject,

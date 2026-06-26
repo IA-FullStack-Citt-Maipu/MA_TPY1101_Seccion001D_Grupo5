@@ -1,4 +1,5 @@
 import type { NotificationInboxItem } from "../types/notification";
+import { buildLoanDetailHash } from "./loanDetailRouting";
 
 export const NOTIFICATIONS_CHANGED_EVENT = "panol:notifications-changed";
 export const NOTIFICATION_READ_STATE_STAGED_EVENT = "panol:notification-read-state-staged";
@@ -36,7 +37,7 @@ export function resolveNotificationHref(notification: NotificationInboxItem): st
     return null;
   }
   if (notification.referenceType === "loan") {
-    return `#/inventory/prestamos/${notification.referenceId}`;
+    return buildLoanDetailHash(notification.referenceId, "list");
   }
   if (notification.referenceType === "implement") {
     return `#/inventory/implementos/${notification.referenceId}`;

@@ -4,6 +4,7 @@ import {
   BookOpenText,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   ClipboardList,
   Clock3,
   Edit3,
@@ -38,7 +39,7 @@ import {
 } from "../services/loanSessionService";
 import type { LoanStateDates, LoanStatusTimelineEntry, LoanSummary } from "../types/loan";
 import type { StockDetail } from "../types/stock";
-import { getSessionUserRole } from "../utils/auth";
+import { getSessionUser, getSessionUserRole } from "../utils/auth";
 import { canStartDelivery } from "../utils/loanSchedule";
 
 const DELETE_CONFIRM_TEXT = "eliminar";
@@ -190,6 +191,10 @@ function timelineStatusChipClass(
   return "teacher-loan-timeline-chip";
 }
 
+function resolveTimelineActorLabel(entry: LoanStatusTimelineEntry): string {
+  return entry.actor_name?.trim() || entry.actor_email?.trim() || `User #${entry.actor_user_id}`;
+}
+
 export function LoanDetailPage({
   loanUuid,
   embedded = false,
@@ -202,10 +207,9 @@ export function LoanDetailPage({
   onLoanChanged?: (loan: LoanSummary) => void;
 }) {
   const currentRole = getSessionUserRole();
+  const currentUser = getSessionUser();
   const isCoordinator = currentRole === "COORDINADOR";
   const [loan, setLoan] = useState<LoanSummary | null>(null);
-  const canModifyLoan = currentRole === "DOCENTE" && loan?.status === "pending";
-  const canCancelLoan = currentRole === "DOCENTE";
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreatedBanner, setShowCreatedBanner] = useState(false);
@@ -213,6 +217,7 @@ export function LoanDetailPage({
   const [timeline, setTimeline] = useState<LoanStatusTimelineEntry[]>([]);
   const [loadingTraceability, setLoadingTraceability] = useState(false);
   const [processingLoan, setProcessingLoan] = useState(false);
+  const [isTimelineExpanded, setIsTimelineExpanded] = useState(false);
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmationInput, setDeleteConfirmationInput] = useState("");
@@ -304,6 +309,37 @@ export function LoanDetailPage({
     () => (loan ? canStartDelivery(loan) : false),
     [loan],
   );
+  const isRequester = loan?.requester_uuid === currentUser?.id;
+  const canModifyLoan = Boolean(loan && isRequester && loan.status === "pending");
+  const canCancelLoan = canModifyLoan;
+  const canReviewLoan = Boolean(isCoordinator && loan && !isRequester && loan.status === "pending");
+  const hasVisibleActions = Boolean(
+    canReviewLoan ||
+      canModifyLoan ||
+      canCancelLoan ||
+      (isCoordinator && loan && (loan.status === "approved" || loan.status === "prepared")) ||
+      (isCoordinator && loan && (loan.status === "delivered" || loan.status === "overdue")),
+  );
+  const requesterDisplay = useMemo(() => {
+    const creationEntry = timeline.find((entry) => entry.from_status == null) ?? timeline[0];
+    if (!creationEntry) {
+      return loadingTraceability ? "Cargando solicitante..." : "Solicitante no disponible";
+    }
+    return creationEntry.actor_name?.trim() || creationEntry.actor_email?.trim() || "Solicitante no disponible";
+  }, [loadingTraceability, timeline]);
+  const orderedTimeline = useMemo(
+    () =>
+      [...timeline].sort((left, right) => {
+        const leftDate = parseDate(left.changed_at)?.getTime() ?? 0;
+        const rightDate = parseDate(right.changed_at)?.getTime() ?? 0;
+        if (rightDate !== leftDate) {
+          return rightDate - leftDate;
+        }
+        return right.history_id - left.history_id;
+      }),
+    [timeline],
+  );
+  const timelineContentId = `loan-timeline-${loanUuid}`;
 
   const canConfirmDeletion = deleteConfirmationInput.trim().toLowerCase() === DELETE_CONFIRM_TEXT;
   const canSubmitRejectionReview = reviewDecision === "REJECT" && reviewNotes.trim().length >= 4;
@@ -577,9 +613,14 @@ export function LoanDetailPage({
       {loan ? (
         <>
           <section className="teacher-loan-detail-header">
-            <div>
+            <div className="teacher-loan-detail-header__copy">
               <p className="teacher-loan-detail-header__eyebrow">Solicitud de prestamo</p>
               <h1>Detalle de solicitud</h1>
+              <p className="teacher-loan-detail-header__requester">
+                <User size={15} />
+                <span>Solicitante:</span>
+                <strong>{requesterDisplay}</strong>
+              </p>
             </div>
             <span className={statusClassName(loan.status)}>{normalizeStatusLabel(loan.status)}</span>
           </section>
@@ -637,68 +678,72 @@ export function LoanDetailPage({
                 </div>
               </article>
 
-              <article className="teacher-loan-detail-card teacher-loan-detail-card--actions">
-                {isCoordinator && loan.status === "pending" ? (
-                  <>
+              {hasVisibleActions ? (
+                <article className="teacher-loan-detail-card teacher-loan-detail-card--actions">
+                  {canReviewLoan ? (
+                    <>
+                      <button
+                        type="button"
+                        className="teacher-loan-detail-action-btn teacher-loan-detail-action-btn--complete"
+                        onClick={() => openReviewModal("APPROVE")}
+                        disabled={processingLoan}
+                      >
+                        <CheckCircle2 size={16} />
+                        Aprobar solicitud
+                      </button>
+                      <button
+                        type="button"
+                        className="teacher-loan-detail-action-btn teacher-loan-detail-action-btn--danger"
+                        onClick={() => openReviewModal("REJECT")}
+                        disabled={processingLoan}
+                      >
+                        <XCircle size={16} />
+                        Rechazar solicitud
+                      </button>
+                    </>
+                  ) : null}
+                  {canModifyLoan ? (
+                    <button type="button" className="teacher-loan-detail-action-btn" onClick={goToLoanEdit}>
+                      <Edit3 size={16} />
+                      Modificar solicitud
+                    </button>
+                  ) : null}
+                  {isCoordinator && (loan.status === "approved" || loan.status === "prepared") ? (
+                    <button
+                      type="button"
+                      className="teacher-loan-detail-action-btn"
+                      onClick={goToLoanDelivery}
+                      disabled={!canDeliverNow}
+                      title="Registrar entrega de implementos"
+                    >
+                      <SendHorizontal size={16} />
+                      Entregar solicitud
+                    </button>
+                  ) : null}
+                  {isCoordinator && (loan.status === "delivered" || loan.status === "overdue") ? (
                     <button
                       type="button"
                       className="teacher-loan-detail-action-btn teacher-loan-detail-action-btn--complete"
-                      onClick={() => openReviewModal("APPROVE")}
+                      onClick={openCompleteModal}
                       disabled={processingLoan}
                     >
                       <CheckCircle2 size={16} />
-                      Aprobar solicitud
+                      Completar prestamo
                     </button>
+                  ) : null}
+                  {canCancelLoan ? (
                     <button
                       type="button"
                       className="teacher-loan-detail-action-btn teacher-loan-detail-action-btn--danger"
-                      onClick={() => openReviewModal("REJECT")}
+                      onClick={openDeleteModal}
                       disabled={processingLoan}
                     >
-                      <XCircle size={16} />
-                      Rechazar solicitud
+                      <Trash2 size={16} />
+                      Cancelar solicitud
                     </button>
-                  </>
-                ) : null}
-                {canModifyLoan ? (
-                  <button type="button" className="teacher-loan-detail-action-btn" onClick={goToLoanEdit}>
-                    <Edit3 size={16} />
-                    Modificar solicitud
-                  </button>
-                ) : null}
-                {isCoordinator && (loan.status === "approved" || loan.status === "prepared") ? (
-                  <button
-                    type="button"
-                    className="teacher-loan-detail-action-btn"
-                    onClick={goToLoanDelivery}
-                    disabled={!canDeliverNow}
-                    title="Registrar entrega de implementos"
-                  >
-                    <SendHorizontal size={16} />
-                    Entregar solicitud
-                  </button>
-                ) : null}
-                {isCoordinator && (loan.status === "delivered" || loan.status === "overdue") ? (
-                  <button
-                    type="button"
-                    className="teacher-loan-detail-action-btn teacher-loan-detail-action-btn--complete"
-                    onClick={openCompleteModal}
-                    disabled={processingLoan}
-                  >
-                    <CheckCircle2 size={16} />
-                    Completar prestamo
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  className="teacher-loan-detail-action-btn teacher-loan-detail-action-btn--danger"
-                  onClick={openDeleteModal}
-                  disabled={processingLoan || !canCancelLoan}
-                >
-                  <Trash2 size={16} />
-                  Cancelar solicitud
-                </button>
-              </article>
+                  ) : null}
+                </article>
+              ) : null}
             </div>
 
             <article className="teacher-loan-detail-items">
@@ -780,56 +825,69 @@ export function LoanDetailPage({
 
             <article className="teacher-loan-detail-items teacher-loan-timeline-panel">
               <header className="teacher-loan-detail-items__header teacher-loan-timeline-panel__header">
-                <h2>
-                  <ClipboardList size={18} />
-                  Historial de Actividad
-                </h2>
-                <span>{timeline.length} evento(s)</span>
-              </header>
-              <div className="teacher-loan-timeline-wrap">
-                {loadingTraceability ? (
-                  <div className="teacher-loan-detail-items__empty">Cargando timeline...</div>
-                ) : timeline.length === 0 ? (
-                  <div className="teacher-loan-detail-items__empty">Sin eventos de estado.</div>
-                ) : (
-                  <div className="teacher-loan-timeline-list">
-                    {timeline.map((entry, index) => (
-                      <article
-                        key={entry.history_id}
-                        className={`teacher-loan-timeline-entry${index === timeline.length - 1 ? " is-last" : ""}`}
-                      >
-                        <div className={`teacher-loan-timeline-entry__node${entry.from_status == null ? "" : " is-done"}`}>
-                          {entry.from_status == null ? <Plus size={16} /> : <CheckCircle2 size={16} />}
-                        </div>
-                        <div className="teacher-loan-timeline-entry__card">
-                          <div className="teacher-loan-timeline-entry__meta">
-                            <div className="teacher-loan-timeline-entry__chips">
-                              <span className={timelineStatusChipClass(entry.from_status)}>
-                                {entry.from_status ? normalizeStatusLabel(entry.from_status).toUpperCase() : "NUEVO"}
-                              </span>
-                              <ArrowRight size={13} />
-                              <span className={timelineStatusChipClass(entry.to_status)}>
-                                {normalizeStatusLabel(entry.to_status).toUpperCase()}
-                              </span>
-                            </div>
-                            <time>{formatDateTime(entry.changed_at)}</time>
-                          </div>
-                          <h3>{timelineTransitionTitle(entry)}</h3>
-                          <p className="teacher-loan-timeline-entry__actor">
-                            <User size={14} />
-                            {entry.actor_name ?? entry.actor_email ?? `User #${entry.actor_user_id}`}
-                          </p>
-                          {entry.notes ? (
-                            <blockquote className="teacher-loan-timeline-entry__notes">
-                              "{entry.notes}"
-                            </blockquote>
-                          ) : null}
-                        </div>
-                      </article>
-                    ))}
+                <button
+                  type="button"
+                  className="teacher-loan-timeline-toggle teacher-loan-timeline-toggle--header"
+                  aria-expanded={isTimelineExpanded}
+                  aria-controls={timelineContentId}
+                  onClick={() => setIsTimelineExpanded((current) => !current)}
+                >
+                  <div className="teacher-loan-timeline-toggle__summary">
+                    <h2>
+                      <ClipboardList size={18} />
+                      Historial de Actividad
+                    </h2>
+                    <span>{timeline.length} evento(s)</span>
                   </div>
-                )}
-              </div>
+                  <ChevronDown size={18} className={isTimelineExpanded ? "is-open" : ""} />
+                </button>
+              </header>
+              {isTimelineExpanded ? (
+                <div id={timelineContentId} className="teacher-loan-timeline-wrap">
+                  {loadingTraceability ? (
+                    <div className="teacher-loan-detail-items__empty">Cargando timeline...</div>
+                  ) : orderedTimeline.length === 0 ? (
+                    <div className="teacher-loan-detail-items__empty">Sin eventos de estado.</div>
+                  ) : (
+                    <div className="teacher-loan-timeline-list">
+                      {orderedTimeline.map((entry, index) => (
+                        <article
+                          key={entry.history_id}
+                          className={`teacher-loan-timeline-entry${index === orderedTimeline.length - 1 ? " is-last" : ""}`}
+                        >
+                          <div className={`teacher-loan-timeline-entry__node${entry.from_status == null ? "" : " is-done"}`}>
+                            {entry.from_status == null ? <Plus size={16} /> : <CheckCircle2 size={16} />}
+                          </div>
+                          <div className="teacher-loan-timeline-entry__card">
+                            <div className="teacher-loan-timeline-entry__meta">
+                              <div className="teacher-loan-timeline-entry__chips">
+                                <span className={timelineStatusChipClass(entry.from_status)}>
+                                  {entry.from_status ? normalizeStatusLabel(entry.from_status).toUpperCase() : "NUEVO"}
+                                </span>
+                                <ArrowRight size={13} />
+                                <span className={timelineStatusChipClass(entry.to_status)}>
+                                  {normalizeStatusLabel(entry.to_status).toUpperCase()}
+                                </span>
+                              </div>
+                              <time>{formatDateTime(entry.changed_at)}</time>
+                            </div>
+                            <h3>{timelineTransitionTitle(entry)}</h3>
+                            <p className="teacher-loan-timeline-entry__actor">
+                              <User size={14} />
+                              {resolveTimelineActorLabel(entry)}
+                            </p>
+                            {entry.notes ? (
+                              <blockquote className="teacher-loan-timeline-entry__notes">
+                                "{entry.notes}"
+                              </blockquote>
+                            ) : null}
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : null}
             </article>
           </section>
         </>

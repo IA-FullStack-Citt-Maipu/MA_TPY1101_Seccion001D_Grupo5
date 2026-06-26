@@ -116,12 +116,13 @@ class SolicitarPrestamoPersistenceTest {
         Long systemOutboxUserId = findUserId(SYSTEM_OUTBOX_USER_UUID);
         int systemNotificationsBefore = userNotificationCount(systemOutboxUserId, expectedTitle, expectedMessage);
         setAuthenticatedUser(requesterUuid, "DOCENTE");
+        OffsetDateTime scheduledAt = nextBusinessDateTime(1, 10, 15);
 
         LoanSummaryView created = solicitarPrestamoUseCase.solicitar(new SolicitarPrestamoCommand(
                 requesterUuid,
                 roomUuid,
                 subjectUuid,
-                OffsetDateTime.parse("2026-06-22T10:15:00-04:00"),
+                scheduledAt,
                 null,
                 null,
                 List.of(new SolicitarPrestamoItemCommand(implementUuid, 3))
@@ -200,6 +201,7 @@ class SolicitarPrestamoPersistenceTest {
         String expectedMessage = notificationMessage("Docente Rollback");
         int notificationsBefore = notificationCount(notificationTitle(), expectedMessage);
         setAuthenticatedUser(requesterUuid, "DOCENTE");
+        OffsetDateTime scheduledAt = nextBusinessDateTime(1, 11, 0);
 
         final UUID[] createdLoanUuid = new UUID[1];
         RuntimeException forced = assertThrows(RuntimeException.class, () ->
@@ -208,7 +210,7 @@ class SolicitarPrestamoPersistenceTest {
                             requesterUuid,
                             roomUuid,
                             subjectUuid,
-                            OffsetDateTime.parse("2026-06-23T11:00:00-04:00"),
+                            scheduledAt,
                             null,
                             null,
                             List.of(new SolicitarPrestamoItemCommand(implementUuid, 1))
@@ -248,12 +250,13 @@ class SolicitarPrestamoPersistenceTest {
         String expectedMessage = notificationMessage("Docente Sin Coordinadores");
         int notificationsBefore = notificationCount(notificationTitle(), expectedMessage);
         setAuthenticatedUser(requesterUuid, "DOCENTE");
+        OffsetDateTime scheduledAt = nextBusinessDateTime(1, 9, 30);
 
         LoanSummaryView created = solicitarPrestamoUseCase.solicitar(new SolicitarPrestamoCommand(
                 requesterUuid,
                 roomUuid,
                 subjectUuid,
-                OffsetDateTime.parse("2026-06-24T09:30:00-04:00"),
+                scheduledAt,
                 null,
                 null,
                 List.of(new SolicitarPrestamoItemCommand(implementUuid, 2))
@@ -272,13 +275,17 @@ class SolicitarPrestamoPersistenceTest {
         UUID subjectUuid = insertSubject();
         UUID implementUuid = insertImplement(10);
         setAuthenticatedUser(requesterUuid, "DOCENTE");
+        OffsetDateTime firstScheduledAt = nextBusinessDateTime(1, 10, 0);
+        OffsetDateTime firstExpectedReturnAt = sameDateAt(firstScheduledAt, 12, 0);
+        OffsetDateTime secondScheduledAt = sameDateAt(firstScheduledAt, 15, 0);
+        OffsetDateTime secondExpectedReturnAt = sameDateAt(firstScheduledAt, 17, 0);
 
         LoanSummaryView firstLoan = solicitarPrestamoUseCase.solicitar(new SolicitarPrestamoCommand(
                 requesterUuid,
                 roomUuid,
                 subjectUuid,
-                OffsetDateTime.parse("2026-06-25T10:00:00-04:00"),
-                OffsetDateTime.parse("2026-06-25T12:00:00-04:00"),
+                firstScheduledAt,
+                firstExpectedReturnAt,
                 null,
                 List.of(new SolicitarPrestamoItemCommand(implementUuid, 1))
         ));
@@ -288,8 +295,8 @@ class SolicitarPrestamoPersistenceTest {
                 requesterUuid,
                 roomUuid,
                 subjectUuid,
-                OffsetDateTime.parse("2026-06-25T15:00:00-04:00"),
-                OffsetDateTime.parse("2026-06-25T17:00:00-04:00"),
+                secondScheduledAt,
+                secondExpectedReturnAt,
                 null,
                 List.of(new SolicitarPrestamoItemCommand(implementUuid, 1))
         ));
@@ -308,13 +315,17 @@ class SolicitarPrestamoPersistenceTest {
         UUID subjectUuid = insertSubject();
         UUID implementUuid = insertImplement(10);
         setAuthenticatedUser(requesterUuid, "DOCENTE");
+        OffsetDateTime firstScheduledAt = nextBusinessDateTime(1, 10, 0);
+        OffsetDateTime firstExpectedReturnAt = sameDateAt(firstScheduledAt, 12, 0);
+        OffsetDateTime overlappingScheduledAt = sameDateAt(firstScheduledAt, 11, 0);
+        OffsetDateTime overlappingExpectedReturnAt = sameDateAt(firstScheduledAt, 13, 0);
 
         LoanSummaryView firstLoan = solicitarPrestamoUseCase.solicitar(new SolicitarPrestamoCommand(
                 requesterUuid,
                 roomUuid,
                 subjectUuid,
-                OffsetDateTime.parse("2026-06-26T10:00:00-04:00"),
-                OffsetDateTime.parse("2026-06-26T12:00:00-04:00"),
+                firstScheduledAt,
+                firstExpectedReturnAt,
                 null,
                 List.of(new SolicitarPrestamoItemCommand(implementUuid, 1))
         ));
@@ -324,8 +335,8 @@ class SolicitarPrestamoPersistenceTest {
                 requesterUuid,
                 roomUuid,
                 subjectUuid,
-                OffsetDateTime.parse("2026-06-26T11:00:00-04:00"),
-                OffsetDateTime.parse("2026-06-26T13:00:00-04:00"),
+                overlappingScheduledAt,
+                overlappingExpectedReturnAt,
                 null,
                 List.of(new SolicitarPrestamoItemCommand(implementUuid, 1))
         )));
@@ -340,6 +351,34 @@ class SolicitarPrestamoPersistenceTest {
         var method = SolicitarPrestamoUseCase.class.getMethod("solicitar", SolicitarPrestamoCommand.class);
         Transactional transactional = method.getAnnotation(Transactional.class);
         assertNotNull(transactional);
+    }
+
+    private OffsetDateTime nextBusinessDateTime(int dayOffset, int hour, int minute) {
+        OffsetDateTime now = OffsetDateTime.now().withSecond(0).withNano(0);
+        OffsetDateTime candidate = now.plusDays(dayOffset)
+                .withHour(hour)
+                .withMinute(minute)
+                .withSecond(0)
+                .withNano(0);
+        if (!candidate.isAfter(now)) {
+            candidate = candidate.plusDays(1)
+                    .withHour(hour)
+                    .withMinute(minute)
+                    .withSecond(0)
+                    .withNano(0);
+        }
+        while (candidate.getDayOfWeek() == java.time.DayOfWeek.SUNDAY) {
+            candidate = candidate.plusDays(1)
+                    .withHour(hour)
+                    .withMinute(minute)
+                    .withSecond(0)
+                    .withNano(0);
+        }
+        return candidate;
+    }
+
+    private OffsetDateTime sameDateAt(OffsetDateTime base, int hour, int minute) {
+        return base.withHour(hour).withMinute(minute).withSecond(0).withNano(0);
     }
 
     private UUID insertUser(String roleName, String displayName) {

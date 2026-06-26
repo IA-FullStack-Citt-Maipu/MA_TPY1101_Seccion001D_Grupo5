@@ -32,13 +32,13 @@
 
 .chatLauncher {
   position: fixed;
-  right: 28px;
-  bottom: 28px;
+  right: 22px;
+  bottom: 22px;
   z-index: 161;
   display: inline-flex;
   align-items: center;
   gap: 12px;
-  min-height: 64px;
+  min-height: 60px;
   padding: 10px 14px 10px 10px;
   border: 1px solid rgba(255, 255, 255, 0.34);
   border-radius: 999px;
@@ -70,8 +70,8 @@
 }
 
 .chatLauncherIcon {
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -98,8 +98,8 @@
 
 .chatWidgetPanel {
   position: fixed;
-  right: 28px;
-  bottom: 104px;
+  right: 22px;
+  bottom: 94px;
   z-index: 160;
   width: min(420px, calc(100vw - 32px));
   height: min(720px, calc(100vh - 140px));
@@ -122,6 +122,14 @@
   visibility: visible;
   pointer-events: auto;
   transform: translateY(0) scale(1);
+}
+
+:global(body.modal-open) .chatLauncher,
+:global(body.modal-open) .chatWidgetPanel,
+:global(body.modal-open) .chatWidgetBackdrop {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .chatLayout {
@@ -745,16 +753,16 @@
   }
 
   .chatLauncher {
-    right: 16px;
-    bottom: 16px;
-    min-height: 58px;
-    padding-right: 10px;
+    right: 12px;
+    bottom: 12px;
+    min-height: 54px;
+    padding-right: 8px;
   }
 
   .chatWidgetPanel {
-    right: 12px;
-    left: 12px;
-    bottom: 88px;
+    right: 10px;
+    left: 10px;
+    bottom: 76px;
     width: auto;
     height: min(78vh, 680px);
     transform-origin: bottom center;
@@ -777,9 +785,9 @@
   }
 
   .chatWidgetPanel {
-    right: 10px;
-    left: 10px;
-    bottom: 82px;
+    right: 8px;
+    left: 8px;
+    bottom: 72px;
     height: min(80vh, 640px);
   }
 

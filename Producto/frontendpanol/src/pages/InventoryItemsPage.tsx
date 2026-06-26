@@ -371,12 +371,14 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
                     const checked = selectedCategoryUuids.includes(category.uuid);
                     return (
                       <label key={category.uuid} className={checked ? "inventory-multiselect__option is-selected" : "inventory-multiselect__option"}>
-                        <span>{category.name}</span>
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleCategorySelection(category.uuid)}
-                        />
+                        <span className="inventory-multiselect__option-control">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleCategorySelection(category.uuid)}
+                          />
+                        </span>
+                        <span className="inventory-multiselect__option-label">{category.name}</span>
                       </label>
                     );
                   })}
@@ -406,12 +408,14 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
                     const checked = selectedStockStatuses.includes(status);
                     return (
                       <label key={status} className={checked ? "inventory-multiselect__option is-selected" : "inventory-multiselect__option"}>
-                        <span>{STOCK_FILTER_LABELS[status]}</span>
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleStockStatusSelection(status)}
-                        />
+                        <span className="inventory-multiselect__option-control">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleStockStatusSelection(status)}
+                          />
+                        </span>
+                        <span className="inventory-multiselect__option-label">{STOCK_FILTER_LABELS[status]}</span>
                       </label>
                     );
                   })}

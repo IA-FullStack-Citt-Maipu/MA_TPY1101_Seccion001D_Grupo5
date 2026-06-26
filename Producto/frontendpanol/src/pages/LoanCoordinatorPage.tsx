@@ -8,14 +8,17 @@ import {
   Search,
   XCircle,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LoanDetailModalFrame } from "../components/loans/LoanDetailModalFrame";
 import { LoanApprovalModal, type LoanApprovalSubmission } from "../components/loans/LoanApprovalModal";
 import { PresencePollingModal } from "../components/ui/PresencePollingModal";
 import { useInactivityPollingGate } from "../hooks/useInactivityPollingGate";
 import { getApiErrorPayload, getErrorMessage } from "../services/apiClient";
 import { completeLoan, fetchLoansPage, reviewLoan } from "../services/loanService";
 import type { LoanSummary } from "../types/loan";
+import { buildLoanDetailHash, stripLoanDetailFromHash } from "../utils/loanDetailRouting";
 import { canStartDelivery } from "../utils/loanSchedule";
+import { LoanDetailPage } from "./LoanDetailPage";
 
 const PAGE_SIZE = 10;
 
@@ -31,7 +34,10 @@ type LoanStatusFilter =
   | "rejected"
   | "expired";
 
-function parseDate(value: string): Date | null {
+function parseDate(value: string | null | undefined): Date | null {
+  if (!value) {
+    return null;
+  }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return null;
@@ -99,11 +105,19 @@ function summarizeItems(items: LoanSummary["items"]): string {
   return items.length > 3 ? `${summary}, ...` : summary;
 }
 
-export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }) {
+export function LoanCoordinatorPage({
+  embedded = false,
+  activeDetailLoanUuid = null,
+}: {
+  embedded?: boolean;
+  activeDetailLoanUuid?: string | null;
+}) {
   const [allLoans, setAllLoans] = useState<LoanSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [processingLoanUuid, setProcessingLoanUuid] = useState<string | null>(null);
+  const hasLoadedOnceRef = useRef(false);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<LoanStatusFilter>("all");
@@ -118,10 +132,15 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
   const [completingLoan, setCompletingLoan] = useState<LoanSummary | null>(null);
   const [completionNotes, setCompletionNotes] = useState("");
 
-  const loadLoans = useCallback(async (showLoading = true) => {
-    if (showLoading) {
-      setLoading(true);
+  const loadLoans = useCallback(async (mode: "initial" | "refresh" = "initial") => {
+    const shouldShowInitialLoading = mode === "initial" && !hasLoadedOnceRef.current;
+
+    if (shouldShowInitialLoading) {
+      setInitialLoading(true);
+    } else {
+      setRefreshing(true);
     }
+
     setError(null);
     try {
       const firstPage = await fetchLoansPage({ page: 1, size: 50, mine: false });
@@ -141,15 +160,15 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
     } catch (requestError) {
       setError(getErrorMessage(requestError, "No se pudo cargar el listado de prestamos."));
     } finally {
-      if (showLoading) {
-        setLoading(false);
-      }
+      hasLoadedOnceRef.current = true;
+      setInitialLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
   const { promptVisible, pollingPaused, countdownSeconds, resumePolling } = useInactivityPollingGate({
     onContinue: async () => {
-      await loadLoans(false);
+      await loadLoans("refresh");
     },
   });
 
@@ -157,7 +176,7 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
     let cancelled = false;
 
     async function bootstrap() {
-      await loadLoans(true);
+      await loadLoans("initial");
       if (cancelled) {
         return;
       }
@@ -175,7 +194,7 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
     }
 
     const intervalId = window.setInterval(() => {
-      void loadLoans(false);
+      void loadLoans("refresh");
     }, 180000);
 
     return () => window.clearInterval(intervalId);
@@ -263,7 +282,7 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
     const todayKey = formatDateForInput(now);
     return allLoans.filter((loan) => {
       if (loan.status !== "completed") return false;
-      const completedDate = parseDate(loan.created_at);
+      const completedDate = parseDate(loan.completed_at);
       if (!completedDate) return false;
       return formatDateForInput(completedDate) === todayKey;
     }).length;
@@ -275,7 +294,11 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
   );
 
   function goToLoanDetail(loanUuid: string) {
-    window.location.assign(`#/inventory/prestamos/${loanUuid}`);
+    window.location.assign(buildLoanDetailHash(loanUuid, "list"));
+  }
+
+  function closeLoanDetail() {
+    window.location.replace(stripLoanDetailFromHash(window.location.hash));
   }
 
   function updateLoanInState(updated: LoanSummary) {
@@ -418,7 +441,7 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
         </article>
       </section>
 
-      <section className="coordinator-loans-card">
+      <section className="coordinator-loans-card" aria-busy={refreshing}>
         <div className="coordinator-loans-filters">
           <label className="coordinator-loans-search">
             <Search size={16} />
@@ -503,7 +526,7 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {initialLoading ? (
                 <tr>
                   <td colSpan={5} className="coordinator-loans-empty">
                     Cargando solicitudes...
@@ -700,6 +723,16 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
             </div>
           </div>
         </div>
+      ) : null}
+      {activeDetailLoanUuid ? (
+        <LoanDetailModalFrame onClose={closeLoanDetail}>
+          <LoanDetailPage
+            loanUuid={activeDetailLoanUuid}
+            embedded
+            hideBackNav
+            onLoanChanged={updateLoanInState}
+          />
+        </LoanDetailModalFrame>
       ) : null}
       <PresencePollingModal
         visible={promptVisible}

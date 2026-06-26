@@ -23,6 +23,7 @@ export interface LoanSummary {
   scheduled_at: string;
   expected_return_at: string;
   created_at: string;
+  completed_at: string | null;
   room: LoanRoomSummary | null;
   subject: LoanSubjectSummary | null;
   items: LoanItem[];

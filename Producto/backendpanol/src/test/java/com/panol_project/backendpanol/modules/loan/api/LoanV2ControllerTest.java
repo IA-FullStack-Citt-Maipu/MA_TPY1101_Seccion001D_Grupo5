@@ -26,6 +26,8 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
 import com.panol_project.backendpanol.shared.error.security.RestAccessDeniedHandler;
 import com.panol_project.backendpanol.shared.error.security.RestAuthenticationEntryPoint;
 import com.panol_project.backendpanol.shared.security.CurrentUserUuidResolver;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -111,6 +113,7 @@ class LoanV2ControllerTest {
                 scheduledAt,
                 null,
                 OffsetDateTime.parse("2026-05-21T21:00:00-04:00"),
+                null,
                 new LoanSummaryView.RoomView(roomUuid, "Sala 301"),
                 new LoanSummaryView.SubjectView(subjectUuid, "Anatomia"),
                 List.of(new LoanSummaryView.ItemView(implementUuid, "Fonendoscopio", 2, 0, 0))
@@ -185,8 +188,76 @@ class LoanV2ControllerTest {
         org.junit.jupiter.api.Assertions.assertEquals(2, command.requestedItems().getFirst().requestedQuantity());
     }
 
+    @Test
+    void solicitarPrestamoDebePermitirRolCoordinador() throws Exception {
+        UUID authenticatedUserUuid = UUID.randomUUID();
+        UUID roomUuid = UUID.randomUUID();
+        UUID implementUuid = UUID.randomUUID();
+        UUID loanUuid = UUID.randomUUID();
+        OffsetDateTime scheduledAt = OffsetDateTime.parse(FUTURE_SCHEDULED_AT);
+
+        LoanAggregate createdLoan = new LoanAggregate(
+                loanUuid,
+                authenticatedUserUuid,
+                roomUuid,
+                null,
+                LoanStatus.PENDING,
+                scheduledAt,
+                null,
+                OffsetDateTime.parse("2026-05-21T21:00:00-04:00"),
+                List.of(new LoanDetailItem(implementUuid, 1, 0, 0))
+        );
+        LoanSummaryView response = new LoanSummaryView(
+                loanUuid,
+                authenticatedUserUuid,
+                LoanStatus.PENDING,
+                scheduledAt,
+                null,
+                OffsetDateTime.parse("2026-05-21T21:00:00-04:00"),
+                null,
+                new LoanSummaryView.RoomView(roomUuid, "Sala 302"),
+                null,
+                List.of(new LoanSummaryView.ItemView(implementUuid, "Guantes", 1, 0, 0))
+        );
+
+        when(loanRepositoryPort.existsActiveRequesterByUuid(authenticatedUserUuid)).thenReturn(true);
+        when(loanRepositoryPort.existsActiveRoomByUuid(roomUuid)).thenReturn(true);
+        when(loanRepositoryPort.findImplementAvailabilityByUuid(implementUuid))
+                .thenReturn(Optional.of(new LoanImplementAvailability(implementUuid, true)));
+        when(loanRepositoryPort.findRequestedItemAvailabilities(List.of(implementUuid), scheduledAt, null, null))
+                .thenReturn(List.of(new LoanRequestedItemAvailability(implementUuid, "Guantes", true, 5)));
+        when(loanRepositoryPort.existsPendingLoanConflict(
+                eq(authenticatedUserUuid),
+                eq(scheduledAt),
+                isNull(),
+                eq(List.of(implementUuid))
+        )).thenReturn(false);
+        when(loanRepositoryPort.createPendingLoan(any(LoanCreateCommand.class))).thenReturn(createdLoan);
+        when(loanRepositoryPort.findVisibleLoanSummaryByUuid(loanUuid)).thenReturn(Optional.of(response));
+
+        mockMvc.perform(post("/api/v2/loans")
+                        .with(authentication(jwtAuthentication(authenticatedUserUuid, "COORDINADOR")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "room_uuid": "%s",
+                                  "scheduled_at": "%s",
+                                  "items": [
+                                    {
+                                      "implement_uuid": "%s",
+                                      "requested_quantity": 1
+                                    }
+                                  ]
+                                }
+                                """.formatted(roomUuid, FUTURE_SCHEDULED_AT, implementUuid)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.uuid").value(response.uuid().toString()))
+                .andExpect(jsonPath("$.requester_uuid").value(authenticatedUserUuid.toString()))
+                .andExpect(jsonPath("$.room.name").value("Sala 302"));
+    }
+
     @ParameterizedTest
-    @ValueSource(strings = {"COORDINADOR", "DIRECTOR"})
+    @ValueSource(strings = {"DIRECTOR"})
     void solicitarPrestamoDebeRetornar403ParaRolesNoDocente(String role) throws Exception {
                 mockMvc.perform(post("/api/v2/loans")
                         .with(authentication(jwtAuthentication(UUID.randomUUID(), role)))
@@ -423,7 +494,10 @@ class LoanV2ControllerTest {
 
         @Bean
         SolicitarPrestamoUseCase solicitarPrestamoUseCase(LoanRepositoryPort loanRepositoryPort) {
-            return new SolicitarPrestamoUseCase(loanRepositoryPort);
+            return new SolicitarPrestamoUseCase(
+                    loanRepositoryPort,
+                    Clock.fixed(Instant.parse("2099-06-01T14:00:00Z"), ZoneOffset.ofHours(-4))
+            );
         }
 
         @Bean

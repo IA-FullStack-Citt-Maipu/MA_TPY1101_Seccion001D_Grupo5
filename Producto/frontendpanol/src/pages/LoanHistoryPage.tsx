@@ -11,12 +11,15 @@ import {
   Search,
   Trash2,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LoanDetailModalFrame } from "../components/loans/LoanDetailModalFrame";
 import { PresencePollingModal } from "../components/ui/PresencePollingModal";
 import { useInactivityPollingGate } from "../hooks/useInactivityPollingGate";
 import { getErrorMessage } from "../services/apiClient";
 import { cancelLoan, fetchLoansPage } from "../services/loanService";
 import type { LoanSummary } from "../types/loan";
+import { buildLoanDetailHash, stripLoanDetailFromHash } from "../utils/loanDetailRouting";
+import { LoanDetailPage } from "./LoanDetailPage";
 
 const CLIENT_PAGE_SIZE = 4;
 const DELETE_CONFIRM_TEXT = "eliminar";
@@ -157,11 +160,19 @@ function summarizeItems(items: LoanSummary["items"]): string {
   return items.length > 3 ? `${summary}, ...` : summary;
 }
 
-export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
+export function LoanHistoryPage({
+  embedded = false,
+  activeDetailLoanUuid = null,
+}: {
+  embedded?: boolean;
+  activeDetailLoanUuid?: string | null;
+}) {
   const [allLoans, setAllLoans] = useState<LoanSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [processingLoanUuid, setProcessingLoanUuid] = useState<string | null>(null);
+  const hasLoadedOnceRef = useRef(false);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<LoanStatusFilter>("all");
@@ -174,10 +185,15 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
   const [deleteConfirmationInput, setDeleteConfirmationInput] = useState("");
   const [deleteNotes, setDeleteNotes] = useState("");
 
-  const loadHistory = useCallback(async (showLoading = true) => {
-    if (showLoading) {
-      setLoading(true);
+  const loadHistory = useCallback(async (mode: "initial" | "refresh" = "initial") => {
+    const shouldShowInitialLoading = mode === "initial" && !hasLoadedOnceRef.current;
+
+    if (shouldShowInitialLoading) {
+      setInitialLoading(true);
+    } else {
+      setRefreshing(true);
     }
+
     setError(null);
     try {
       const firstPage = await fetchLoansPage({ page: 1, size: 50, mine: true });
@@ -197,15 +213,15 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
     } catch (requestError) {
       setError(getErrorMessage(requestError, "No se pudo cargar tu historial de prestamos."));
     } finally {
-      if (showLoading) {
-        setLoading(false);
-      }
+      hasLoadedOnceRef.current = true;
+      setInitialLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
   const { promptVisible, pollingPaused, countdownSeconds, resumePolling } = useInactivityPollingGate({
     onContinue: async () => {
-      await loadHistory(false);
+      await loadHistory("refresh");
     },
   });
 
@@ -213,7 +229,7 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
     let cancelled = false;
 
     async function bootstrap() {
-      await loadHistory(true);
+      await loadHistory("initial");
       if (cancelled) {
         return;
       }
@@ -232,7 +248,7 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
     }
 
     const intervalId = window.setInterval(() => {
-      void loadHistory(false);
+      void loadHistory("refresh");
     }, 180000);
 
     return () => window.clearInterval(intervalId);
@@ -332,7 +348,11 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
   }
 
   function goToLoanDetail(loanUuid: string) {
-    window.location.assign(`#/inventory/prestamos/${loanUuid}`);
+    window.location.assign(buildLoanDetailHash(loanUuid, "list"));
+  }
+
+  function closeLoanDetail() {
+    window.location.replace(stripLoanDetailFromHash(window.location.hash));
   }
 
   function requestDeletion(loan: LoanSummary) {
@@ -367,6 +387,12 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
       setProcessingLoanUuid(null);
     }
   }
+
+  const handleDetailLoanChanged = useCallback((updatedLoan: LoanSummary) => {
+    setAllLoans((previous) =>
+      previous.map((loan) => (loan.uuid === updatedLoan.uuid ? updatedLoan : loan)),
+    );
+  }, []);
 
   const content = (
     <div className="teacher-loans-page">
@@ -410,7 +436,7 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
         </article>
       </section>
 
-      <section className="teacher-loans-card">
+      <section className="teacher-loans-card" aria-busy={refreshing}>
         <div className="teacher-loans-toolbar">
           <div className="teacher-loans-toolbar__filters">
             <label className="teacher-loans-toolbar__search">
@@ -493,7 +519,7 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {initialLoading ? (
                 <tr>
                   <td colSpan={5} className="teacher-loans-table__empty">
                     Cargando historial de prestamos...
@@ -641,6 +667,16 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
             </div>
           </div>
         </div>
+      ) : null}
+      {activeDetailLoanUuid ? (
+        <LoanDetailModalFrame onClose={closeLoanDetail}>
+          <LoanDetailPage
+            loanUuid={activeDetailLoanUuid}
+            embedded
+            hideBackNav
+            onLoanChanged={handleDetailLoanChanged}
+          />
+        </LoanDetailModalFrame>
       ) : null}
       <PresencePollingModal
         visible={promptVisible}
