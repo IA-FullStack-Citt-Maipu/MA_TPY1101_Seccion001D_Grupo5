@@ -117,7 +117,6 @@ def _build_loan_summary(row: dict[str, Any]) -> dict[str, Any]:
         "status": row.get("status"),
         "scheduled_at": row.get("scheduled_at"),
         "created_at": row.get("created_at"),
-        "requester_uuid": row.get("requester_uuid"),
         "room": row.get("room"),
         "subject": row.get("subject"),
         "items_count": len(items),
@@ -187,16 +186,14 @@ def _iter_filtered_loans(
 @tool
 def listar_prestamos(
     estado: str | None = None,
-    requester_uuid: str | None = None,
     limite: int | None = 20,
 ) -> dict[str, Any]:
     """
-    Lista prestamos y permite filtrar por estado y solicitante.
+    Lista prestamos y permite filtrar por estado.
     """
     started_at = perf_counter()
     normalized_estado = _normalize_estado(estado)
     normalized_limite = _normalize_limited_items(limite)
-    normalized_requester = (requester_uuid or "").strip() or None
 
     if normalized_estado and normalized_estado not in _VALID_LOAN_STATES:
         result = {
@@ -212,11 +209,8 @@ def listar_prestamos(
 
     def predicate(row: dict[str, Any]) -> bool:
         row_status = str(row.get("status") or "").strip().lower()
-        row_requester = str(row.get("requester_uuid") or "").strip().lower()
 
         if normalized_estado and row_status != normalized_estado:
-            return False
-        if normalized_requester and row_requester != normalized_requester.lower():
             return False
         return True
 
@@ -235,7 +229,6 @@ def listar_prestamos(
         "data": {
             "filters": {
                 "estado": normalized_estado,
-                "requester_uuid": normalized_requester,
                 "limite": normalized_limite,
             },
             "count": len(sliced),

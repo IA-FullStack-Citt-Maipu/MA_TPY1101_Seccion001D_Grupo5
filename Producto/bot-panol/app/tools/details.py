@@ -35,24 +35,6 @@ def detalle_implemento(implement_uuid: str) -> dict[str, Any]:
     if not isinstance(stock, dict):
         stock = {}
 
-    recent_movements = payload.get("recent_movements")
-    if not isinstance(recent_movements, list):
-        recent_movements = []
-
-    normalized_movements: list[dict[str, Any]] = []
-    for movement in recent_movements[:10]:
-        if not isinstance(movement, dict):
-            continue
-        normalized_movements.append(
-            {
-                "action": movement.get("action"),
-                "quantity": movement.get("quantity"),
-                "performed_by": movement.get("performed_by"),
-                "timestamp": movement.get("timestamp"),
-                "notes": movement.get("notes"),
-            }
-        )
-
     output = {
         "ok": True,
         "source": "backend",
@@ -85,7 +67,6 @@ def detalle_implemento(implement_uuid: str) -> dict[str, Any]:
                 "damaged": stock.get("damaged"),
                 "min_stock": payload.get("min_stock"),
             },
-            "recent_movements": normalized_movements,
         },
     }
     record_tool_call("detalle_implemento", "success", 200, perf_counter() - started_at)

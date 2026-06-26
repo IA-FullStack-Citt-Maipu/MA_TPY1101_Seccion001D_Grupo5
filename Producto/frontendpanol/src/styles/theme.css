@@ -4764,6 +4764,9 @@ a:focus-visible {
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
+  vertical-align: top;
+  padding-top: 8px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -10544,19 +10547,19 @@ a:focus-visible {
 
 :root[data-theme="dark"] .inventory-items-table thead th,
 :root[data-theme="dark"] .stock-health-table thead th {
-  background: rgba(255, 255, 255, 0.045);
+  background: #1a2740;
   color: #9eb3cf;
   border-bottom-color: rgba(143, 184, 255, 0.12);
 }
 
 :root[data-theme="dark"] .inventory-items-table tbody tr,
 :root[data-theme="dark"] .stock-health-table tbody tr {
-  background: rgba(16, 26, 41, 0.9);
+  background: #132036;
 }
 
 :root[data-theme="dark"] .inventory-items-table tbody tr:nth-child(even),
 :root[data-theme="dark"] .stock-health-table tbody tr:nth-child(even) {
-  background: rgba(255, 255, 255, 0.02);
+  background: #16253d;
 }
 
 :root[data-theme="dark"] .inventory-items-table tbody tr:hover,
@@ -11107,7 +11110,7 @@ a:focus-visible {
 :root[data-theme="dark"] .table-wrapper,
 :root[data-theme="dark"] .stock-health-table-wrap,
 :root[data-theme="dark"] .teacher-loan-detail-items__table-wrap {
-  background: rgba(8, 14, 24, 0.28);
+  background: #101b2d;
 }
 
 :root[data-theme="dark"] .inventory-items-table,
