@@ -697,6 +697,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                         LOAN.SCHEDULED_AT,
                         LOAN.EXPECTED_RETURN_AT,
                         LOAN.CREATED_AT,
+                        V_LOAN_STATE_DATES.COMPLETED_AT,
                         roomUuidField,
                         roomNameField,
                         subjectUuidField,
@@ -704,6 +705,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 )
                 .from(LOAN)
                 .join(USER).on(USER.ID.eq(LOAN.REQUESTER_ID))
+                .leftJoin(V_LOAN_STATE_DATES).on(V_LOAN_STATE_DATES.LOAN_ID.eq(LOAN.ID))
                 .leftJoin(ROOM).on(ROOM.ID.eq(LOAN.ROOM_ID))
                 .leftJoin(SUBJECT).on(SUBJECT.ID.eq(LOAN.SUBJECT_ID))
                 .where(condition)
@@ -718,6 +720,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                     record.get(LOAN.SCHEDULED_AT),
                     record.get(LOAN.EXPECTED_RETURN_AT),
                     record.get(LOAN.CREATED_AT),
+                    record.get(V_LOAN_STATE_DATES.COMPLETED_AT),
                     record.get(roomUuidField),
                     record.get(roomNameField),
                     record.get(subjectUuidField),
@@ -733,6 +736,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                     record.get(LOAN.SCHEDULED_AT),
                     record.get(LOAN.EXPECTED_RETURN_AT),
                     record.get(LOAN.CREATED_AT),
+                    record.get(V_LOAN_STATE_DATES.COMPLETED_AT),
                     record.get(roomUuidField),
                     record.get(roomNameField),
                     record.get(subjectUuidField),
@@ -748,6 +752,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                     record.get(LOAN.SCHEDULED_AT),
                     record.get(LOAN.EXPECTED_RETURN_AT),
                     record.get(LOAN.CREATED_AT),
+                    record.get(V_LOAN_STATE_DATES.COMPLETED_AT),
                     record.get(roomUuidField),
                     record.get(roomNameField),
                     record.get(subjectUuidField),
@@ -763,6 +768,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                         record.get(LOAN.SCHEDULED_AT),
                         record.get(LOAN.EXPECTED_RETURN_AT),
                         record.get(LOAN.CREATED_AT),
+                        record.get(V_LOAN_STATE_DATES.COMPLETED_AT),
                         record.get(roomUuidField),
                         record.get(roomNameField),
                         record.get(subjectUuidField),
@@ -1354,6 +1360,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 row.scheduledAt(),
                 row.expectedReturnAt(),
                 row.createdAt(),
+                row.completedAt(),
                 room,
                 subject,
                 items
@@ -1957,6 +1964,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
             OffsetDateTime scheduledAt,
             OffsetDateTime expectedReturnAt,
             OffsetDateTime createdAt,
+            OffsetDateTime completedAt,
             UUID roomUuid,
             String roomName,
             UUID subjectUuid,

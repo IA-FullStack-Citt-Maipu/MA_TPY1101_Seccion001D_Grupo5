@@ -117,7 +117,7 @@ function buildDashboardData(
       const available = implement?.stock?.available ?? 0;
       const stockTone: "ok" | "warn" | "critical" = available <= 3 ? "critical" : available <= 10 ? "warn" : "ok";
       return {
-        implement: implementNameById.get(implementId) ?? `Implemento #${implementId}`,
+        implement: implementNameById.get(implementId) ?? "Implemento sin nombre disponible",
         requests: total,
         rejects: 0,
         stock: `${available} unidades`,

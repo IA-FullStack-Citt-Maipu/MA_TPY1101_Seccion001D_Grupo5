@@ -15,7 +15,9 @@ import com.panol_project.backendpanol.shared.error.ApiException;
 import com.panol_project.backendpanol.shared.error.BadRequestException;
 import com.panol_project.backendpanol.shared.error.ConflictException;
 import com.panol_project.backendpanol.shared.error.NotFoundException;
+import java.time.Clock;
 import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.HashMap;
@@ -24,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,11 +35,19 @@ import org.springframework.transaction.annotation.Transactional;
 public class SolicitarPrestamoUseCase {
 
     private static final int MAX_NOTES_LENGTH = 1000;
+    private static final int MAX_SCHEDULE_DAYS_AHEAD = 14;
 
     private final LoanRepositoryPort loanRepositoryPort;
+    private final Clock clock;
 
+    @Autowired
     public SolicitarPrestamoUseCase(LoanRepositoryPort loanRepositoryPort) {
+        this(loanRepositoryPort, Clock.systemDefaultZone());
+    }
+
+    public SolicitarPrestamoUseCase(LoanRepositoryPort loanRepositoryPort, Clock clock) {
         this.loanRepositoryPort = loanRepositoryPort;
+        this.clock = clock;
     }
 
     @Transactional
@@ -245,12 +256,13 @@ public class SolicitarPrestamoUseCase {
         if (scheduledAt == null) {
             throw new BadRequestException("LOAN_SCHEDULE_REQUIRED", "scheduled_at es obligatorio");
         }
-        if (scheduledAt.isBefore(OffsetDateTime.now())) {
+        if (scheduledAt.isBefore(OffsetDateTime.now(clock))) {
             throw new BadRequestException(
                     "LOAN_SCHEDULE_PAST_NOT_ALLOWED",
                     "scheduled_at no puede estar en una fecha u hora pasada"
             );
         }
+        validateScheduledAtRange(scheduledAt);
         validateScheduleWindow(
                 scheduledAt,
                 "LOAN_SCHEDULE_DAY_NOT_ALLOWED",
@@ -263,7 +275,7 @@ public class SolicitarPrestamoUseCase {
         if (expectedReturnAt == null) {
             return;
         }
-        if (expectedReturnAt.isBefore(OffsetDateTime.now())) {
+        if (expectedReturnAt.isBefore(OffsetDateTime.now(clock))) {
             throw new BadRequestException(
                     "LOAN_EXPECTED_RETURN_PAST_NOT_ALLOWED",
                     "expected_return_at no puede estar en una fecha u hora pasada"
@@ -303,6 +315,18 @@ public class SolicitarPrestamoUseCase {
             throw new BadRequestException(
                     timeErrorCode,
                     fieldName + " debe estar entre las 08:00 y las 22:00"
+            );
+        }
+    }
+
+    private void validateScheduledAtRange(OffsetDateTime scheduledAt) {
+        LocalDate currentDate = OffsetDateTime.now(clock).toLocalDate();
+        LocalDate latestAllowedDate = currentDate.plusDays(MAX_SCHEDULE_DAYS_AHEAD);
+        LocalDate scheduledDate = scheduledAt.toLocalDate();
+        if (scheduledDate.isAfter(latestAllowedDate)) {
+            throw new BadRequestException(
+                    "LOAN_SCHEDULE_RANGE_NOT_ALLOWED",
+                    "scheduled_at solo permite solicitudes entre hoy y los proximos 14 dias corridos"
             );
         }
     }

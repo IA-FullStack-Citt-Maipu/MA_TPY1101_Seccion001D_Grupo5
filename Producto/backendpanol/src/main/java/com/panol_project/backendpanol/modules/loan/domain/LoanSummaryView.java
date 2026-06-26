@@ -11,6 +11,7 @@ public record LoanSummaryView(
         OffsetDateTime scheduledAt,
         OffsetDateTime expectedReturnAt,
         OffsetDateTime createdAt,
+        OffsetDateTime completedAt,
         RoomView room,
         SubjectView subject,
         List<ItemView> items

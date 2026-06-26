@@ -27,6 +27,7 @@ import com.panol_project.backendpanol.modules.loan.application.dto.RevisarPresta
 import com.panol_project.backendpanol.modules.loan.application.dto.SolicitarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.SolicitarPrestamoItemCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStateDatesView;
+import com.panol_project.backendpanol.modules.loan.domain.LoanStatus;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryPage;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStatusTimelineEntry;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
@@ -75,7 +76,7 @@ public class LoanV2Controller {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasRole('DOCENTE')")
+    @PreAuthorize("hasAnyRole('DOCENTE', 'COORDINADOR')")
     public LoanV2Response solicitarPrestamo(@Valid @RequestBody CreateLoanV2Request request, Authentication authentication) {
         UUID requesterUuid = currentUserUuidResolver.resolveCurrentUserUuid(authentication)
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "AUTH_REQUIRED", "Autenticacion requerida"));
@@ -100,7 +101,7 @@ public class LoanV2Controller {
     }
 
     @PatchMapping("/{loanUuid}")
-    @PreAuthorize("hasRole('DOCENTE')")
+    @PreAuthorize("hasAnyRole('DOCENTE', 'COORDINADOR')")
     public LoanV2Response modificarPrestamo(
             @PathVariable UUID loanUuid,
             @Valid @RequestBody CreateLoanV2Request request,
@@ -190,6 +191,7 @@ public class LoanV2Controller {
             @Valid @RequestBody ReviewLoanV2Request request,
             Authentication authentication
     ) {
+        requireCoordinatorReviewer(authentication, loanUuid);
         UUID actorUuid = resolveCurrentUserUuid(authentication);
         LoanSummaryView reviewed = gestionPrestamoUseCase.revisar(
                 new RevisarPrestamoCommand(
@@ -258,7 +260,7 @@ public class LoanV2Controller {
             @RequestBody(required = false) CancelLoanV2Request request,
             Authentication authentication
     ) {
-        findLoanVisibleForCurrentUser(authentication, loanUuid);
+        requireLoanCancellationAllowed(authentication, loanUuid);
         UUID actorUuid = resolveCurrentUserUuid(authentication);
 
         LoanSummaryView cancelled = gestionPrestamoUseCase.cancelar(
@@ -311,6 +313,7 @@ public class LoanV2Controller {
                 loan.scheduledAt(),
                 loan.expectedReturnAt(),
                 loan.createdAt(),
+                loan.completedAt(),
                 loan.room() == null ? null : new LoanRoomV2Response(loan.room().uuid(), loan.room().name()),
                 loan.subject() == null ? null : new LoanSubjectV2Response(loan.subject().uuid(), loan.subject().name()),
                 loan.items().stream()
@@ -393,6 +396,53 @@ public class LoanV2Controller {
             throw new NotFoundException("LOAN_NOT_FOUND", "Prestamo no encontrado");
         }
         return loan;
+    }
+
+    private LoanSummaryView requireOwnedCancellableLoanForRequester(
+            Authentication authentication,
+            UUID loanUuid,
+            String forbiddenCode,
+            String invalidStateCode
+    ) {
+        LoanSummaryView loan = findLoanVisibleForCurrentUser(authentication, loanUuid);
+        UUID currentUserUuid = resolveCurrentUserUuid(authentication);
+        if (!currentUserUuid.equals(loan.requesterUuid())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, forbiddenCode, "No tienes permisos para gestionar este prestamo");
+        }
+        if (loan.status() != LoanStatus.PENDING
+                && loan.status() != LoanStatus.APPROVED
+                && loan.status() != LoanStatus.PREPARED) {
+            throw new BadRequestException(
+                    invalidStateCode,
+                    "Solo puedes cancelar prestamos en estado pending, approved o prepared"
+            );
+        }
+        return loan;
+    }
+
+    private LoanSummaryView requireCoordinatorReviewer(Authentication authentication, UUID loanUuid) {
+        LoanSummaryView loan = findLoanVisibleForCurrentUser(authentication, loanUuid);
+        UUID currentUserUuid = resolveCurrentUserUuid(authentication);
+        if (currentUserUuid.equals(loan.requesterUuid())) {
+            throw new ApiException(
+                    HttpStatus.FORBIDDEN,
+                    "LOAN_SELF_REVIEW_FORBIDDEN",
+                    "No puedes revisar una solicitud creada por ti mismo"
+            );
+        }
+        return loan;
+    }
+
+    private LoanSummaryView requireLoanCancellationAllowed(Authentication authentication, UUID loanUuid) {
+        if (hasRole(authentication, "ROLE_COORDINADOR")) {
+            return findLoanVisibleForCurrentUser(authentication, loanUuid);
+        }
+        return requireOwnedCancellableLoanForRequester(
+                authentication,
+                loanUuid,
+                "LOAN_CANCEL_FORBIDDEN",
+                "LOAN_CANCEL_INVALID_STATE"
+        );
     }
 
     private UUID resolveCurrentUserUuid(Authentication authentication) {

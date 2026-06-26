@@ -17,6 +17,7 @@ import { fetchImplementStock } from "../services/stockService";
 import type { DeliverLoanPayload, LoanSummary } from "../types/loan";
 import type { ImplementSummary } from "../types/implement";
 import type { IndividualItem, StockDetail } from "../types/stock";
+import { buildLoanDetailHash } from "../utils/loanDetailRouting";
 
 interface DeliveryIndividualOption {
   assetCode: string;
@@ -409,7 +410,7 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
       window.history.back();
       return;
     }
-    window.location.hash = `#/inventory/prestamos/${loanUuid}`;
+    window.location.assign(buildLoanDetailHash(loanUuid, "list"));
   }
 
   function openModificationModal(itemName: string) {
@@ -424,7 +425,7 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
 
   function goToLoanDetail() {
     closeModificationModal();
-    window.location.hash = `#/inventory/prestamos/${loanUuid}`;
+    window.location.assign(buildLoanDetailHash(loanUuid, "list"));
   }
 
   function toggleItemSelected(implementUuid: string) {
@@ -640,7 +641,7 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
         items: payloadItems,
         notes: deliveryNotes.trim() || null,
       });
-      window.location.hash = `#/inventory/prestamos/${updated.uuid}`;
+      window.location.assign(buildLoanDetailHash(updated.uuid, "list"));
     } catch (requestError) {
       const apiError = getApiErrorPayload(requestError);
       setError(apiError?.message ?? getErrorMessage(requestError, "No se pudo registrar la entrega."));
@@ -674,7 +675,6 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
           <article className="loan-delivery-main">
             <header className="loan-delivery-main__meta">
               <div>
-                <p><strong>Prestamo:</strong> {loan.uuid}</p>
                 <p><strong>Sala:</strong> {loan.room?.name ?? "Sin sala"}</p>
                 <p><strong>Programado:</strong> {formatDateTime(loan.scheduled_at)}</p>
               </div>

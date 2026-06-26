@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   InventoryLayout,
   type BreadcrumbPart,
@@ -17,7 +17,6 @@ import { InventoryMovesPage } from "./pages/InventoryMovesPage";
 import { LoanCalendarPage } from "./pages/LoanCalendarPage";
 import { LoanCreatePage } from "./pages/LoanCreatePage";
 import { LoanCoordinatorPage } from "./pages/LoanCoordinatorPage";
-import { LoanDetailPage } from "./pages/LoanDetailPage";
 import { LoanDeliveryPage } from "./pages/LoanDeliveryPage";
 import { LoanHistoryPage } from "./pages/LoanHistoryPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -37,6 +36,7 @@ import {
   type SessionUserSummary,
   type UserRole,
 } from "./utils/auth";
+import { getHashPath, getLoanDetailUuidFromHash, normalizeLegacyLoanDetailHash } from "./utils/loanDetailRouting";
 import { applyThemeMode, getStoredThemeMode, persistThemeMode, type ThemeMode } from "./utils/theme";
 
 interface RouteView {
@@ -79,11 +79,19 @@ function App() {
   const [sessionUser, setSessionUser] = useState<SessionUserSummary | null>(() => getSessionUser());
   const [authStatus, setAuthStatus] = useState<AuthStatus>("bootstrapping");
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => getStoredThemeMode());
+  const currentHashPathRef = useRef(getHashPath(window.location.hash || "#/login"));
 
   useEffect(() => {
     function handleHashChange() {
-      setHash(window.location.hash || "#/login");
-      setRouteTransitionKey((previous) => previous + 1);
+      const nextHash = window.location.hash || "#/login";
+      const nextHashPath = getHashPath(nextHash);
+
+      if (nextHashPath !== currentHashPathRef.current) {
+        currentHashPathRef.current = nextHashPath;
+        setRouteTransitionKey((previous) => previous + 1);
+      }
+
+      setHash(nextHash);
     }
 
     window.addEventListener("hashchange", handleHashChange);
@@ -139,12 +147,15 @@ function App() {
   const role = sessionUser?.role ?? "UNKNOWN";
   const authenticated = authStatus === "authenticated" && sessionUser != null;
   const normalizedHash = hash || "#/login";
+  const normalizedHashPath = getHashPath(normalizedHash);
   const defaultHash = getDefaultHashByRole(role);
   const effectiveHash = !authenticated
     ? "#/login"
-    : normalizedHash === "#/login"
+    : normalizedHashPath === "#/login"
       ? defaultHash
       : normalizedHash;
+  const effectiveHashPath = getHashPath(effectiveHash);
+  const activeLoanDetailUuid = getLoanDetailUuidFromHash(effectiveHash);
 
   useEffect(() => {
     applyThemeMode(themeMode);
@@ -164,7 +175,7 @@ function App() {
     if (authStatus === "bootstrapping") {
       return;
     }
-    if (!authenticated && normalizedHash !== "#/login") {
+    if (!authenticated && normalizedHashPath !== "#/login") {
       window.location.hash = "#/login";
       return;
     }
@@ -173,17 +184,28 @@ function App() {
       window.location.hash = "#/login";
       return;
     }
-    if (authenticated && isDirector(role) && normalizedHash.startsWith("#/inventory")) {
+    if (authenticated && isDirector(role) && normalizedHashPath.startsWith("#/inventory")) {
       window.location.hash = "#/director/dashboard";
       return;
     }
-    if (authenticated && normalizedHash === "#/login") {
+    if (authenticated && normalizedHashPath === "#/login") {
       window.location.hash = defaultHash;
     }
-  }, [authStatus, authenticated, defaultHash, normalizedHash, role]);
+  }, [authStatus, authenticated, defaultHash, normalizedHashPath, role]);
+
+  useEffect(() => {
+    if (!authenticated) {
+      return;
+    }
+
+    const redirectedHash = normalizeLegacyLoanDetailHash(normalizedHash);
+    if (redirectedHash && redirectedHash !== normalizedHash) {
+      window.location.replace(redirectedHash);
+    }
+  }, [authenticated, normalizedHash]);
 
   const routeView = useMemo<RouteView>(() => {
-    const currentHash = effectiveHash;
+    const currentHashPath = effectiveHashPath;
     const teacherRole = isTeacher(role);
     const coordinatorRole = isCoordinator(role);
     const directorRole = isDirector(role);
@@ -198,7 +220,7 @@ function App() {
       };
     }
 
-    if (!directorRole && currentHash.startsWith("#/director")) {
+    if (!directorRole && currentHashPath.startsWith("#/director")) {
       return {
         key: "director-forbidden",
         navigationMode: "inventory",
@@ -208,7 +230,7 @@ function App() {
       };
     }
 
-    if (directorRole && currentHash.startsWith("#/director/users")) {
+    if (directorRole && currentHashPath.startsWith("#/director/users")) {
       return {
         key: "director-users",
         navigationMode: "director",
@@ -218,7 +240,7 @@ function App() {
       };
     }
 
-    if (directorRole && currentHash.startsWith("#/director/dashboard")) {
+    if (directorRole && currentHashPath.startsWith("#/director/dashboard")) {
       return {
         key: "director-dashboard",
         navigationMode: "director",
@@ -228,7 +250,7 @@ function App() {
       };
     }
 
-    if (currentHash.startsWith("#/notificaciones")) {
+    if (currentHashPath.startsWith("#/notificaciones")) {
       return {
         key: "notifications",
         navigationMode: directorRole ? "director" : "inventory",
@@ -243,7 +265,7 @@ function App() {
       };
     }
 
-    if (currentHash.startsWith("#/support")) {
+    if (currentHashPath.startsWith("#/support")) {
       return {
         key: "support",
         navigationMode: directorRole ? "director" : "inventory",
@@ -259,7 +281,7 @@ function App() {
       };
     }
 
-    if (currentHash.startsWith("#/configuracion")) {
+    if (currentHashPath.startsWith("#/configuracion")) {
       return {
         key: "settings",
         navigationMode: directorRole ? "director" : "inventory",
@@ -282,7 +304,7 @@ function App() {
       };
     }
 
-    if (currentHash.startsWith("#/inventory/monitoring/outbox")) {
+    if (currentHashPath.startsWith("#/inventory/monitoring/outbox")) {
       return {
         key: "outbox-monitoring-disabled",
         navigationMode: "inventory",
@@ -292,7 +314,7 @@ function App() {
       };
     }
 
-    if (currentHash.startsWith("#/inventory/prestamos/calendario")) {
+    if (currentHashPath.startsWith("#/inventory/prestamos/calendario")) {
       if (!teacherRole && !coordinatorRole) {
         return inventoryDenied("agenda", "Prestamos", "No tienes permisos para ver la agenda de prestamos.");
       }
@@ -303,14 +325,14 @@ function App() {
         breadcrumbs: teacherRole
           ? [{ label: "Prestamos", href: "#/inventory/prestamos" }, { label: "Agenda" }]
           : [{ label: "Inventario", href: "#/inventory/dashboard" }, { label: "Prestamos", href: "#/inventory/prestamos" }, { label: "Agenda" }],
-        content: <LoanCalendarPage embedded />,
+        content: <LoanCalendarPage embedded activeDetailLoanUuid={activeLoanDetailUuid} />,
       };
     }
 
-    const itemEditMatch = currentHash.match(
+    const itemEditMatch = currentHashPath.match(
       /^#\/inventory\/(?:implementos|items)\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})\/editar$/,
     );
-    const itemDetailMatch = currentHash.match(
+    const itemDetailMatch = currentHashPath.match(
       /^#\/inventory\/(?:implementos|items)\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$/,
     );
     if (itemEditMatch) {
@@ -341,13 +363,13 @@ function App() {
       };
     }
 
-    const loanDetailMatch = currentHash.match(
+    const loanDetailMatch = currentHashPath.match(
       /^#\/inventory\/prestamos\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$/,
     );
-    const loanDeliveryMatch = currentHash.match(
+    const loanDeliveryMatch = currentHashPath.match(
       /^#\/inventory\/prestamos\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})\/entrega$/,
     );
-    const loanEditMatch = currentHash.match(
+    const loanEditMatch = currentHashPath.match(
       /^#\/inventory\/prestamos\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})\/editar$/,
     );
 
@@ -367,7 +389,7 @@ function App() {
     }
 
     if (loanEditMatch) {
-      if (!teacherRole) {
+      if (!teacherRole && !coordinatorRole) {
         return inventoryDenied("teacher-loans", "Prestamos", "No tienes permisos para modificar solicitudes de prestamo.");
       }
       const loanUuid = loanEditMatch[1];
@@ -380,23 +402,7 @@ function App() {
       };
     }
 
-    if (loanDetailMatch) {
-      if (!teacherRole && !coordinatorRole) {
-        return inventoryDenied("teacher-loans", "Prestamos", "No tienes permisos para acceder a solicitudes de prestamo.");
-      }
-      const loanUuid = loanDetailMatch[1];
-      return {
-        key: `loan-detail-${loanUuid}`,
-        navigationMode: "inventory",
-        activeSection: teacherRole ? "teacher-loans" : "coordinator-loans",
-        breadcrumbs: teacherRole
-          ? [{ label: "Prestamos", href: "#/inventory/prestamos" }, { label: "Detalle" }]
-          : [{ label: "Inventario", href: "#/inventory/dashboard" }, { label: "Prestamos", href: "#/inventory/prestamos" }, { label: "Detalle prestamo" }],
-        content: <LoanDetailPage loanUuid={loanUuid} embedded />,
-      };
-    }
-
-    if (currentHash === "#/inventory/prestamos") {
+    if (loanDetailMatch || currentHashPath === "#/inventory/prestamos") {
       if (!teacherRole && !coordinatorRole) {
         return inventoryDenied("teacher-loans", "Prestamos", "No tienes permisos para acceder a solicitudes de prestamo.");
       }
@@ -406,7 +412,7 @@ function App() {
           navigationMode: "inventory",
           activeSection: "coordinator-loans",
           breadcrumbs: [{ label: "Inventario", href: "#/inventory/dashboard" }, { label: "Prestamos" }],
-          content: <LoanCoordinatorPage embedded />,
+          content: <LoanCoordinatorPage embedded activeDetailLoanUuid={activeLoanDetailUuid} />,
         };
       }
       return {
@@ -414,13 +420,13 @@ function App() {
         navigationMode: "inventory",
         activeSection: "teacher-loans",
         breadcrumbs: [{ label: "Prestamos" }, { label: "Mis prestamos" }],
-        content: <LoanHistoryPage embedded />,
+        content: <LoanHistoryPage embedded activeDetailLoanUuid={activeLoanDetailUuid} />,
       };
     }
 
-    if (currentHash.startsWith("#/inventory/prestamos/nuevo")) {
-      if (!teacherRole) {
-        return inventoryDenied("teacher-loans", "Prestamos", "Solo el rol Docente puede crear solicitudes de prestamo.");
+    if (currentHashPath.startsWith("#/inventory/prestamos/nuevo")) {
+      if (!teacherRole && !coordinatorRole) {
+        return inventoryDenied("teacher-loans", "Prestamos", "No tienes permisos para crear solicitudes de prestamo.");
       }
       return {
         key: "loan-create",
@@ -432,9 +438,9 @@ function App() {
     }
 
     if (
-      currentHash === "#/inventory/implementos/nuevo" ||
-      currentHash === "#/inventory/implementos/new" ||
-      currentHash === "#/inventory/items/new"
+      currentHashPath === "#/inventory/implementos/nuevo" ||
+      currentHashPath === "#/inventory/implementos/new" ||
+      currentHashPath === "#/inventory/items/new"
     ) {
       if (!coordinatorRole) {
         return inventoryDenied("items", "Implementos", "Solo el rol Coordinador puede crear implementos.");
@@ -448,7 +454,7 @@ function App() {
       };
     }
 
-    if (currentHash.startsWith("#/inventory/implementos") || currentHash.startsWith("#/inventory/items")) {
+    if (currentHashPath.startsWith("#/inventory/implementos") || currentHashPath.startsWith("#/inventory/items")) {
       if (!coordinatorRole) {
         return inventoryDenied("items", "Implementos", "Solo el rol Coordinador puede acceder al catalogo operativo.");
       }
@@ -461,7 +467,7 @@ function App() {
       };
     }
 
-    if (currentHash.startsWith("#/inventory/locations")) {
+    if (currentHashPath.startsWith("#/inventory/locations")) {
       if (!coordinatorRole) {
         return inventoryDenied("locations", "Ubicaciones", "Solo el rol Coordinador puede gestionar ubicaciones.");
       }
@@ -474,7 +480,7 @@ function App() {
       };
     }
 
-    if (currentHash.startsWith("#/inventory/moves")) {
+    if (currentHashPath.startsWith("#/inventory/moves")) {
       if (!coordinatorRole) {
         return inventoryDenied("moves", "Movimientos", "Solo el rol Coordinador puede acceder a los movimientos operativos.");
       }
@@ -487,7 +493,7 @@ function App() {
       };
     }
 
-    if (currentHash.startsWith("#/inventory/categories")) {
+    if (currentHashPath.startsWith("#/inventory/categories")) {
       if (!coordinatorRole) {
         return inventoryDenied("categories", "Categorias", "Solo el rol Coordinador puede gestionar categorias.");
       }
@@ -500,7 +506,7 @@ function App() {
       };
     }
 
-    if (currentHash.startsWith("#/inventory/dashboard")) {
+    if (currentHashPath.startsWith("#/inventory/dashboard")) {
       if (!coordinatorRole) {
         return inventoryDenied("dashboard", "Panel", "Solo el rol Coordinador puede acceder al panel operativo.");
       }
@@ -521,7 +527,7 @@ function App() {
       content: <NotFoundPage />,
       notFound: true,
     };
-  }, [effectiveHash, handleSessionUserChange, handleThemeModeChange, role, sessionUser, themeMode]);
+  }, [activeLoanDetailUuid, effectiveHashPath, handleSessionUserChange, handleThemeModeChange, role, sessionUser, themeMode]);
 
   if (authStatus === "bootstrapping") {
     return (

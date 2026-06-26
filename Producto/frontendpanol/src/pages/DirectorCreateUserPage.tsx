@@ -241,7 +241,6 @@ export function DirectorCreateUserPage({ embedded = false }: { embedded?: boolea
             <table className="category-table">
               <thead>
                 <tr>
-                  <th>UUID</th>
                   <th>Nombre</th>
                   <th>RUT</th>
                   <th>Correo</th>
@@ -253,7 +252,6 @@ export function DirectorCreateUserPage({ embedded = false }: { embedded?: boolea
               <tbody>
                 {sortedUsers.map((user) => (
                   <tr key={getUserRef(user)}>
-                    <td>{user.uuid}</td>
                     <td>{user.name}</td>
                     <td>{formatRutDisplay(user.rut)}</td>
                     <td>{user.email ?? "-"}</td>

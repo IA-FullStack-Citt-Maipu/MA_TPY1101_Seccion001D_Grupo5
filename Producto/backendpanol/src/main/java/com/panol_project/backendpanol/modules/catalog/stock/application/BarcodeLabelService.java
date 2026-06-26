@@ -76,7 +76,7 @@ public class BarcodeLabelService {
                     throw new BadRequestException("LABEL_INDIVIDUAL_NOT_FOUND", "La unidad individual no existe o no esta activa");
                 }
                 var individual = selected.getFirst();
-                String code = normalizeCode(individual.assetCode(), "IND-" + individual.uuid());
+                String code = requireVisibleCode(individual.assetCode());
                 return List.of(new LabelData(implemento.name(), code, "Unidad individual"));
             }
 
@@ -91,7 +91,7 @@ public class BarcodeLabelService {
             List<LabelData> labels = new ArrayList<>();
             for (int i = 0; i < qty; i++) {
                 var individual = individuals.get(i);
-                String code = normalizeCode(individual.assetCode(), "IND-" + individual.uuid());
+                String code = requireVisibleCode(individual.assetCode());
                 labels.add(new LabelData(implemento.name(), code, "Unidad individual"));
             }
             return labels;
@@ -101,7 +101,7 @@ public class BarcodeLabelService {
             throw new BadRequestException("LABEL_SCOPE_GENERAL_ONLY", "individual_uuid solo aplica para scope INDIVIDUAL");
         }
         int qty = normalizeQuantity(quantity);
-        String generalCode = normalizeCode(implemento.barcode(), "IMP-" + implemento.uuid());
+        String generalCode = requireVisibleCode(implemento.barcode());
         List<LabelData> labels = new ArrayList<>();
         for (int i = 0; i < qty; i++) {
             labels.add(new LabelData(implemento.name(), generalCode, "Implemento general"));
@@ -119,9 +119,9 @@ public class BarcodeLabelService {
         return quantity;
     }
 
-    private String normalizeCode(String raw, String fallback) {
+    private String requireVisibleCode(String raw) {
         if (raw == null || raw.trim().isEmpty()) {
-            return fallback;
+            throw new BadRequestException("LABEL_CODE_MISSING", "No existe un codigo visible disponible para esta etiqueta");
         }
         return raw.trim();
     }
