@@ -398,7 +398,7 @@ public class LoanV2Controller {
         return loan;
     }
 
-    private LoanSummaryView requireOwnedPendingLoanForRequesterActions(
+    private LoanSummaryView requireOwnedCancellableLoanForRequester(
             Authentication authentication,
             UUID loanUuid,
             String forbiddenCode,
@@ -409,8 +409,13 @@ public class LoanV2Controller {
         if (!currentUserUuid.equals(loan.requesterUuid())) {
             throw new ApiException(HttpStatus.FORBIDDEN, forbiddenCode, "No tienes permisos para gestionar este prestamo");
         }
-        if (loan.status() != LoanStatus.PENDING) {
-            throw new BadRequestException(invalidStateCode, "Solo puedes gestionar prestamos en estado pending");
+        if (loan.status() != LoanStatus.PENDING
+                && loan.status() != LoanStatus.APPROVED
+                && loan.status() != LoanStatus.PREPARED) {
+            throw new BadRequestException(
+                    invalidStateCode,
+                    "Solo puedes cancelar prestamos en estado pending, approved o prepared"
+            );
         }
         return loan;
     }
@@ -432,7 +437,7 @@ public class LoanV2Controller {
         if (hasRole(authentication, "ROLE_COORDINADOR")) {
             return findLoanVisibleForCurrentUser(authentication, loanUuid);
         }
-        return requireOwnedPendingLoanForRequesterActions(
+        return requireOwnedCancellableLoanForRequester(
                 authentication,
                 loanUuid,
                 "LOAN_CANCEL_FORBIDDEN",

@@ -41,6 +41,7 @@ import type { LoanStateDates, LoanStatusTimelineEntry, LoanSummary } from "../ty
 import type { StockDetail } from "../types/stock";
 import { getSessionUser, getSessionUserRole } from "../utils/auth";
 import { canStartDelivery } from "../utils/loanSchedule";
+import { canRequesterCancelLoan } from "../utils/loanStatus";
 
 const DELETE_CONFIRM_TEXT = "eliminar";
 
@@ -311,7 +312,7 @@ export function LoanDetailPage({
   );
   const isRequester = loan?.requester_uuid === currentUser?.id;
   const canModifyLoan = Boolean(loan && isRequester && loan.status === "pending");
-  const canCancelLoan = canModifyLoan;
+  const canCancelLoan = Boolean(loan && isRequester && canRequesterCancelLoan(loan.status));
   const canReviewLoan = Boolean(isCoordinator && loan && !isRequester && loan.status === "pending");
   const hasVisibleActions = Boolean(
     canReviewLoan ||

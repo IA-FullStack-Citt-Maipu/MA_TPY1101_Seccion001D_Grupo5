@@ -361,6 +361,107 @@ class LoanV2ControllerTest {
     }
 
     @ParameterizedTest
+    @ValueSource(strings = {"PENDING", "APPROVED", "PREPARED"})
+    void cancelarPrestamoDebePermitirSolicitanteSobreEstadosCancelables(String statusLiteral) throws Exception {
+        UUID requesterUuid = UUID.randomUUID();
+        UUID loanUuid = UUID.randomUUID();
+        UUID roomUuid = UUID.randomUUID();
+        UUID implementUuid = UUID.randomUUID();
+        LoanStatus initialStatus = LoanStatus.valueOf(statusLiteral);
+        OffsetDateTime scheduledAt = OffsetDateTime.parse(FUTURE_SCHEDULED_AT);
+        int reservedQuantity = initialStatus == LoanStatus.PENDING ? 0 : 1;
+
+        LoanSummaryView cancellableLoan = new LoanSummaryView(
+                loanUuid,
+                requesterUuid,
+                initialStatus,
+                scheduledAt,
+                null,
+                OffsetDateTime.parse("2026-05-21T21:00:00-04:00"),
+                null,
+                new LoanSummaryView.RoomView(roomUuid, "Sala 306"),
+                null,
+                List.of(new LoanSummaryView.ItemView(implementUuid, "Set clinico", 1, reservedQuantity, 0))
+        );
+        LoanAggregate cancelledLoan = new LoanAggregate(
+                loanUuid,
+                requesterUuid,
+                roomUuid,
+                null,
+                LoanStatus.CANCELLED,
+                scheduledAt,
+                null,
+                OffsetDateTime.parse("2026-05-21T21:00:00-04:00"),
+                List.of(new LoanDetailItem(implementUuid, 1, 0, 0))
+        );
+        LoanSummaryView cancelledSummary = new LoanSummaryView(
+                loanUuid,
+                requesterUuid,
+                LoanStatus.CANCELLED,
+                scheduledAt,
+                null,
+                OffsetDateTime.parse("2026-05-21T21:00:00-04:00"),
+                null,
+                new LoanSummaryView.RoomView(roomUuid, "Sala 306"),
+                null,
+                List.of(new LoanSummaryView.ItemView(implementUuid, "Set clinico", 1, 0, 0))
+        );
+
+        when(loanRepositoryPort.findVisibleLoanSummaryByUuid(loanUuid))
+                .thenReturn(Optional.of(cancellableLoan), Optional.of(cancelledSummary));
+        when(loanRepositoryPort.cancelLoan(any())).thenReturn(cancelledLoan);
+
+        mockMvc.perform(patch("/api/v2/loans/{loanUuid}/cancel", loanUuid)
+                        .with(authentication(jwtAuthentication(requesterUuid, "DOCENTE")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "notes": "Cancelacion solicitada por docente"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.uuid").value(loanUuid.toString()))
+                .andExpect(jsonPath("$.status").value("cancelled"));
+
+        verify(loanRepositoryPort).cancelLoan(any());
+    }
+
+    @Test
+    void cancelarPrestamoDebeRechazarSolicitanteEnEstadoNoCancelable() throws Exception {
+        UUID requesterUuid = UUID.randomUUID();
+        UUID loanUuid = UUID.randomUUID();
+        OffsetDateTime scheduledAt = OffsetDateTime.parse(FUTURE_SCHEDULED_AT);
+
+        LoanSummaryView deliveredLoan = new LoanSummaryView(
+                loanUuid,
+                requesterUuid,
+                LoanStatus.DELIVERED,
+                scheduledAt,
+                null,
+                OffsetDateTime.parse("2026-05-21T21:00:00-04:00"),
+                null,
+                null,
+                null,
+                List.of()
+        );
+
+        when(loanRepositoryPort.findVisibleLoanSummaryByUuid(loanUuid)).thenReturn(Optional.of(deliveredLoan));
+
+        mockMvc.perform(patch("/api/v2/loans/{loanUuid}/cancel", loanUuid)
+                        .with(authentication(jwtAuthentication(requesterUuid, "DOCENTE")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "notes": "Intento fuera de rango"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("LOAN_CANCEL_INVALID_STATE"));
+
+        verify(loanRepositoryPort, never()).cancelLoan(any());
+    }
+
+    @ParameterizedTest
     @ValueSource(strings = {"DIRECTOR"})
     void solicitarPrestamoDebeRetornar403ParaRolesNoDocente(String role) throws Exception {
                 mockMvc.perform(post("/api/v2/loans")

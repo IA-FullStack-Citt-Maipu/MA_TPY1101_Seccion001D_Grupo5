@@ -19,6 +19,7 @@ import { getErrorMessage } from "../services/apiClient";
 import { cancelLoan, fetchLoansPage } from "../services/loanService";
 import type { LoanSummary } from "../types/loan";
 import { buildLoanDetailHash, stripLoanDetailFromHash } from "../utils/loanDetailRouting";
+import { canRequesterCancelLoan } from "../utils/loanStatus";
 import { LoanDetailPage } from "./LoanDetailPage";
 
 const CLIENT_PAGE_SIZE = 4;
@@ -142,10 +143,6 @@ function isActiveLoanStatus(status: string): boolean {
 
 function isPendingReturnStatus(status: string): boolean {
   return status === "delivered" || status === "overdue";
-}
-
-function canCancelLoan(status: string): boolean {
-  return status === "pending" || status === "approved" || status === "prepared";
 }
 
 function summarizeItems(items: LoanSummary["items"]): string {
@@ -560,7 +557,7 @@ export function LoanHistoryPage({
                         >
                           <Download size={16} />
                         </button>
-                        {canCancelLoan(loan.status) ? (
+                        {canRequesterCancelLoan(loan.status) ? (
                           <button
                             type="button"
                             className="teacher-loans-icon-btn teacher-loans-icon-btn--danger"
