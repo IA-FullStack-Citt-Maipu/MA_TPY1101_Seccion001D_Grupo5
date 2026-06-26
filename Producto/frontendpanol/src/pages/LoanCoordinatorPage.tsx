@@ -16,6 +16,7 @@ import { useInactivityPollingGate } from "../hooks/useInactivityPollingGate";
 import { getApiErrorPayload, getErrorMessage } from "../services/apiClient";
 import { completeLoan, fetchLoansPage, reviewLoan } from "../services/loanService";
 import type { LoanSummary } from "../types/loan";
+import { getSessionUser } from "../utils/auth";
 import { buildLoanDetailHash, stripLoanDetailFromHash } from "../utils/loanDetailRouting";
 import { canStartDelivery } from "../utils/loanSchedule";
 import { LoanDetailPage } from "./LoanDetailPage";
@@ -112,6 +113,7 @@ export function LoanCoordinatorPage({
   embedded?: boolean;
   activeDetailLoanUuid?: string | null;
 }) {
+  const currentUserId = getSessionUser()?.id ?? null;
   const [allLoans, setAllLoans] = useState<LoanSummary[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -308,6 +310,9 @@ export function LoanCoordinatorPage({
   }
 
   function openApproveModal(loan: LoanSummary) {
+    if (currentUserId != null && loan.requester_uuid === currentUserId) {
+      return;
+    }
     setApprovingLoan(loan);
   }
 
@@ -360,6 +365,9 @@ export function LoanCoordinatorPage({
   }
 
   function openRejectModal(loan: LoanSummary) {
+    if (currentUserId != null && loan.requester_uuid === currentUserId) {
+      return;
+    }
     setRejectingLoan(loan);
     setRejectionReason("");
   }
@@ -542,6 +550,7 @@ export function LoanCoordinatorPage({
                 pagedLoans.map((loan) => {
                   const isProcessing = processingLoanUuid === loan.uuid;
                   const deliveryEnabled = canStartDelivery(loan);
+                  const isOwnLoan = currentUserId != null && loan.requester_uuid === currentUserId;
                   return (
                     <tr key={loan.uuid}>
                       <td>
@@ -566,24 +575,35 @@ export function LoanCoordinatorPage({
                             <Eye size={15} />
                           </button>
                           {loan.status === "pending" ? (
-                            <>
+                            isOwnLoan ? (
                               <button
                                 type="button"
-                                className="coordinator-loans-action-btn coordinator-loans-action-btn--approve"
-                                disabled={isProcessing}
-                                onClick={() => openApproveModal(loan)}
+                                className="coordinator-loans-action-btn"
+                                disabled
+                                title="No puedes revisar una solicitud creada por ti mismo"
                               >
-                                Aceptar
+                                Solicitud propia
                               </button>
-                              <button
-                                type="button"
-                                className="coordinator-loans-action-btn coordinator-loans-action-btn--reject"
-                                disabled={isProcessing}
-                                onClick={() => openRejectModal(loan)}
-                              >
-                                Rechazar
-                              </button>
-                            </>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  className="coordinator-loans-action-btn coordinator-loans-action-btn--approve"
+                                  disabled={isProcessing}
+                                  onClick={() => openApproveModal(loan)}
+                                >
+                                  Aceptar
+                                </button>
+                                <button
+                                  type="button"
+                                  className="coordinator-loans-action-btn coordinator-loans-action-btn--reject"
+                                  disabled={isProcessing}
+                                  onClick={() => openRejectModal(loan)}
+                                >
+                                  Rechazar
+                                </button>
+                              </>
+                            )
                           ) : loan.status === "approved" || loan.status === "prepared" ? (
                             <button
                               type="button"

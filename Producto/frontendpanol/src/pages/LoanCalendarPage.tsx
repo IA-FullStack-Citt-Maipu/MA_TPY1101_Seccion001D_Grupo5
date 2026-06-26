@@ -452,6 +452,12 @@ export function LoanCalendarPage({
     if (!activeDetailLoanUuid) {
       return;
     }
+    if (initialLoading || !hasLoadedOnceRef.current) {
+      return;
+    }
+    if (error && allLoans.length === 0) {
+      return;
+    }
     if (selectedDayLoans.length === 0) {
       window.location.replace(stripLoanDetailFromHash(window.location.hash));
       return;
@@ -465,7 +471,7 @@ export function LoanCalendarPage({
         window.location.replace(stripLoanDetailFromHash(window.location.hash));
       }
     }
-  }, [activeDetailLoanUuid, selectedDayLoans]);
+  }, [activeDetailLoanUuid, allLoans.length, error, initialLoading, selectedDayLoans]);
 
   function goToPreviousMonth() {
     setMonthAnchor((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1));

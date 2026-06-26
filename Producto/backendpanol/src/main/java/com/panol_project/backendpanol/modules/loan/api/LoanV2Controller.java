@@ -191,6 +191,7 @@ public class LoanV2Controller {
             @Valid @RequestBody ReviewLoanV2Request request,
             Authentication authentication
     ) {
+        requireCoordinatorReviewer(authentication, loanUuid);
         UUID actorUuid = resolveCurrentUserUuid(authentication);
         LoanSummaryView reviewed = gestionPrestamoUseCase.revisar(
                 new RevisarPrestamoCommand(
@@ -259,7 +260,7 @@ public class LoanV2Controller {
             @RequestBody(required = false) CancelLoanV2Request request,
             Authentication authentication
     ) {
-        requireOwnedPendingLoanForRequesterActions(authentication, loanUuid, "LOAN_CANCEL_FORBIDDEN", "LOAN_CANCEL_INVALID_STATE");
+        requireLoanCancellationAllowed(authentication, loanUuid);
         UUID actorUuid = resolveCurrentUserUuid(authentication);
 
         LoanSummaryView cancelled = gestionPrestamoUseCase.cancelar(
@@ -412,6 +413,31 @@ public class LoanV2Controller {
             throw new BadRequestException(invalidStateCode, "Solo puedes gestionar prestamos en estado pending");
         }
         return loan;
+    }
+
+    private LoanSummaryView requireCoordinatorReviewer(Authentication authentication, UUID loanUuid) {
+        LoanSummaryView loan = findLoanVisibleForCurrentUser(authentication, loanUuid);
+        UUID currentUserUuid = resolveCurrentUserUuid(authentication);
+        if (currentUserUuid.equals(loan.requesterUuid())) {
+            throw new ApiException(
+                    HttpStatus.FORBIDDEN,
+                    "LOAN_SELF_REVIEW_FORBIDDEN",
+                    "No puedes revisar una solicitud creada por ti mismo"
+            );
+        }
+        return loan;
+    }
+
+    private LoanSummaryView requireLoanCancellationAllowed(Authentication authentication, UUID loanUuid) {
+        if (hasRole(authentication, "ROLE_COORDINADOR")) {
+            return findLoanVisibleForCurrentUser(authentication, loanUuid);
+        }
+        return requireOwnedPendingLoanForRequesterActions(
+                authentication,
+                loanUuid,
+                "LOAN_CANCEL_FORBIDDEN",
+                "LOAN_CANCEL_INVALID_STATE"
+        );
     }
 
     private UUID resolveCurrentUserUuid(Authentication authentication) {

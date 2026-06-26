@@ -24,7 +24,7 @@ import { InventoryLayout } from "../components/layout/InventoryLayout";
 import { getErrorMessage } from "../services/apiClient";
 import { fetchImplementById } from "../services/implementService";
 import { fetchLabelsPdfBlob, type LabelScope } from "../services/labelService";
-import { fetchLocations } from "../services/locationService";
+import { fetchLocations, fetchLocationsForManagement } from "../services/locationService";
 import { fetchInventoryMovements, registerManualMovement, type ManualMovementType } from "../services/movementService";
 import { addStockEntry, applyStockMovement, fetchImplementStock, updateIndividualState } from "../services/stockService";
 import type { ImplementDetail, InventoryMovementDetail } from "../types/implement";
@@ -224,20 +224,23 @@ export function InventoryItemDetailPage({
   const [labelPreviewUrl, setLabelPreviewUrl] = useState<string | null>(null);
   const [labelBusy, setLabelBusy] = useState(false);
   const locationNameByUuid = new Map(locations.map((location) => [location.uuid, location.name] as const));
-  const labelIndividual =
-    labelScope === "INDIVIDUAL"
-      ? (stockDetail?.individuals ?? []).find((individual) => individual.uuid === labelIndividualUuid) ?? null
-      : null;
-  const labelDisplayCode =
-    labelScope === "INDIVIDUAL"
-      ? labelIndividual?.asset_code?.trim() || null
-      : implement?.barcode?.trim() || null;
+
+  function resolveLabelDisplayCode(scope: LabelScope, individualUuid: string | null): string | null {
+    if (scope === "INDIVIDUAL") {
+      const selectedIndividual =
+        (stockDetail?.individuals ?? []).find((individual) => individual.uuid === individualUuid) ?? null;
+      return selectedIndividual?.asset_code?.trim() || null;
+    }
+    return implement?.barcode?.trim() || null;
+  }
+
+  const labelDisplayCode = resolveLabelDisplayCode(labelScope, labelIndividualUuid);
 
   function resolveLocationName(locationUuid: string | null): string {
     if (!locationUuid) {
-      return "Sin ubicación";
+      return "Sin ubicacion";
     }
-    return locationNameByUuid.get(locationUuid) ?? "Sin ubicación";
+    return locationNameByUuid.get(locationUuid) ?? "Ubicacion no disponible";
   }
 
   useEffect(() => {
@@ -283,11 +286,12 @@ export function InventoryItemDetailPage({
   }, [implementUuid]);
 
   useEffect(() => {
-    fetchLocations()
+    const loadLocations = isCoordinator ? fetchLocationsForManagement : fetchLocations;
+    loadLocations()
       .then((result) => setLocations(result))
       .catch((requestError) => setLocationsError(getErrorMessage(requestError, "No se pudo cargar las ubicaciones.")))
       .finally(() => undefined);
-  }, []);
+  }, [isCoordinator]);
 
   async function refreshStock() {
     const detail = await fetchImplementStock(implementUuid);
@@ -588,7 +592,9 @@ export function InventoryItemDetailPage({
     setLabelIndividualUuid(individualUuid);
     setLabelPreviewUrl(null);
     setIsLabelModalOpen(true);
-    void handleGenerateLabelsPdf(scope, individualUuid);
+    if (resolveLabelDisplayCode(scope, individualUuid)) {
+      void handleGenerateLabelsPdf(scope, individualUuid);
+    }
   }
 
   async function handleGenerateLabelsPdf(scopeArg: LabelScope, individualUuidArg: string | null) {
