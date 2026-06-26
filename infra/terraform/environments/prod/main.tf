@@ -19,6 +19,7 @@ locals {
     APP_AUTH_JWT_ISSUER                                = var.app_auth_jwt_issuer
     APP_AUTH_JWT_EXPIRATION_SECONDS                    = tostring(var.app_auth_jwt_expiration_seconds)
     APP_AUTH_REFRESH_EXPIRATION_SECONDS                = tostring(var.app_auth_refresh_expiration_seconds)
+    APP_AUTH_REFRESH_TEMPORARY_EXPIRATION_SECONDS      = tostring(var.app_auth_refresh_temporary_expiration_seconds)
     APP_AUTH_COOKIE_SECURE                             = tostring(var.app_auth_cookie_secure)
     APP_AUTH_COOKIE_SAME_SITE                          = var.app_auth_cookie_same_site
     APP_AUTH_TOKEN_REVOCATION_CLEANUP_ENABLED          = tostring(var.app_auth_token_revocation_cleanup_enabled)

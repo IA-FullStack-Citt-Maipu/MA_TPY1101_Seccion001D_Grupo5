@@ -43,6 +43,7 @@ Comunes:
 - `APP_AUTH_JWT_ISSUER`
 - `APP_AUTH_JWT_EXPIRATION_SECONDS`
 - `APP_AUTH_REFRESH_EXPIRATION_SECONDS`
+- `APP_AUTH_REFRESH_TEMPORARY_EXPIRATION_SECONDS`
 - `APP_AUTH_BOT_TOKEN_EXPIRATION_SECONDS`
 - `APP_AUTH_BOT_TOKEN_AUDIENCE`
 - `APP_AUTH_COOKIE_SECURE`
@@ -82,6 +83,11 @@ jOOQ (build-time):
 - `APP_AUTH_REFRESH_EXPIRATION_SECONDS`
   - TTL de la sesion refresh y del `Max-Age` persistente de la cookie refresh.
   - Default: `604800` segundos.
+- `APP_AUTH_REFRESH_TEMPORARY_EXPIRATION_SECONDS`
+  - TTL server-side de la sesion temporal cuando `rememberMe=false`.
+  - La cookie sigue siendo de sesion del navegador, pero el backend ya no la
+    renueva por 7 dias.
+  - Default: `86400` segundos.
 - `APP_AUTH_BOT_TOKEN_EXPIRATION_SECONDS`
   - TTL del token puente emitido para `bot-panol`.
   - Default: `300` segundos.

@@ -101,6 +101,7 @@ class AuthCookieSecurityTest {
                         true,
                         "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
                         OffsetDateTime.parse("2026-06-13T12:00:00Z"),
+                        OffsetDateTime.parse("2026-06-13T13:00:00Z"),
                         OffsetDateTime.parse("2026-06-20T12:00:00Z")
                 )
         ));

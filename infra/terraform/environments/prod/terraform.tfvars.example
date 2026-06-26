@@ -19,6 +19,7 @@ app_auth_lock_minutes             = 15
 app_auth_jwt_issuer               = "panol-backend-prod"
 app_auth_jwt_expiration_seconds   = 3600
 app_auth_refresh_expiration_seconds = 604800
+app_auth_refresh_temporary_expiration_seconds = 86400
 app_auth_cookie_secure            = true
 app_auth_cookie_same_site         = "Lax"
 app_auth_token_revocation_cleanup_enabled          = true

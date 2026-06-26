@@ -1,7 +1,7 @@
 # Modulo: auth
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-06-13
+- Ultima verificacion: 2026-06-26
 - Fuente de verdad: `AuthV2Controller`, `AuthService`, `AuthCookieService`,
   `RefreshSessionJooqRepository`, `SecurityConfig`, `TokenRevocationValidator`
 
@@ -36,6 +36,8 @@ Base path: `/api/v2/auth`
   de endpoints protegidos desde la cookie `panol_access_token`.
 - Login setea `panol_access_token` y `panol_refresh_token` como cookies
   HTTP-only.
+- `rememberMe=true` usa el TTL refresh persistente; `rememberMe=false` deja
+  cookies de sesion y usa un TTL server-side temporal mas corto.
 - Refresh rota el refresh token y reemite ambas cookies.
 - Login devuelve `role`, `expiresInSeconds` y `user` para bootstrap de sesion
   del frontend; el JWT ya no se expone en el body.
@@ -206,7 +208,8 @@ Base path: `/api/v2/auth`
    - `persistentLogin`
    - `userAgent`
    - `createdAt`
-   - `expiresAt`
+   - `accessExpiresAt`
+   - `sessionExpiresAt`
 
 ### 6. Revocacion selectiva por dispositivo
 

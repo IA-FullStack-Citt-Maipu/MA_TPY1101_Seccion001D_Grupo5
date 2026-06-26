@@ -77,6 +77,11 @@ variable "app_auth_refresh_expiration_seconds" {
   default = 604800
 }
 
+variable "app_auth_refresh_temporary_expiration_seconds" {
+  type    = number
+  default = 86400
+}
+
 variable "app_auth_cookie_secure" {
   type    = bool
   default = true

@@ -58,6 +58,7 @@ app:
     lock-minutes: ${APP_AUTH_LOCK_MINUTES:15}
     refresh:
       expiration-seconds: ${APP_AUTH_REFRESH_EXPIRATION_SECONDS:604800}
+      temporary-expiration-seconds: ${APP_AUTH_REFRESH_TEMPORARY_EXPIRATION_SECONDS:86400}
     cookies:
       secure: ${APP_AUTH_COOKIE_SECURE:false}
       same-site: ${APP_AUTH_COOKIE_SAME_SITE:Lax}

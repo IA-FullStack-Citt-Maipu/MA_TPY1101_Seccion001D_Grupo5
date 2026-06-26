@@ -37,7 +37,10 @@ const sessionDateTimeFormatter = new Intl.DateTimeFormat("es-CL", {
   timeStyle: "short",
 });
 
-function formatSessionTimestamp(value: string): string {
+function formatSessionTimestamp(value: string | null | undefined): string {
+  if (!value || !value.trim()) {
+    return "Sin dato";
+  }
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
     return value;
@@ -532,8 +535,12 @@ export function SettingsPage({
                           <strong>{formatSessionTimestamp(session.createdAt)}</strong>
                         </span>
                         <span>
-                          Expira
-                          <strong>{formatSessionTimestamp(session.expiresAt)}</strong>
+                          Acceso actual
+                          <strong>{formatSessionTimestamp(session.accessExpiresAt)}</strong>
+                        </span>
+                        <span>
+                          {session.persistentLogin ? "Recordarme hasta" : "Sesion hasta"}
+                          <strong>{formatSessionTimestamp(session.sessionExpiresAt)}</strong>
                         </span>
                       </div>
                     </div>

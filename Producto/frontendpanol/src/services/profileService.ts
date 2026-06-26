@@ -14,7 +14,8 @@ interface BackendCurrentUserSessionResponse {
   persistentLogin: boolean;
   userAgent?: string | null;
   createdAt: string;
-  expiresAt: string;
+  accessExpiresAt?: string | null;
+  sessionExpiresAt?: string | null;
 }
 
 export interface ChangePasswordPayload {
@@ -28,7 +29,8 @@ export interface CurrentUserSession {
   persistentLogin: boolean;
   userAgent: string | null;
   createdAt: string;
-  expiresAt: string;
+  accessExpiresAt: string | null;
+  sessionExpiresAt: string | null;
 }
 
 function toSessionUserSummary(data: BackendProfileResponse): SessionUserSummary {
@@ -65,7 +67,8 @@ export async function fetchCurrentUserSessions(): Promise<CurrentUserSession[]> 
     persistentLogin: session.persistentLogin === true,
     userAgent: typeof session.userAgent === "string" ? session.userAgent : null,
     createdAt: session.createdAt,
-    expiresAt: session.expiresAt,
+    accessExpiresAt: typeof session.accessExpiresAt === "string" ? session.accessExpiresAt : null,
+    sessionExpiresAt: typeof session.sessionExpiresAt === "string" ? session.sessionExpiresAt : null,
   }));
 }
 
