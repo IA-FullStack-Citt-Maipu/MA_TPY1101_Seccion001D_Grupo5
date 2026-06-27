@@ -49,6 +49,8 @@ public interface LoanRepositoryPort {
 
     LoanAggregate reviewLoan(LoanReviewCommand command);
 
+    LoanAggregate prepareLoan(LoanPrepareCommand command);
+
     LoanAggregate cancelLoan(LoanCancelCommand command);
 
     LoanDeliveryResult deliverLoan(LoanDeliveryCommand command);

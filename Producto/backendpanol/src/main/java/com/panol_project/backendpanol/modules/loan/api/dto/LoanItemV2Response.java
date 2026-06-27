@@ -17,6 +17,9 @@ public record LoanItemV2Response(
         Integer reservedQuantity,
 
         @JsonProperty("delivered_quantity")
-        Integer deliveredQuantity
+        Integer deliveredQuantity,
+
+        @JsonProperty("returned_quantity")
+        Integer returnedQuantity
 ) {
 }

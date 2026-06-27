@@ -341,7 +341,7 @@ function isLowStock(implement: ImplementSummary): boolean {
 function normalizeLoanStatusLabel(status: LoanStatus): string {
   const labels: Record<LoanStatus, string> = {
     pending: "Pendiente",
-    approved: "Aprobado",
+    approved: "Reservado",
     prepared: "Preparado",
     delivered: "Entregado",
     completed: "Completado",
@@ -395,7 +395,7 @@ export function LoanCreatePage({
     : null;
   const effectiveExpectedReturnAt = expectedReturnAt ?? (scheduledAt ? addHoursToIso(scheduledAt, 2) : null);
   const editBlockedMessage =
-    isEditMode && editingLoan && editingLoan.status !== "pending"
+    isEditMode && editingLoan && editingLoan.status !== "approved"
       ? `Esta solicitud ya no se puede modificar porque esta en estado ${normalizeLoanStatusLabel(editingLoan.status).toLowerCase()}.`
       : null;
 
@@ -814,8 +814,8 @@ export function LoanCreatePage({
     setSearchInlineError(null);
     setDuplicateWarning(null);
 
-    if (isEditMode && editingLoan && editingLoan.status !== "pending") {
-      setGlobalError("Solo puedes modificar solicitudes en estado pendiente.");
+    if (isEditMode && editingLoan && editingLoan.status !== "approved") {
+      setGlobalError("Solo puedes modificar solicitudes en estado reservado.");
       return;
     }
 

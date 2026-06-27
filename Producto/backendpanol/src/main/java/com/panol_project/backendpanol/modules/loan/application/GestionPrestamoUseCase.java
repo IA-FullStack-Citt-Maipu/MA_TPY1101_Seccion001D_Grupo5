@@ -4,12 +4,14 @@ import com.panol_project.backendpanol.modules.loan.application.dto.CancelarPrest
 import com.panol_project.backendpanol.modules.loan.application.dto.CompletarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.DevolverPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.EntregarPrestamoCommand;
+import com.panol_project.backendpanol.modules.loan.application.dto.PrepararPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.RevisarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanAggregate;
 import com.panol_project.backendpanol.modules.loan.domain.LoanCancelCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanDeliveryCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanDeliveryItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanDeliveryResult;
+import com.panol_project.backendpanol.modules.loan.domain.LoanPrepareCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRepositoryPort;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReturnCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReturnConsumableItem;
@@ -19,11 +21,13 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanReviewCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReviewDecision;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReviewItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStateDatesView;
+import com.panol_project.backendpanol.modules.loan.domain.LoanStatus;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStatusTimelineEntry;
-import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryPage;
+import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
 import com.panol_project.backendpanol.shared.error.BadRequestException;
 import com.panol_project.backendpanol.shared.error.NotFoundException;
+import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -36,9 +40,15 @@ public class GestionPrestamoUseCase {
     private static final int MAX_NOTES_LENGTH = 1000;
 
     private final LoanRepositoryPort loanRepositoryPort;
+    private final Clock clock;
 
     public GestionPrestamoUseCase(LoanRepositoryPort loanRepositoryPort) {
+        this(loanRepositoryPort, Clock.systemDefaultZone());
+    }
+
+    public GestionPrestamoUseCase(LoanRepositoryPort loanRepositoryPort, Clock clock) {
         this.loanRepositoryPort = loanRepositoryPort;
+        this.clock = clock;
     }
 
     @Transactional(readOnly = true)
@@ -104,8 +114,31 @@ public class GestionPrestamoUseCase {
     }
 
     @Transactional
+    public LoanSummaryView preparar(PrepararPrestamoCommand command) {
+        String notes = normalizeOptionalText(command.notes());
+        validateNotes(notes);
+
+        LoanSummaryView currentLoan = findVisibleLoanSummaryOrThrow(command.loanUuid());
+        validatePreparationAllowed(currentLoan);
+
+        LoanAggregate prepared = loanRepositoryPort.prepareLoan(
+                new LoanPrepareCommand(
+                        command.loanUuid(),
+                        command.actorUuid(),
+                        notes
+                )
+        );
+
+        return findVisibleLoanSummaryOrThrow(prepared.uuid());
+    }
+
+    @Transactional
     public LoanSummaryView entregar(EntregarPrestamoCommand command) {
         validateNotes(command.notes());
+
+        LoanSummaryView currentLoan = findVisibleLoanSummaryOrThrow(command.loanUuid());
+        validateDeliveryAllowed(currentLoan);
+
         LoanDeliveryResult delivery = loanRepositoryPort.deliverLoan(
                 new LoanDeliveryCommand(
                         command.loanUuid(),
@@ -202,7 +235,41 @@ public class GestionPrestamoUseCase {
         }
     }
 
-    private LoanSummaryView findVisibleLoanSummaryOrThrow(java.util.UUID loanUuid) {
+    private void validatePreparationAllowed(LoanSummaryView loan) {
+        if (loan.status() != LoanStatus.APPROVED) {
+            throw new BadRequestException(
+                    "LOAN_PREPARE_INVALID_STATE",
+                    "Solo se puede preparar un prestamo en estado approved"
+            );
+        }
+
+        OffsetDateTime scheduledAt = loan.scheduledAt();
+        if (scheduledAt != null && OffsetDateTime.now(clock).isBefore(scheduledAt.minusMinutes(60))) {
+            throw new BadRequestException(
+                    "LOAN_PREPARE_TOO_EARLY",
+                    "La preparacion solo se puede iniciar desde 60 minutos antes de la hora programada"
+            );
+        }
+    }
+
+    private void validateDeliveryAllowed(LoanSummaryView loan) {
+        if (loan.status() != LoanStatus.PREPARED) {
+            throw new BadRequestException(
+                    "LOAN_DELIVERY_INVALID_STATE",
+                    "Solo se puede entregar un prestamo en estado prepared"
+            );
+        }
+
+        OffsetDateTime scheduledAt = loan.scheduledAt();
+        if (scheduledAt != null && OffsetDateTime.now(clock).isBefore(scheduledAt)) {
+            throw new BadRequestException(
+                    "LOAN_DELIVERY_TOO_EARLY",
+                    "La entrega solo se puede registrar desde la hora programada del prestamo"
+            );
+        }
+    }
+
+    private LoanSummaryView findVisibleLoanSummaryOrThrow(UUID loanUuid) {
         return loanRepositoryPort.findVisibleLoanSummaryByUuid(loanUuid)
                 .orElseThrow(() -> new NotFoundException("LOAN_NOT_FOUND", "Prestamo no encontrado"));
     }

@@ -28,6 +28,7 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanDeliveryItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanDeliveryResult;
 import com.panol_project.backendpanol.modules.loan.domain.LoanDetailItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanImplementAvailability;
+import com.panol_project.backendpanol.modules.loan.domain.LoanPrepareCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRepositoryPort;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRequestedItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRequestedItemAvailability;
@@ -218,7 +219,13 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
         OffsetDateTime effectiveExpectedReturnAt = resolveExpectedReturnAt(scheduledAt, expectedReturnAt);
 
         Condition condition = LOAN.REQUESTER_ID.eq(requesterId)
-                .and(LOAN.STATUS.eq(LoanStatusEnum.pending))
+                .and(LOAN.STATUS.in(
+                        LoanStatusEnum.pending,
+                        LoanStatusEnum.approved,
+                        LoanStatusEnum.prepared,
+                        LoanStatusEnum.delivered,
+                        LoanStatusEnum.overdue
+                ))
                 .and(IMPLEMENT.UUID.in(filteredImplementUuids))
                 .and(LOAN.SCHEDULED_AT.lt(effectiveExpectedReturnAt))
                 .and(LOAN.EXPECTED_RETURN_AT.gt(scheduledAt));
@@ -290,8 +297,8 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
     @Override
     public LoanAggregate updatePendingLoan(LoanUpdateCommand command) {
         LoanRow current = requireLoanRowForUpdate(command.loanUuid());
-        if (current.status() != LoanStatus.PENDING) {
-            throw new BadRequestException("LOAN_UPDATE_INVALID_STATE", "Solo se puede modificar un prestamo en estado pending");
+        if (current.status() != LoanStatus.APPROVED) {
+            throw new BadRequestException("LOAN_UPDATE_INVALID_STATE", "Solo se puede modificar un prestamo en estado approved");
         }
         if (!Objects.equals(current.requesterUuid(), command.requesterUuid())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "LOAN_UPDATE_FORBIDDEN", "No tienes permisos para modificar este prestamo");
@@ -315,13 +322,13 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 .where(LOAN_DETAIL.LOAN_ID.eq(current.loanId()))
                 .execute();
 
-        List<LoanDetailItem> details = insertLoanDetails(current.loanId(), command.requestedItems());
+        List<LoanDetailItem> details = insertLoanDetails(current.loanId(), command.requestedItems(), true);
 
         dsl.insertInto(LOAN_STATUS_HISTORY)
                 .set(LOAN_STATUS_HISTORY.LOAN_ID, current.loanId())
                 .set(LOAN_STATUS_HISTORY.ACTOR_USER_ID, requireUserIdByUuid(command.requesterUuid()))
-                .set(LOAN_STATUS_HISTORY.FROM_STATUS, LoanStatusEnum.pending)
-                .set(LOAN_STATUS_HISTORY.TO_STATUS, LoanStatusEnum.pending)
+                .set(LOAN_STATUS_HISTORY.FROM_STATUS, LoanStatusEnum.approved)
+                .set(LOAN_STATUS_HISTORY.TO_STATUS, LoanStatusEnum.approved)
                 .set(LOAN_STATUS_HISTORY.NOTES, resolveStatusNotes("Solicitud modificada por docente", command.notes()))
                 .set(LOAN_STATUS_HISTORY.CHANGED_AT, OffsetDateTime.now())
                 .execute();
@@ -337,7 +344,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 command.requesterUuid(),
                 command.roomUuid(),
                 command.subjectUuid(),
-                LoanStatus.PENDING,
+                LoanStatus.APPROVED,
                 command.scheduledAt(),
                 resolveExpectedReturnAt(command.scheduledAt(), command.expectedReturnAt()),
                 current.createdAt(),
@@ -422,6 +429,22 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
         return loadLoanAggregateById(current.loanId());
     }
 
+    @Override
+    public LoanAggregate prepareLoan(LoanPrepareCommand command) {
+        LoanRow current = requireLoanRowForUpdate(command.loanUuid());
+        if (current.status() != LoanStatus.APPROVED) {
+            throw new BadRequestException(
+                    "LOAN_PREPARE_INVALID_STATE",
+                    "Solo se puede preparar un prestamo en estado approved"
+            );
+        }
+
+        Long actorUserId = requireUserIdByUuid(command.actorUuid());
+        ensureIndividualAssignmentsForPreparation(current.loanId());
+        callPrepareLoanFunction(current.loanId(), actorUserId, normalizeOptionalText(command.notes()));
+        return loadLoanAggregateById(current.loanId());
+    }
+
     private void approveLoanWithAdjustedQuantities(
             LoanRow current,
             Long actorUserId,
@@ -502,10 +525,10 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
         }
 
         LoanRow current = requireLoanRowForUpdate(command.loanUuid());
-        if (current.status() != LoanStatus.APPROVED && current.status() != LoanStatus.PREPARED) {
+        if (current.status() != LoanStatus.PREPARED) {
             throw new BadRequestException(
                     "LOAN_DELIVERY_INVALID_STATE",
-                    "Solo se puede entregar un prestamo en estado approved o prepared"
+                    "Solo se puede entregar un prestamo en estado prepared"
             );
         }
 
@@ -532,9 +555,6 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
             updateLoanDetailQuantitiesForDelivery(current.loanId(), detailContext, deliveryQuantity);
         }
 
-        if (current.status() == LoanStatus.APPROVED) {
-            callPrepareLoanFunction(current.loanId(), actorUserId, "Preparado para entrega");
-        }
         callDeliverLoanFunction(current.loanId(), actorUserId, resolveStatusNotes("Entrega registrada en panol", command.notes()));
 
         return new LoanDeliveryResult(loadLoanAggregateById(current.loanId()));
@@ -887,13 +907,14 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
         }
 
         Map<Long, List<LoanSummaryView.ItemView>> itemsByLoanId = new HashMap<>();
-        dsl.select(
+                dsl.select(
                         LOAN_DETAIL.LOAN_ID,
                         IMPLEMENT.UUID,
                         IMPLEMENT.NAME,
                         LOAN_DETAIL.REQUESTED_QUANTITY,
                         LOAN_DETAIL.RESERVED_QUANTITY,
-                        LOAN_DETAIL.DELIVERED_QUANTITY
+                        LOAN_DETAIL.DELIVERED_QUANTITY,
+                        LOAN_DETAIL.RETURNED_QUANTITY
                 )
                 .from(LOAN_DETAIL)
                 .join(IMPLEMENT).on(IMPLEMENT.ID.eq(LOAN_DETAIL.IMPLEMENT_ID))
@@ -906,7 +927,8 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                             record.get(IMPLEMENT.NAME),
                             record.get(LOAN_DETAIL.REQUESTED_QUANTITY),
                             record.get(LOAN_DETAIL.RESERVED_QUANTITY),
-                            record.get(LOAN_DETAIL.DELIVERED_QUANTITY)
+                            record.get(LOAN_DETAIL.DELIVERED_QUANTITY),
+                            record.get(LOAN_DETAIL.RETURNED_QUANTITY)
                     );
                     itemsByLoanId.computeIfAbsent(loanId, ignored -> new ArrayList<>()).add(item);
                     return null;
@@ -921,12 +943,13 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
         }
 
         Map<Long, List<LoanDetailItem>> detailsByLoanId = new HashMap<>();
-        dsl.select(
+                dsl.select(
                         LOAN_DETAIL.LOAN_ID,
                         IMPLEMENT.UUID,
                         LOAN_DETAIL.REQUESTED_QUANTITY,
                         LOAN_DETAIL.RESERVED_QUANTITY,
-                        LOAN_DETAIL.DELIVERED_QUANTITY
+                        LOAN_DETAIL.DELIVERED_QUANTITY,
+                        LOAN_DETAIL.RETURNED_QUANTITY
                 )
                 .from(LOAN_DETAIL)
                 .join(IMPLEMENT).on(IMPLEMENT.ID.eq(LOAN_DETAIL.IMPLEMENT_ID))
@@ -938,7 +961,8 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                             record.get(IMPLEMENT.UUID),
                             record.get(LOAN_DETAIL.REQUESTED_QUANTITY),
                             record.get(LOAN_DETAIL.RESERVED_QUANTITY),
-                            record.get(LOAN_DETAIL.DELIVERED_QUANTITY)
+                            record.get(LOAN_DETAIL.DELIVERED_QUANTITY),
+                            record.get(LOAN_DETAIL.RETURNED_QUANTITY)
                     );
                     detailsByLoanId.computeIfAbsent(loanId, ignored -> new ArrayList<>()).add(item);
                     return null;
@@ -1119,6 +1143,61 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                     0,
                     0
             ));
+        }
+    }
+
+    private void ensureIndividualAssignmentsForPreparation(Long loanId) {
+        for (LoanDetailContext detailContext : fetchLoanDetailContextByImplementUuid(loanId).values()) {
+            if (detailContext.itemType() != ItemTypeEnum.individual || detailContext.reservedQuantity() <= 0) {
+                continue;
+            }
+
+            Integer assignedCount = dsl.selectCount()
+                    .from(LOAN_DETAIL_INDIVIDUAL)
+                    .where(
+                            LOAN_DETAIL_INDIVIDUAL.LOAN_ID.eq(loanId)
+                                    .and(LOAN_DETAIL_INDIVIDUAL.IMPLEMENT_ID.eq(detailContext.implementId()))
+                                    .and(LOAN_DETAIL_INDIVIDUAL.ALLOCATION_STATUS.in(
+                                            IndividualAllocationStatusEnum.reserved,
+                                            IndividualAllocationStatusEnum.prepared
+                                    ))
+                    )
+                    .fetchOne(0, Integer.class);
+
+            if (safe(assignedCount) == detailContext.reservedQuantity()) {
+                continue;
+            }
+
+            dsl.deleteFrom(LOAN_DETAIL_INDIVIDUAL)
+                    .where(
+                            LOAN_DETAIL_INDIVIDUAL.LOAN_ID.eq(loanId)
+                                    .and(LOAN_DETAIL_INDIVIDUAL.IMPLEMENT_ID.eq(detailContext.implementId()))
+                                    .and(LOAN_DETAIL_INDIVIDUAL.ALLOCATION_STATUS.in(
+                                            IndividualAllocationStatusEnum.reserved,
+                                            IndividualAllocationStatusEnum.prepared
+                                    ))
+                    )
+                    .execute();
+
+            List<IndividualSelection> selectedIndividuals = fetchAvailableIndividuals(
+                    detailContext.implementId(),
+                    detailContext.reservedQuantity()
+            );
+            if (selectedIndividuals.size() != detailContext.reservedQuantity()) {
+                throw new ConflictException(
+                        "LOAN_STOCK_CONFLICT",
+                        "No hay suficientes individuales disponibles para preparar este prestamo"
+                );
+            }
+
+            for (IndividualSelection selected : selectedIndividuals) {
+                dsl.insertInto(LOAN_DETAIL_INDIVIDUAL)
+                        .set(LOAN_DETAIL_INDIVIDUAL.LOAN_ID, loanId)
+                        .set(LOAN_DETAIL_INDIVIDUAL.IMPLEMENT_ID, detailContext.implementId())
+                        .set(LOAN_DETAIL_INDIVIDUAL.INDIVIDUAL_ID, selected.individualId())
+                        .set(LOAN_DETAIL_INDIVIDUAL.ALLOCATION_STATUS, IndividualAllocationStatusEnum.reserved)
+                        .execute();
+            }
         }
     }
 
@@ -1306,6 +1385,14 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
     }
 
     private List<LoanDetailItem> insertLoanDetails(Long loanId, List<LoanRequestedItem> requestedItems) {
+        return insertLoanDetails(loanId, requestedItems, false);
+    }
+
+    private List<LoanDetailItem> insertLoanDetails(
+            Long loanId,
+            List<LoanRequestedItem> requestedItems,
+            boolean reserveRequestedQuantity
+    ) {
         List<LoanDetailItem> details = new ArrayList<>();
         for (LoanRequestedItem item : requestedItems) {
             Long implementId = requireImplementIdByUuid(item.implementUuid());
@@ -1314,7 +1401,13 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                     .set(LOAN_DETAIL.LOAN_ID, loanId)
                     .set(LOAN_DETAIL.IMPLEMENT_ID, implementId)
                     .set(LOAN_DETAIL.REQUESTED_QUANTITY, item.requestedQuantity())
-                    .returning(LOAN_DETAIL.REQUESTED_QUANTITY, LOAN_DETAIL.RESERVED_QUANTITY, LOAN_DETAIL.DELIVERED_QUANTITY)
+                    .set(LOAN_DETAIL.RESERVED_QUANTITY, reserveRequestedQuantity ? item.requestedQuantity() : 0)
+                    .returning(
+                            LOAN_DETAIL.REQUESTED_QUANTITY,
+                            LOAN_DETAIL.RESERVED_QUANTITY,
+                            LOAN_DETAIL.DELIVERED_QUANTITY,
+                            LOAN_DETAIL.RETURNED_QUANTITY
+                    )
                     .fetchOne();
 
             if (detail == null) {
@@ -1325,7 +1418,8 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                     item.implementUuid(),
                     detail.getRequestedQuantity(),
                     detail.getReservedQuantity(),
-                    detail.getDeliveredQuantity()
+                    detail.getDeliveredQuantity(),
+                    detail.getReturnedQuantity()
             ));
         }
         return details;

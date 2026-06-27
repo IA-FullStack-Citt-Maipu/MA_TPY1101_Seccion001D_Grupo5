@@ -4,6 +4,7 @@ export interface LoanItem {
   requested_quantity: number;
   reserved_quantity: number;
   delivered_quantity: number;
+  returned_quantity: number;
 }
 
 export interface LoanRoomSummary {
@@ -61,6 +62,10 @@ export interface DeliverLoanItemPayload {
 
 export interface DeliverLoanPayload {
   items: DeliverLoanItemPayload[];
+  notes?: string | null;
+}
+
+export interface PrepareLoanPayload {
   notes?: string | null;
 }
 

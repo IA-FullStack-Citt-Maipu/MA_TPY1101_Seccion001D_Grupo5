@@ -88,7 +88,7 @@ function formatDateTime(value: string): string {
 function normalizeStatus(status: LoanSummary["status"]): string {
   const labels: Record<LoanSummary["status"], string> = {
     pending: "Pendiente",
-    approved: "Aprobado",
+    approved: "Reservado",
     prepared: "Preparado",
     delivered: "En uso",
     completed: "Completado",
@@ -436,7 +436,7 @@ export function LoanCalendarPage({
     });
 
     return [
-      { key: "approved", label: "Aprobadas", value: counts.approved },
+      { key: "approved", label: "Reservadas", value: counts.approved },
       { key: "completed", label: "Completadas", value: counts.completed },
       { key: "cancelled", label: "Canceladas", value: counts.cancelled },
       { key: "rejected", label: "Rechazadas", value: counts.rejected },

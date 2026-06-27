@@ -34,7 +34,17 @@ public record LoanSummaryView(
             String implementName,
             Integer requestedQuantity,
             Integer reservedQuantity,
-            Integer deliveredQuantity
+            Integer deliveredQuantity,
+            Integer returnedQuantity
     ) {
+        public ItemView(
+                UUID implementUuid,
+                String implementName,
+                Integer requestedQuantity,
+                Integer reservedQuantity,
+                Integer deliveredQuantity
+        ) {
+            this(implementUuid, implementName, requestedQuantity, reservedQuantity, deliveredQuantity, 0);
+        }
     }
 }

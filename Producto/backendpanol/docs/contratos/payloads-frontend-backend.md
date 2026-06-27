@@ -250,3 +250,66 @@ Error funcional esperado:
   `GET /api/v2/auth/me/sessions`, `DELETE /api/v2/auth/me/sessions/{sessionId}`,
   `PATCH /api/v2/auth/me/email` y `PATCH /api/v2/auth/me/password`.
 - Cualquier otro detalle tecnico debe permanecer en logs internos del backend.
+
+## 12) Prestamos v2
+
+### Flujo vigente
+
+- `POST /api/v2/loans` crea la solicitud y auto-reserva el detalle completo en la misma transaccion.
+- Los prestamos nuevos nacen en `approved` como estado tecnico de reserva, pero en UI deben leerse como "Reservado".
+- El docente solo recibe notificacion cuando el prestamo pasa a `prepared`, no cuando entra en `approved`.
+- `POST /api/v2/loans/{loanUuid}/prepare` separa fisicamente implementos desde 60 minutos antes de `scheduled_at`.
+- `POST /api/v2/loans/{loanUuid}/delivery` solo acepta prestamos `prepared` y desde `scheduled_at`.
+- `PATCH /api/v2/loans/{loanUuid}/review` queda solo para compatibilidad con prestamos legacy en `pending`.
+
+### Response resumen/detalle (`GET /api/v2/loans`, `GET /api/v2/loans/{loanUuid}`, `POST /api/v2/loans`)
+
+```json
+{
+  "uuid": "2f0f2a7d-9d89-4d75-b2c1-b9d88b8b4f4f",
+  "requester_uuid": "e16c39c1-94f4-461f-9c35-9488f4061f78",
+  "status": "approved",
+  "scheduled_at": "2026-06-26T15:00:00-04:00",
+  "expected_return_at": "2026-06-26T17:00:00-04:00",
+  "created_at": "2026-06-26T10:00:00-04:00",
+  "completed_at": null,
+  "room": {
+    "uuid": "88ce8ad0-6575-45eb-965a-06b223fc5cf4",
+    "name": "Sala 301"
+  },
+  "subject": null,
+  "items": [
+    {
+      "implement_uuid": "0de53ed2-6ce7-4376-88ec-b743d5e683b9",
+      "implement_name": "Fonendoscopio",
+      "requested_quantity": 2,
+      "reserved_quantity": 2,
+      "delivered_quantity": 0,
+      "returned_quantity": 0
+    }
+  ]
+}
+```
+
+Notas:
+
+- `requested_quantity` sigue siendo la referencia original del docente.
+- `reserved_quantity` refleja la reserva logica vigente.
+- `delivered_quantity` refleja lo efectivamente entregado.
+- `returned_quantity` refleja lo efectivamente devuelto/cerrado.
+
+### Request de preparacion (`POST /api/v2/loans/{loanUuid}/prepare`)
+
+```json
+{
+  "notes": "Preparado en panol principal"
+}
+```
+
+### Request de entrega (`POST /api/v2/loans/{loanUuid}/delivery`)
+
+- Mantiene la flexibilidad vigente para:
+  - entrega parcial
+  - cambio de cantidades
+  - seleccion/reseleccion de `asset_codes`
+  - implementos adicionales

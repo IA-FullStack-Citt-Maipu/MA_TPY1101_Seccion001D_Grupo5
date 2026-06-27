@@ -94,7 +94,7 @@ function formatKpiDate(value: string | null): string {
 function normalizeStatusLabel(status: string): string {
   const labels: Record<string, string> = {
     pending: "Pendiente",
-    approved: "Aprobado",
+    approved: "Reservado",
     prepared: "Preparado",
     delivered: "En uso",
     overdue: "Atrasado",
@@ -460,7 +460,7 @@ export function LoanHistoryPage({
               >
                 <option value="all">Todos</option>
                 <option value="pending">Pendiente</option>
-                <option value="approved">Aprobado</option>
+                <option value="approved">Reservado</option>
                 <option value="prepared">Preparado</option>
                 <option value="delivered">En uso</option>
                 <option value="overdue">Atrasado</option>

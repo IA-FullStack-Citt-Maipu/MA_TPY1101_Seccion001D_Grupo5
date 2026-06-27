@@ -111,14 +111,14 @@ class LoanV2ControllerTest {
         LoanSummaryView response = new LoanSummaryView(
                 loanUuid,
                 authenticatedUserUuid,
-                LoanStatus.PENDING,
+                LoanStatus.APPROVED,
                 scheduledAt,
                 null,
                 OffsetDateTime.parse("2026-05-21T21:00:00-04:00"),
                 null,
                 new LoanSummaryView.RoomView(roomUuid, "Sala 301"),
                 new LoanSummaryView.SubjectView(subjectUuid, "Anatomia"),
-                List.of(new LoanSummaryView.ItemView(implementUuid, "Fonendoscopio", 2, 0, 0))
+                List.of(new LoanSummaryView.ItemView(implementUuid, "Fonendoscopio", 2, 2, 0))
         );
 
         when(loanRepositoryPort.existsActiveRequesterByUuid(authenticatedUserUuid)).thenReturn(true);
@@ -165,7 +165,7 @@ class LoanV2ControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.uuid").value(response.uuid().toString()))
                 .andExpect(jsonPath("$.requester_uuid").value(authenticatedUserUuid.toString()))
-                .andExpect(jsonPath("$.status").value("pending"))
+                .andExpect(jsonPath("$.status").value("approved"))
                 .andExpect(jsonPath("$.scheduled_at").value(FUTURE_SCHEDULED_AT))
                 .andExpect(jsonPath("$.room.uuid").value(roomUuid.toString()))
                 .andExpect(jsonPath("$.room.name").value("Sala 301"))
@@ -174,8 +174,9 @@ class LoanV2ControllerTest {
                 .andExpect(jsonPath("$.items[0].implement_uuid").value(implementUuid.toString()))
                 .andExpect(jsonPath("$.items[0].implement_name").value("Fonendoscopio"))
                 .andExpect(jsonPath("$.items[0].requested_quantity").value(2))
-                .andExpect(jsonPath("$.items[0].reserved_quantity").value(0))
-                .andExpect(jsonPath("$.items[0].delivered_quantity").value(0));
+                .andExpect(jsonPath("$.items[0].reserved_quantity").value(2))
+                .andExpect(jsonPath("$.items[0].delivered_quantity").value(0))
+                .andExpect(jsonPath("$.items[0].returned_quantity").value(0));
 
         ArgumentCaptor<LoanCreateCommand> commandCaptor = ArgumentCaptor.forClass(LoanCreateCommand.class);
         verify(loanRepositoryPort).createPendingLoan(commandCaptor.capture());
@@ -212,14 +213,14 @@ class LoanV2ControllerTest {
         LoanSummaryView response = new LoanSummaryView(
                 loanUuid,
                 authenticatedUserUuid,
-                LoanStatus.PENDING,
+                LoanStatus.APPROVED,
                 scheduledAt,
                 null,
                 OffsetDateTime.parse("2026-05-21T21:00:00-04:00"),
                 null,
                 new LoanSummaryView.RoomView(roomUuid, "Sala 302"),
                 null,
-                List.of(new LoanSummaryView.ItemView(implementUuid, "Guantes", 1, 0, 0))
+                List.of(new LoanSummaryView.ItemView(implementUuid, "Guantes", 1, 1, 0))
         );
 
         when(loanRepositoryPort.existsActiveRequesterByUuid(authenticatedUserUuid)).thenReturn(true);
@@ -580,7 +581,7 @@ class LoanV2ControllerTest {
                                 """.formatted(roomUuid, FUTURE_SCHEDULED_AT, implementUuid)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("LOAN_DUPLICATE_REQUEST"))
-                .andExpect(jsonPath("$.message").value("Ya tienes una solicitud pendiente con uno o m\u00e1s de estos implementos"));
+                .andExpect(jsonPath("$.message").value("Ya tienes una solicitud activa con uno o mas de estos implementos en la misma ventana horaria"));
     }
 
     @Test

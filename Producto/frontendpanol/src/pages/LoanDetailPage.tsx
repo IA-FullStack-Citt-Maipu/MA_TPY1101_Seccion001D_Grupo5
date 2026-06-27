@@ -18,18 +18,16 @@ import {
   TimerReset,
   Trash2,
   User,
-  XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { LoanApprovalModal, type LoanApprovalSubmission } from "../components/loans/LoanApprovalModal";
 import { getErrorMessage } from "../services/apiClient";
 import {
   cancelLoan,
   completeLoan,
   fetchLoanByUuid,
+  prepareLoan,
   fetchLoanStateDates,
   fetchLoanStatusTimeline,
-  reviewLoan,
   returnLoan,
 } from "../services/loanService";
 import { fetchImplementStock } from "../services/stockService";
@@ -40,7 +38,7 @@ import {
 import type { LoanStateDates, LoanStatusTimelineEntry, LoanSummary } from "../types/loan";
 import type { StockDetail } from "../types/stock";
 import { getSessionUser, getSessionUserRole } from "../utils/auth";
-import { canStartDelivery } from "../utils/loanSchedule";
+import { canStartDelivery, canStartPreparation } from "../utils/loanSchedule";
 import { canRequesterCancelLoan } from "../utils/loanStatus";
 
 const DELETE_CONFIRM_TEXT = "eliminar";
@@ -82,7 +80,7 @@ function formatDateTime(value: string): string {
 function normalizeStatusLabel(status: string): string {
   const labels: Record<string, string> = {
     pending: "Pendiente",
-    approved: "Aprobado",
+    approved: "Reservado",
     prepared: "Preparado",
     delivered: "En uso",
     overdue: "Atrasado",
@@ -124,6 +122,14 @@ function itemStatusLabel(item: LoanSummary["items"][number], loanStatus: LoanSum
     ? item.reserved_quantity
     : item.requested_quantity;
 
+  if (loanStatus === "completed" && item.delivered_quantity > 0) {
+    if (item.returned_quantity >= item.delivered_quantity) {
+      return "Devuelto";
+    }
+    if (item.returned_quantity > 0) {
+      return "Devuelto parcial";
+    }
+  }
   if (item.delivered_quantity >= plannedQuantity && plannedQuantity > 0) {
     return "Entregado";
   }
@@ -144,6 +150,14 @@ function itemStatusClassName(item: LoanSummary["items"][number], loanStatus: Loa
     ? item.reserved_quantity
     : item.requested_quantity;
 
+  if (loanStatus === "completed" && item.delivered_quantity > 0) {
+    if (item.returned_quantity >= item.delivered_quantity) {
+      return "teacher-loan-item-status teacher-loan-item-status--delivered";
+    }
+    if (item.returned_quantity > 0) {
+      return "teacher-loan-item-status teacher-loan-item-status--partial";
+    }
+  }
   if (item.delivered_quantity >= plannedQuantity && plannedQuantity > 0) {
     return "teacher-loan-item-status teacher-loan-item-status--delivered";
   }
@@ -163,7 +177,7 @@ function timelineTransitionTitle(entry: LoanStatusTimelineEntry): string {
 
   const transitionKey = `${entry.from_status ?? "new"}->${entry.to_status}`;
   const labels: Record<string, string> = {
-    "pending->approved": "Aprobacion de Solicitud",
+    "pending->approved": "Reserva automatica",
     "pending->rejected": "Rechazo de Solicitud",
     "pending->cancelled": "Cancelacion de Solicitud",
     "approved->prepared": "Preparacion de Implementos",
@@ -223,8 +237,6 @@ export function LoanDetailPage({
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmationInput, setDeleteConfirmationInput] = useState("");
   const [deleteNotes, setDeleteNotes] = useState("");
-  const [reviewDecision, setReviewDecision] = useState<"APPROVE" | "REJECT" | null>(null);
-  const [reviewNotes, setReviewNotes] = useState("");
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [completionNotes, setCompletionNotes] = useState("");
   const [returnItems, setReturnItems] = useState<ReturnItemState[]>([]);
@@ -306,16 +318,18 @@ export function LoanDetailPage({
     return loan.items.reduce((total, item) => total + item.requested_quantity, 0);
   }, [loan]);
 
+  const canPrepareNow = useMemo(
+    () => (loan ? canStartPreparation(loan) : false),
+    [loan],
+  );
   const canDeliverNow = useMemo(
     () => (loan ? canStartDelivery(loan) : false),
     [loan],
   );
   const isRequester = loan?.requester_uuid === currentUser?.id;
-  const canModifyLoan = Boolean(loan && isRequester && loan.status === "pending");
+  const canModifyLoan = Boolean(loan && isRequester && loan.status === "approved");
   const canCancelLoan = Boolean(loan && isRequester && canRequesterCancelLoan(loan.status));
-  const canReviewLoan = Boolean(isCoordinator && loan && !isRequester && loan.status === "pending");
   const hasVisibleActions = Boolean(
-    canReviewLoan ||
       canModifyLoan ||
       canCancelLoan ||
       (isCoordinator && loan && (loan.status === "approved" || loan.status === "prepared")) ||
@@ -343,7 +357,6 @@ export function LoanDetailPage({
   const timelineContentId = `loan-timeline-${loanUuid}`;
 
   const canConfirmDeletion = deleteConfirmationInput.trim().toLowerCase() === DELETE_CONFIRM_TEXT;
-  const canSubmitRejectionReview = reviewDecision === "REJECT" && reviewNotes.trim().length >= 4;
   const returnableFungibleItems = useMemo(
     () =>
       returnItems.filter(
@@ -370,14 +383,23 @@ export function LoanDetailPage({
     window.location.hash = `#/inventory/prestamos/${loanUuid}/entrega`;
   }
 
-  function openReviewModal(decision: "APPROVE" | "REJECT") {
-    setReviewDecision(decision);
-    setReviewNotes("");
-  }
+  async function handlePrepareLoan() {
+    if (!loan || loan.status !== "approved") {
+      return;
+    }
 
-  function closeReviewModal() {
-    setReviewDecision(null);
-    setReviewNotes("");
+    setError(null);
+    setProcessingLoan(true);
+    try {
+      const updated = await prepareLoan(loan.uuid);
+      setLoan(updated);
+      onLoanChanged?.(updated);
+      await refreshTraceability(updated.uuid);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, "No se pudo preparar la solicitud."));
+    } finally {
+      setProcessingLoan(false);
+    }
   }
 
   async function refreshTraceability(loanId: string) {
@@ -430,53 +452,6 @@ export function LoanDetailPage({
       setReturnItems(rows);
     } finally {
       setLoadingReturnItems(false);
-    }
-  }
-
-  async function submitApprovalReview(payload: LoanApprovalSubmission) {
-    if (!loan || reviewDecision !== "APPROVE") {
-      return;
-    }
-
-    setError(null);
-    setProcessingLoan(true);
-    try {
-      const updated = await reviewLoan(loan.uuid, {
-        decision: "APPROVE",
-        notes: payload.notes,
-        items: payload.items,
-      });
-      setLoan(updated);
-      onLoanChanged?.(updated);
-      await refreshTraceability(updated.uuid);
-      closeReviewModal();
-    } catch (requestError) {
-      setError(getErrorMessage(requestError, "No se pudo aprobar la solicitud."));
-    } finally {
-      setProcessingLoan(false);
-    }
-  }
-
-  async function submitRejectReview() {
-    if (!loan || reviewDecision !== "REJECT" || !canSubmitRejectionReview) {
-      return;
-    }
-
-    setError(null);
-    setProcessingLoan(true);
-    try {
-      const updated = await reviewLoan(loan.uuid, {
-        decision: "REJECT",
-        notes: reviewNotes.trim(),
-      });
-      setLoan(updated);
-      onLoanChanged?.(updated);
-      await refreshTraceability(updated.uuid);
-      closeReviewModal();
-    } catch (requestError) {
-      setError(getErrorMessage(requestError, "No se pudo rechazar la solicitud."));
-    } finally {
-      setProcessingLoan(false);
     }
   }
 
@@ -681,35 +656,25 @@ export function LoanDetailPage({
 
               {hasVisibleActions ? (
                 <article className="teacher-loan-detail-card teacher-loan-detail-card--actions">
-                  {canReviewLoan ? (
-                    <>
-                      <button
-                        type="button"
-                        className="teacher-loan-detail-action-btn teacher-loan-detail-action-btn--complete"
-                        onClick={() => openReviewModal("APPROVE")}
-                        disabled={processingLoan}
-                      >
-                        <CheckCircle2 size={16} />
-                        Aprobar solicitud
-                      </button>
-                      <button
-                        type="button"
-                        className="teacher-loan-detail-action-btn teacher-loan-detail-action-btn--danger"
-                        onClick={() => openReviewModal("REJECT")}
-                        disabled={processingLoan}
-                      >
-                        <XCircle size={16} />
-                        Rechazar solicitud
-                      </button>
-                    </>
-                  ) : null}
                   {canModifyLoan ? (
                     <button type="button" className="teacher-loan-detail-action-btn" onClick={goToLoanEdit}>
                       <Edit3 size={16} />
                       Modificar solicitud
                     </button>
                   ) : null}
-                  {isCoordinator && (loan.status === "approved" || loan.status === "prepared") ? (
+                  {isCoordinator && loan.status === "approved" ? (
+                    <button
+                      type="button"
+                      className="teacher-loan-detail-action-btn teacher-loan-detail-action-btn--complete"
+                      onClick={() => void handlePrepareLoan()}
+                      disabled={processingLoan || !canPrepareNow}
+                      title="Preparar implementos reservados"
+                    >
+                      <CheckCircle2 size={16} />
+                      Preparar implementos
+                    </button>
+                  ) : null}
+                  {isCoordinator && loan.status === "prepared" ? (
                     <button
                       type="button"
                       className="teacher-loan-detail-action-btn"
@@ -764,13 +729,14 @@ export function LoanDetailPage({
                       <th>Solicitado</th>
                       <th>Reservado</th>
                       <th>Entregado</th>
+                      <th>Devuelto</th>
                       <th>Estado</th>
                     </tr>
                   </thead>
                   <tbody>
                     {loan.items.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="teacher-loan-detail-items__empty">
+                        <td colSpan={6} className="teacher-loan-detail-items__empty">
                           Esta solicitud no contiene implementos.
                         </td>
                       </tr>
@@ -788,6 +754,7 @@ export function LoanDetailPage({
                           <td>{item.requested_quantity}</td>
                           <td>{item.reserved_quantity}</td>
                           <td>{item.delivered_quantity}</td>
+                          <td>{item.returned_quantity}</td>
                           <td>
                             <span className={itemStatusClassName(item, loan.status)}>{itemStatusLabel(item, loan.status)}</span>
                           </td>
@@ -801,8 +768,8 @@ export function LoanDetailPage({
               <footer className="teacher-loan-detail-items__footer">
                 <Info size={16} />
                 <p>
-                  La reserva de implementos se confirma en funcion del stock disponible y del estado
-                  operativo del panol.
+                  La reserva se realiza automaticamente al crear la solicitud y la preparacion fisica ocurre
+                  mas cerca de la fecha programada.
                 </p>
               </footer>
             </article>
@@ -815,7 +782,7 @@ export function LoanDetailPage({
                 <h2>Fechas por estado</h2>
               </header>
               <div className="teacher-loan-detail-info-list">
-                <div><span>Aprobado</span><p>{stateDates?.approved_at ? formatDateTime(stateDates.approved_at) : "--"}</p></div>
+                <div><span>Reservado</span><p>{stateDates?.approved_at ? formatDateTime(stateDates.approved_at) : "--"}</p></div>
                 <div><span>Preparado</span><p>{stateDates?.prepared_at ? formatDateTime(stateDates.prepared_at) : "--"}</p></div>
                 <div><span>Entregado</span><p>{stateDates?.delivered_at ? formatDateTime(stateDates.delivered_at) : "--"}</p></div>
                 <div><span>Atrasado</span><p>{stateDates?.overdue_at ? formatDateTime(stateDates.overdue_at) : "--"}</p></div>
@@ -930,50 +897,6 @@ export function LoanDetailPage({
               >
                 <Trash2 size={16} />
                 {processingLoan ? "Cancelando..." : "Cancelar"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {reviewDecision === "APPROVE" && loan ? (
-        <LoanApprovalModal
-          loan={loan}
-          processing={processingLoan}
-          onClose={closeReviewModal}
-          onSubmit={submitApprovalReview}
-        />
-      ) : null}
-
-      {reviewDecision === "REJECT" ? (
-        <div className="modal-overlay">
-          <div className="modal teacher-loans-review-modal">
-            <h3>Rechazar solicitud</h3>
-            <p>Escribe una nota para dejar registrado el motivo del rechazo.</p>
-            <label htmlFor="loan-review-notes">Notas</label>
-            <textarea
-              id="loan-review-notes"
-              rows={4}
-              value={reviewNotes}
-              maxLength={1000}
-              onChange={(event) => setReviewNotes(event.target.value)}
-              placeholder="Motivo del rechazo..."
-            />
-            {reviewNotes.trim().length > 0 && reviewNotes.trim().length < 4 ? (
-              <small className="field-error">La nota de rechazo debe tener al menos 4 caracteres.</small>
-            ) : null}
-            <div className="modal-actions">
-              <button type="button" className="button button--ghost" onClick={closeReviewModal} disabled={processingLoan}>
-                Cancelar
-              </button>
-              <button
-                type="button"
-                className="button button--danger"
-                disabled={!canSubmitRejectionReview || processingLoan}
-                onClick={() => void submitRejectReview()}
-              >
-                <XCircle size={16} />
-                {processingLoan ? "Rechazando..." : "Rechazar"}
               </button>
             </div>
           </div>

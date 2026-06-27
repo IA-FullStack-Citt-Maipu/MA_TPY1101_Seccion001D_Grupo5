@@ -76,6 +76,7 @@ Nota: para frontend web productivo, consumir endpoints backend. Si una vista no 
 | `requested_quantity` | `int4` |
 | `reserved_quantity` | `int4` |
 | `delivered_quantity` | `int4` |
+| `returned_quantity` | `int4` |
 
 - UI sugerida: tablero coordinador para seguimiento de items en curso.
 
@@ -132,6 +133,7 @@ Nota: para frontend web productivo, consumir endpoints backend. Si una vista no 
 | `prepared_at` | `timestamptz` |
 | `delivered_at` | `timestamptz` |
 | `completed_at` | `timestamptz` |
+| `returned_quantity` | `int4` |
 
 - UI sugerida: calendario semanal/mensual con drawer de detalle de items.
 
@@ -167,6 +169,7 @@ Nota: para frontend web productivo, consumir endpoints backend. Si una vista no 
 | `delivered_at` | `timestamptz` |
 | `completed_at` | `timestamptz` |
 | `details` | `jsonb` |
+| `total_returned_quantity` | `int4` |
 
 - Campo `details` (jsonb): arreglo de objetos con:
   - `implement_id`
@@ -175,6 +178,7 @@ Nota: para frontend web productivo, consumir endpoints backend. Si una vista no 
   - `requested_quantity`
   - `reserved_quantity`
   - `delivered_quantity`
+  - `returned_quantity`
 
 - UI sugerida: tabla principal de prestamos + expansion por fila para ver items.
 

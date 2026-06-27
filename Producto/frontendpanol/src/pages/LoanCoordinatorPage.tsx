@@ -10,15 +10,13 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LoanDetailModalFrame } from "../components/loans/LoanDetailModalFrame";
-import { LoanApprovalModal, type LoanApprovalSubmission } from "../components/loans/LoanApprovalModal";
 import { PresencePollingModal } from "../components/ui/PresencePollingModal";
 import { useInactivityPollingGate } from "../hooks/useInactivityPollingGate";
-import { getApiErrorPayload, getErrorMessage } from "../services/apiClient";
-import { completeLoan, fetchLoansPage, reviewLoan } from "../services/loanService";
+import { getErrorMessage } from "../services/apiClient";
+import { completeLoan, fetchLoansPage, prepareLoan } from "../services/loanService";
 import type { LoanSummary } from "../types/loan";
-import { getSessionUser } from "../utils/auth";
 import { buildLoanDetailHash, stripLoanDetailFromHash } from "../utils/loanDetailRouting";
-import { canStartDelivery } from "../utils/loanSchedule";
+import { canStartDelivery, canStartPreparation } from "../utils/loanSchedule";
 import { LoanDetailPage } from "./LoanDetailPage";
 
 const PAGE_SIZE = 10;
@@ -72,7 +70,7 @@ function formatSchedule(value: string): string {
 function normalizeStatusLabel(status: string): string {
   const labels: Record<string, string> = {
     pending: "Pendiente",
-    approved: "Aprobado",
+    approved: "Reservado",
     prepared: "Preparado",
     delivered: "En uso",
     overdue: "Atrasado",
@@ -113,7 +111,6 @@ export function LoanCoordinatorPage({
   embedded?: boolean;
   activeDetailLoanUuid?: string | null;
 }) {
-  const currentUserId = getSessionUser()?.id ?? null;
   const [allLoans, setAllLoans] = useState<LoanSummary[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -128,9 +125,6 @@ export function LoanCoordinatorPage({
   const [roomFilter, setRoomFilter] = useState("");
   const [page, setPage] = useState(1);
 
-  const [rejectingLoan, setRejectingLoan] = useState<LoanSummary | null>(null);
-  const [rejectionReason, setRejectionReason] = useState("");
-  const [approvingLoan, setApprovingLoan] = useState<LoanSummary | null>(null);
   const [completingLoan, setCompletingLoan] = useState<LoanSummary | null>(null);
   const [completionNotes, setCompletionNotes] = useState("");
 
@@ -309,38 +303,14 @@ export function LoanCoordinatorPage({
     );
   }
 
-  function openApproveModal(loan: LoanSummary) {
-    if (currentUserId != null && loan.requester_uuid === currentUserId) {
-      return;
-    }
-    setApprovingLoan(loan);
-  }
-
-  function closeApproveModal() {
-    setApprovingLoan(null);
-  }
-
-  async function approveLoan(payload: LoanApprovalSubmission) {
-    if (!approvingLoan) {
-      return;
-    }
-    setProcessingLoanUuid(approvingLoan.uuid);
+  async function markLoanPrepared(loan: LoanSummary) {
+    setProcessingLoanUuid(loan.uuid);
     setError(null);
     try {
-      const updated = await reviewLoan(approvingLoan.uuid, {
-        decision: "APPROVE",
-        notes: payload.notes,
-        items: payload.items,
-      });
+      const updated = await prepareLoan(loan.uuid);
       updateLoanInState(updated);
-      closeApproveModal();
     } catch (requestError) {
-      const payloadError = getApiErrorPayload(requestError);
-      if (payloadError?.code === "LOAN_STOCK_CONFLICT") {
-        setError("Esta solicitud excede el stock de algun implemento; no se puede aprobar.");
-      } else {
-        setError(getErrorMessage(requestError, "No se pudo aprobar el prestamo."));
-      }
+      setError(getErrorMessage(requestError, "No se pudo preparar el prestamo."));
     } finally {
       setProcessingLoanUuid(null);
     }
@@ -364,14 +334,6 @@ export function LoanCoordinatorPage({
     window.location.assign(`#/inventory/prestamos/${loanUuid}/entrega`);
   }
 
-  function openRejectModal(loan: LoanSummary) {
-    if (currentUserId != null && loan.requester_uuid === currentUserId) {
-      return;
-    }
-    setRejectingLoan(loan);
-    setRejectionReason("");
-  }
-
   function openCompleteModal(loan: LoanSummary) {
     setCompletingLoan(loan);
     setCompletionNotes("");
@@ -380,31 +342,6 @@ export function LoanCoordinatorPage({
   function closeCompleteModal() {
     setCompletingLoan(null);
     setCompletionNotes("");
-  }
-
-  function closeRejectModal() {
-    setRejectingLoan(null);
-    setRejectionReason("");
-  }
-
-  async function rejectLoan() {
-    if (!rejectingLoan || rejectionReason.trim().length < 4) {
-      return;
-    }
-    setProcessingLoanUuid(rejectingLoan.uuid);
-    setError(null);
-    try {
-      const updated = await reviewLoan(rejectingLoan.uuid, {
-        decision: "REJECT",
-        notes: rejectionReason.trim(),
-      });
-      updateLoanInState(updated);
-      closeRejectModal();
-    } catch (requestError) {
-      setError(getErrorMessage(requestError, "No se pudo rechazar el prestamo."));
-    } finally {
-      setProcessingLoanUuid(null);
-    }
   }
 
   const content = (
@@ -474,7 +411,7 @@ export function LoanCoordinatorPage({
             >
               <option value="all">Todos</option>
               <option value="pending">Pendiente</option>
-              <option value="approved">Aprobado</option>
+              <option value="approved">Reservado</option>
               <option value="prepared">Preparado</option>
               <option value="delivered">En uso</option>
               <option value="overdue">Atrasado</option>
@@ -549,8 +486,8 @@ export function LoanCoordinatorPage({
               ) : (
                 pagedLoans.map((loan) => {
                   const isProcessing = processingLoanUuid === loan.uuid;
+                  const preparationEnabled = canStartPreparation(loan);
                   const deliveryEnabled = canStartDelivery(loan);
-                  const isOwnLoan = currentUserId != null && loan.requester_uuid === currentUserId;
                   return (
                     <tr key={loan.uuid}>
                       <td>
@@ -574,37 +511,17 @@ export function LoanCoordinatorPage({
                           >
                             <Eye size={15} />
                           </button>
-                          {loan.status === "pending" ? (
-                            isOwnLoan ? (
-                              <button
-                                type="button"
-                                className="coordinator-loans-action-btn"
-                                disabled
-                                title="No puedes revisar una solicitud creada por ti mismo"
-                              >
-                                Solicitud propia
-                              </button>
-                            ) : (
-                              <>
-                                <button
-                                  type="button"
-                                  className="coordinator-loans-action-btn coordinator-loans-action-btn--approve"
-                                  disabled={isProcessing}
-                                  onClick={() => openApproveModal(loan)}
-                                >
-                                  Aceptar
-                                </button>
-                                <button
-                                  type="button"
-                                  className="coordinator-loans-action-btn coordinator-loans-action-btn--reject"
-                                  disabled={isProcessing}
-                                  onClick={() => openRejectModal(loan)}
-                                >
-                                  Rechazar
-                                </button>
-                              </>
-                            )
-                          ) : loan.status === "approved" || loan.status === "prepared" ? (
+                          {loan.status === "approved" ? (
+                            <button
+                              type="button"
+                              className="coordinator-loans-action-btn coordinator-loans-action-btn--approve"
+                              disabled={isProcessing || !preparationEnabled}
+                              onClick={() => void markLoanPrepared(loan)}
+                              title="Preparar implementos reservados"
+                            >
+                              Preparar
+                            </button>
+                          ) : loan.status === "prepared" ? (
                             <button
                               type="button"
                               className="coordinator-loans-action-btn coordinator-loans-action-btn--approve"
@@ -677,43 +594,6 @@ export function LoanCoordinatorPage({
         </footer>
       </section>
 
-      {rejectingLoan ? (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h3>Rechazar prestamo</h3>
-            <p>Escribe el motivo de rechazo para esta solicitud.</p>
-            <label htmlFor="rejection-reason">Motivo</label>
-            <textarea
-              id="rejection-reason"
-              rows={3}
-              value={rejectionReason}
-              onChange={(event) => setRejectionReason(event.target.value)}
-              placeholder="Motivo del rechazo..."
-            />
-            <div className="modal-actions">
-              <button type="button" className="button button--ghost" onClick={closeRejectModal}>
-                Cancelar
-              </button>
-              <button
-                type="button"
-                className="button button--danger"
-                onClick={() => void rejectLoan()}
-                disabled={rejectionReason.trim().length < 4 || processingLoanUuid === rejectingLoan.uuid}
-              >
-                Rechazar
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-      {approvingLoan ? (
-        <LoanApprovalModal
-          loan={approvingLoan}
-          processing={processingLoanUuid === approvingLoan.uuid}
-          onClose={closeApproveModal}
-          onSubmit={approveLoan}
-        />
-      ) : null}
       {completingLoan ? (
         <div className="modal-overlay">
           <div className="modal">

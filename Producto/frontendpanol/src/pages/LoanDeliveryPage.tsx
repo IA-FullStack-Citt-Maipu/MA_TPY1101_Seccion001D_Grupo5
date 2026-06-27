@@ -18,6 +18,7 @@ import type { DeliverLoanPayload, LoanSummary } from "../types/loan";
 import type { ImplementSummary } from "../types/implement";
 import type { IndividualItem, StockDetail } from "../types/stock";
 import { buildLoanDetailHash } from "../utils/loanDetailRouting";
+import { canStartDelivery } from "../utils/loanSchedule";
 
 interface DeliveryIndividualOption {
   assetCode: string;
@@ -326,10 +327,7 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
     };
   }, [loanUuid]);
 
-  const deliveryAllowed = useMemo(
-    () => (loan ? loan.status === "approved" || loan.status === "prepared" : false),
-    [loan],
-  );
+  const deliveryAllowed = useMemo(() => (loan ? canStartDelivery(loan) : false), [loan]);
 
   const selectedItems = useMemo(() => {
     return items.filter((item) => {
@@ -399,7 +397,7 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
     if (!loan || submitting || !deliveryAllowed) {
       return false;
     }
-    if (loan.status !== "approved" && loan.status !== "prepared") {
+    if (loan.status !== "prepared") {
       return false;
     }
     return selectedItems.length > 0 && itemsBlockingDelivery.length === 0 && itemsReadyForDelivery.length === selectedItems.length;
@@ -591,8 +589,12 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
       setError("No hay datos de prestamo para registrar la entrega.");
       return;
     }
-    if (loan.status !== "approved" && loan.status !== "prepared") {
-      setError("Solo puedes entregar solicitudes en estado aprobado o preparado.");
+    if (loan.status !== "prepared") {
+      setError("Solo puedes entregar solicitudes en estado preparado.");
+      return;
+    }
+    if (!deliveryAllowed) {
+      setError("La entrega solo se puede registrar desde la hora programada del prestamo.");
       return;
     }
 
@@ -680,7 +682,7 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
               </div>
               <div className={`loan-delivery-window ${deliveryAllowed ? "is-open" : "is-closed"}`}>
                 <Clock3 size={16} />
-                {deliveryAllowed ? "Entrega habilitada para este estado" : "Estado no habilitado para entrega"}
+                {deliveryAllowed ? "Entrega habilitada desde la hora programada" : "Entrega disponible solo al iniciar el horario programado"}
               </div>
             </header>
 
@@ -705,7 +707,7 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
                           <p>Adicional no solicitado | Se agregara a esta entrega</p>
                         ) : (
                           <p>
-                            Solicitado: {item.requested} | Aprobado: {item.approved} | Ya entregado: {item.delivered} | Pendiente: {item.outstanding}
+                            Solicitado: {item.requested} | Reservado: {item.approved} | Ya entregado: {item.delivered} | Pendiente: {item.outstanding}
                           </p>
                         )}
                         {item.availableStock != null ? (

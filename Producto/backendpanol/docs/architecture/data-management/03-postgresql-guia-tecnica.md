@@ -1,8 +1,8 @@
 ﻿# 03 - PostgreSQL: Guia Tecnica Vigente
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-05-31
-- Fuente de verdad: `Producto/databasepanol/migrations/v25/V25..V35` + `16-catalogo-bd-v31.md`
+- Ultima verificacion: 2026-06-26
+- Fuente de verdad: `Producto/databasepanol/migrations/v25/V25..V43` + `16-catalogo-bd-v31.md`
 
 ## Rol de PostgreSQL
 
@@ -36,6 +36,21 @@ Las transiciones y el stock se ejecutan en funciones SQL:
 - `fn_expire_pending_loans`
 - `fn_mark_overdue_loans`
 - `fn_loan_change_status`
+
+Flujo vigente para prestamos nuevos:
+
+- `pending -> approved` ocurre de forma automatica al crear la solicitud.
+- `approved` representa reserva logica completa, no aprobacion manual visible en UI.
+- `approved -> prepared` ocurre por accion explicita del coordinador desde 60 minutos antes de `scheduled_at`.
+- `prepared -> delivered` ocurre al entregar, nunca auto-preparando dentro del endpoint de entrega.
+- `delivered -> completed` conserva la logica de retorno/cierre actual.
+
+Reglas relevantes:
+
+- Si la reserva completa no cabe en la ventana horaria, la creacion completa falla.
+- La reserva al crear/editar no mueve stock fisico; eso ocurre en `fn_prepare_loan`.
+- `loan_detail.returned_quantity` pasa a ser parte canonica del detalle operativo.
+- Los triggers de notificacion deben omitir avisos al docente cuando `to_status = approved`.
 
 Trazabilidad:
 

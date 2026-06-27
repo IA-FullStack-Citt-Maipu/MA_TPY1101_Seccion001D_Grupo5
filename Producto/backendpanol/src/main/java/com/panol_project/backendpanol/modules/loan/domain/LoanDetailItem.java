@@ -6,6 +6,15 @@ public record LoanDetailItem(
         UUID implementUuid,
         Integer requestedQuantity,
         Integer reservedQuantity,
-        Integer deliveredQuantity
+        Integer deliveredQuantity,
+        Integer returnedQuantity
 ) {
+    public LoanDetailItem(
+            UUID implementUuid,
+            Integer requestedQuantity,
+            Integer reservedQuantity,
+            Integer deliveredQuantity
+    ) {
+        this(implementUuid, requestedQuantity, reservedQuantity, deliveredQuantity, 0);
+    }
 }

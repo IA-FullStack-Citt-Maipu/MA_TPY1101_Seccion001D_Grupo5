@@ -5,6 +5,7 @@ import type {
   CompleteLoanPayload,
   DeliverLoanPayload,
   LoanPage,
+  PrepareLoanPayload,
   LoanStateDates,
   LoanStatusTimelineEntry,
   LoanSummary,
@@ -72,6 +73,11 @@ export async function fetchLoanByUuid(loanUuid: string): Promise<LoanSummary | n
 
 export async function reviewLoan(loanUuid: string, payload: ReviewLoanPayload): Promise<LoanSummary> {
   const response = await apiClient.patch<LoanSummary>(`/api/v2/loans/${loanUuid}/review`, payload);
+  return response.data;
+}
+
+export async function prepareLoan(loanUuid: string, payload: PrepareLoanPayload = {}): Promise<LoanSummary> {
+  const response = await apiClient.post<LoanSummary>(`/api/v2/loans/${loanUuid}/prepare`, payload);
   return response.data;
 }
 

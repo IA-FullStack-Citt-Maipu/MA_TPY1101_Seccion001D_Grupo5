@@ -8,6 +8,8 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanImplementAvailabil
 import com.panol_project.backendpanol.modules.loan.domain.LoanRepositoryPort;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRequestedItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRequestedItemAvailability;
+import com.panol_project.backendpanol.modules.loan.domain.LoanReviewCommand;
+import com.panol_project.backendpanol.modules.loan.domain.LoanReviewDecision;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStatus;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
 import com.panol_project.backendpanol.modules.loan.domain.LoanUpdateCommand;
@@ -27,6 +29,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,18 +39,29 @@ public class SolicitarPrestamoUseCase {
 
     private static final int MAX_NOTES_LENGTH = 1000;
     private static final int MAX_SCHEDULE_DAYS_AHEAD = 14;
+    private static final UUID DEFAULT_SYSTEM_USER_UUID = UUID.fromString("99999999-9999-9999-9999-999999999999");
 
     private final LoanRepositoryPort loanRepositoryPort;
     private final Clock clock;
+    private final UUID systemUserUuid;
 
     @Autowired
-    public SolicitarPrestamoUseCase(LoanRepositoryPort loanRepositoryPort) {
-        this(loanRepositoryPort, Clock.systemDefaultZone());
+    public SolicitarPrestamoUseCase(
+            LoanRepositoryPort loanRepositoryPort,
+            @Value("${app.loan.lifecycle.system-user-uuid:${app.outbox.system-user-uuid:99999999-9999-9999-9999-999999999999}}")
+            String systemUserUuid
+    ) {
+        this(loanRepositoryPort, Clock.systemDefaultZone(), parseSystemUserUuid(systemUserUuid));
     }
 
     public SolicitarPrestamoUseCase(LoanRepositoryPort loanRepositoryPort, Clock clock) {
+        this(loanRepositoryPort, clock, DEFAULT_SYSTEM_USER_UUID);
+    }
+
+    public SolicitarPrestamoUseCase(LoanRepositoryPort loanRepositoryPort, Clock clock, UUID systemUserUuid) {
         this.loanRepositoryPort = loanRepositoryPort;
         this.clock = clock;
+        this.systemUserUuid = systemUserUuid == null ? DEFAULT_SYSTEM_USER_UUID : systemUserUuid;
     }
 
     @Transactional
@@ -76,7 +90,7 @@ public class SolicitarPrestamoUseCase {
             LoanImplementAvailability implement = loanRepositoryPort.findImplementAvailabilityByUuid(item.implementUuid())
                     .orElseThrow(() -> new NotFoundException("LOAN_IMPLEMENT_NOT_FOUND", "Implemento no encontrado"));
             if (!implement.active()) {
-                throw new BadRequestException("LOAN_IMPLEMENT_INACTIVE", "El implemento seleccionado est\u00e1 inactivo");
+                throw new BadRequestException("LOAN_IMPLEMENT_INACTIVE", "El implemento seleccionado esta inactivo");
             }
         }
 
@@ -95,7 +109,7 @@ public class SolicitarPrestamoUseCase {
             throw new ApiException(
                     HttpStatus.CONFLICT,
                     "LOAN_DUPLICATE_REQUEST",
-                    "Ya tienes una solicitud pendiente con uno o m\u00e1s de estos implementos"
+                    "Ya tienes una solicitud activa con uno o mas de estos implementos en la misma ventana horaria"
             );
         }
 
@@ -111,6 +125,14 @@ public class SolicitarPrestamoUseCase {
                 )
         );
 
+        loanRepositoryPort.reviewLoan(new LoanReviewCommand(
+                loan.uuid(),
+                systemUserUuid,
+                LoanReviewDecision.APPROVE,
+                "Reserva automatica al crear solicitud",
+                List.of()
+        ));
+
         return loanRepositoryPort.findVisibleLoanSummaryByUuid(loan.uuid())
                 .orElseThrow(() -> new NotFoundException("LOAN_NOT_FOUND", "Prestamo no encontrado"));
     }
@@ -125,7 +147,7 @@ public class SolicitarPrestamoUseCase {
         UUID requesterUuid = command.requesterUuid();
         UUID roomUuid = command.roomUuid();
         UUID subjectUuid = command.subjectUuid();
-        LoanSummaryView currentLoan = requireEditablePendingLoan(loanUuid, requesterUuid);
+        LoanSummaryView currentLoan = requireEditableApprovedLoan(loanUuid, requesterUuid);
 
         validateCommand(command);
 
@@ -147,7 +169,7 @@ public class SolicitarPrestamoUseCase {
             LoanImplementAvailability implement = loanRepositoryPort.findImplementAvailabilityByUuid(item.implementUuid())
                     .orElseThrow(() -> new NotFoundException("LOAN_IMPLEMENT_NOT_FOUND", "Implemento no encontrado"));
             if (!implement.active()) {
-                throw new BadRequestException("LOAN_IMPLEMENT_INACTIVE", "El implemento seleccionado está inactivo");
+                throw new BadRequestException("LOAN_IMPLEMENT_INACTIVE", "El implemento seleccionado esta inactivo");
             }
         }
 
@@ -167,7 +189,7 @@ public class SolicitarPrestamoUseCase {
             throw new ApiException(
                     HttpStatus.CONFLICT,
                     "LOAN_DUPLICATE_REQUEST",
-                    "Ya tienes una solicitud pendiente con uno o más de estos implementos"
+                    "Ya tienes una solicitud activa con uno o mas de estos implementos en la misma ventana horaria"
             );
         }
 
@@ -239,15 +261,15 @@ public class SolicitarPrestamoUseCase {
         return normalized.isEmpty() ? null : normalized;
     }
 
-    private LoanSummaryView requireEditablePendingLoan(UUID loanUuid, UUID requesterUuid) {
+    private LoanSummaryView requireEditableApprovedLoan(UUID loanUuid, UUID requesterUuid) {
         LoanSummaryView loan = loanRepositoryPort.findVisibleLoanSummaryByUuid(loanUuid)
                 .orElseThrow(() -> new NotFoundException("LOAN_NOT_FOUND", "Prestamo no encontrado"));
 
         if (!loan.requesterUuid().equals(requesterUuid)) {
             throw new ApiException(HttpStatus.FORBIDDEN, "LOAN_UPDATE_FORBIDDEN", "No tienes permisos para modificar este prestamo");
         }
-        if (loan.status() != LoanStatus.PENDING) {
-            throw new BadRequestException("LOAN_UPDATE_INVALID_STATE", "Solo se puede modificar un prestamo en estado pending");
+        if (loan.status() != LoanStatus.APPROVED) {
+            throw new BadRequestException("LOAN_UPDATE_INVALID_STATE", "Solo se puede modificar un prestamo en estado approved");
         }
         return loan;
     }
@@ -363,5 +385,12 @@ public class SolicitarPrestamoUseCase {
                 );
             }
         }
+    }
+
+    private static UUID parseSystemUserUuid(String rawSystemUserUuid) {
+        if (rawSystemUserUuid == null || rawSystemUserUuid.isBlank()) {
+            return DEFAULT_SYSTEM_USER_UUID;
+        }
+        return UUID.fromString(rawSystemUserUuid.trim());
     }
 }

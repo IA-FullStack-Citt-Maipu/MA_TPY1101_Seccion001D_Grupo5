@@ -6,6 +6,7 @@ import com.panol_project.backendpanol.modules.loan.api.dto.CreateLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.api.dto.DeliverLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanItemV2Response;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanPageV2Response;
+import com.panol_project.backendpanol.modules.loan.api.dto.PrepareLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanRoomV2Response;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanStateDatesV2Response;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanStatusTimelineEntryV2Response;
@@ -22,6 +23,7 @@ import com.panol_project.backendpanol.modules.loan.application.dto.DevolverPrest
 import com.panol_project.backendpanol.modules.loan.application.dto.DevolverPrestamoIndividualCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.EntregarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.EntregarPrestamoItemCommand;
+import com.panol_project.backendpanol.modules.loan.application.dto.PrepararPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.RevisarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.RevisarPrestamoItemCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.SolicitarPrestamoCommand;
@@ -212,6 +214,24 @@ public class LoanV2Controller {
         return toResponse(reviewed);
     }
 
+    @PostMapping("/{loanUuid}/prepare")
+    @PreAuthorize("hasRole('COORDINADOR')")
+    public LoanV2Response prepararPrestamo(
+            @PathVariable UUID loanUuid,
+            @Valid @RequestBody(required = false) PrepareLoanV2Request request,
+            Authentication authentication
+    ) {
+        UUID actorUuid = resolveCurrentUserUuid(authentication);
+        LoanSummaryView prepared = gestionPrestamoUseCase.preparar(
+                new PrepararPrestamoCommand(
+                        loanUuid,
+                        actorUuid,
+                        request == null ? null : request.notes()
+                )
+        );
+        return toResponse(prepared);
+    }
+
     @PostMapping("/{loanUuid}/delivery")
     @PreAuthorize("hasRole('COORDINADOR')")
     public LoanV2Response entregarPrestamo(
@@ -322,7 +342,8 @@ public class LoanV2Controller {
                                 item.implementName(),
                                 item.requestedQuantity(),
                                 item.reservedQuantity(),
-                                item.deliveredQuantity()
+                                item.deliveredQuantity(),
+                                item.returnedQuantity()
                         ))
                         .toList()
         );
