@@ -6,6 +6,7 @@ import java.util.UUID;
 
 public record LoanCreateCommand(
         UUID requesterUuid,
+        UUID actorUuid,
         UUID roomUuid,
         UUID subjectUuid,
         OffsetDateTime scheduledAt,

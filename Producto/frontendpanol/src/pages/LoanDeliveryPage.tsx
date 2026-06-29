@@ -1,15 +1,18 @@
 import {
   ArrowLeft,
   CheckSquare,
+  ChevronDown,
   Clock3,
   Minus,
   PackageSearch,
   Plus,
+  RotateCcw,
   Search,
   SendHorizontal,
   Square,
+  Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getApiErrorPayload, getErrorMessage } from "../services/apiClient";
 import { fetchImplements } from "../services/implementService";
 import { fetchLoanByUuid, deliverLoan } from "../services/loanService";
@@ -46,6 +49,26 @@ interface DeliveryItemState {
   selectedAssetCodes: string[];
   stockError: string | null;
   isAdditional: boolean;
+}
+
+function cloneDeliveryItemState(item: DeliveryItemState): DeliveryItemState {
+  return {
+    ...item,
+    availableAssetCodes: [...item.availableAssetCodes],
+    suggestedAssetCodes: [...item.suggestedAssetCodes],
+    individualOptions: item.individualOptions.map((option) => ({ ...option })),
+    selectedAssetCodes: [...item.selectedAssetCodes],
+  };
+}
+
+function getDeliveryItemSignature(item: DeliveryItemState): string {
+  return [
+    item.implementUuid,
+    item.isAdditional ? "1" : "0",
+    item.selected ? "1" : "0",
+    item.quantity,
+    item.selectedAssetCodes.join(","),
+  ].join("|");
 }
 
 function parseDate(value: string): Date | null {
@@ -118,6 +141,31 @@ function buildIndividualOptions(individuals: IndividualItem[], suggestedAssetCod
     .filter((option): option is DeliveryIndividualOption => option !== null);
 }
 
+function getAdditionalImplementSearchText(implement: ImplementSummary): string {
+  return [
+    implement.name,
+    implement.category?.name ?? "",
+    implement.location?.name ?? "",
+    implement.barcode ?? "",
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function getAdditionalImplementMeta(implement: ImplementSummary): string {
+  const meta: string[] = [];
+  if (implement.barcode) {
+    meta.push(`Codigo de barras: ${implement.barcode}`);
+  }
+  if (implement.category?.name) {
+    meta.push(`Categoria: ${implement.category.name}`);
+  }
+  if (typeof implement.stock?.available === "number") {
+    meta.push(`Disponibles: ${implement.stock.available}`);
+  }
+  return meta.join(" | ");
+}
+
 function isItemReadyForDelivery(item: DeliveryItemState): boolean {
   if (!item.selected || item.stockError) {
     return false;
@@ -138,6 +186,7 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
   const [submitting, setSubmitting] = useState(false);
   const [loan, setLoan] = useState<LoanSummary | null>(null);
   const [items, setItems] = useState<DeliveryItemState[]>([]);
+  const [initialItems, setInitialItems] = useState<DeliveryItemState[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showModificationModal, setShowModificationModal] = useState(false);
   const [showDeliveryVariationModal, setShowDeliveryVariationModal] = useState(false);
@@ -145,8 +194,10 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
   const [deliveryNotes, setDeliveryNotes] = useState("");
   const [additionalOptions, setAdditionalOptions] = useState<ImplementSummary[]>([]);
   const [additionalSearch, setAdditionalSearch] = useState("");
-  const [selectedAdditionalUuid, setSelectedAdditionalUuid] = useState("");
   const [addingImplement, setAddingImplement] = useState(false);
+  const [isAdditionalMenuOpen, setIsAdditionalMenuOpen] = useState(false);
+  const additionalMenuRef = useRef<HTMLDivElement | null>(null);
+  const additionalSearchInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -289,7 +340,8 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
           };
         });
 
-        setItems(hydratedRows);
+        setItems(hydratedRows.map(cloneDeliveryItemState));
+        setInitialItems(hydratedRows.map(cloneDeliveryItemState));
         const excludedUuids = new Set(detail.items.map((item) => item.implement_uuid));
         try {
           const implementOptions = await fetchImplements({
@@ -327,6 +379,45 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
     };
   }, [loanUuid]);
 
+  useEffect(() => {
+    if (!isAdditionalMenuOpen) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      additionalSearchInputRef.current?.focus();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isAdditionalMenuOpen]);
+
+  useEffect(() => {
+    if (!isAdditionalMenuOpen) {
+      return;
+    }
+
+    function handleDocumentMouseDown(event: MouseEvent) {
+      const target = event.target as Node;
+      if (additionalMenuRef.current && !additionalMenuRef.current.contains(target)) {
+        setIsAdditionalMenuOpen(false);
+      }
+    }
+
+    function handleDocumentKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsAdditionalMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleDocumentMouseDown);
+    document.addEventListener("keydown", handleDocumentKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handleDocumentMouseDown);
+      document.removeEventListener("keydown", handleDocumentKeyDown);
+    };
+  }, [isAdditionalMenuOpen]);
+
   const deliveryAllowed = useMemo(() => (loan ? canStartDelivery(loan) : false), [loan]);
 
   const selectedItems = useMemo(() => {
@@ -350,12 +441,7 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
         if (!normalizedSearch) {
           return true;
         }
-        return [
-          implement.name,
-          implement.category?.name ?? "",
-          implement.location?.name ?? "",
-          implement.barcode ?? "",
-        ].join(" ").toLowerCase().includes(normalizedSearch);
+        return getAdditionalImplementSearchText(implement).includes(normalizedSearch);
       })
       .slice(0, 25);
   }, [additionalOptions, additionalSearch, items]);
@@ -364,6 +450,13 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
     () => selectedItems.reduce((total, item) => total + (item.itemType === "individual" ? item.selectedAssetCodes.length : item.quantity), 0),
     [selectedItems],
   );
+
+  const canResetDelivery = useMemo(() => {
+    if (items.length !== initialItems.length) {
+      return true;
+    }
+    return items.some((item, index) => getDeliveryItemSignature(item) !== getDeliveryItemSignature(initialItems[index]));
+  }, [initialItems, items]);
 
   const itemsReadyForDelivery = useMemo(
     () => selectedItems.filter(isItemReadyForDelivery),
@@ -426,6 +519,66 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
     window.location.assign(buildLoanDetailHash(loanUuid, "list"));
   }
 
+  function toggleAdditionalMenu() {
+    setIsAdditionalMenuOpen((current) => {
+      const next = !current;
+      if (!next) {
+        setAdditionalSearch("");
+      }
+      return next;
+    });
+  }
+
+  function selectAdditionalImplement(implementUuid: string) {
+    const selected = additionalCandidates.find((implement) => implement.uuid === implementUuid);
+    if (!selected) {
+      return;
+    }
+    setAdditionalSearch("");
+    setIsAdditionalMenuOpen(false);
+    void addAdditionalImplement(selected);
+  }
+
+  function resetDeliveryItems() {
+    setItems(initialItems.map(cloneDeliveryItemState));
+    setError(null);
+    setShowDeliveryVariationModal(false);
+    setShowModificationModal(false);
+    setModificationTargetName(null);
+    setAdditionalSearch("");
+    setIsAdditionalMenuOpen(false);
+  }
+
+  function discardDeliveryItem(implementUuid: string) {
+    setItems((previous) =>
+      previous.flatMap((item) => {
+        if (item.implementUuid !== implementUuid) {
+          return [item];
+        }
+        if (item.isAdditional) {
+          return [];
+        }
+        if (item.itemType === "individual") {
+          return [
+            {
+              ...item,
+              selected: false,
+              quantity: 0,
+              selectedAssetCodes: [],
+            },
+          ];
+        }
+        return [
+          {
+            ...item,
+            selected: false,
+            quantity: 0,
+          },
+        ];
+      }),
+    );
+  }
+
   function toggleItemSelected(implementUuid: string) {
     setItems((previous) =>
       previous.map((item) => {
@@ -447,19 +600,27 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
             quantity: selectedAssetCodes.length,
           };
         }
+        if (!nextSelected) {
+          return {
+            ...item,
+            selected: false,
+            quantity: 0,
+          };
+        }
         const quantity = item.quantity > 0 ? item.quantity : Math.min(1, item.maxQuantity);
         return { ...item, selected: quantity > 0, quantity };
       }),
     );
   }
 
-  function adjustFungibleQuantity(implementUuid: string, delta: number) {
+  function setFungibleQuantity(implementUuid: string, rawQuantity: number) {
     setItems((previous) =>
       previous.map((item) => {
         if (item.implementUuid !== implementUuid || item.itemType === "individual") {
           return item;
         }
-        const next = Math.max(0, Math.min(item.maxQuantity, item.quantity + delta));
+        const safeQuantity = Number.isFinite(rawQuantity) ? rawQuantity : 0;
+        const next = Math.max(0, Math.min(item.maxSelectableQuantity, Math.trunc(safeQuantity)));
         return {
           ...item,
           quantity: next,
@@ -467,6 +628,20 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
         };
       }),
     );
+  }
+
+  function adjustFungibleQuantity(implementUuid: string, delta: number) {
+    const target = items.find((item) => item.implementUuid === implementUuid);
+    if (!target || target.itemType === "individual") {
+      return;
+    }
+    setFungibleQuantity(implementUuid, target.quantity + delta);
+  }
+
+  function handleFungibleQuantityInput(implementUuid: string, value: string) {
+    const normalized = value.replace(/[^\d]/g, "");
+    const nextQuantity = normalized.length > 0 ? Number.parseInt(normalized, 10) : 0;
+    setFungibleQuantity(implementUuid, nextQuantity);
   }
 
   function toggleAssetCode(implementUuid: string, assetCode: string) {
@@ -504,12 +679,7 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
     }
   }
 
-  async function addAdditionalImplement() {
-    const selected = additionalOptions.find((implement) => implement.uuid === selectedAdditionalUuid);
-    if (!selected) {
-      return;
-    }
-
+  async function addAdditionalImplement(selected: ImplementSummary) {
     setAddingImplement(true);
     setError(null);
     try {
@@ -570,8 +740,8 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
       }
 
       setItems((previous) => [...previous, nextItem]);
-      setSelectedAdditionalUuid("");
       setAdditionalSearch("");
+      setIsAdditionalMenuOpen(false);
     } catch (requestError) {
       setError(getErrorMessage(requestError, "No se pudo agregar el implemento adicional."));
     } finally {
@@ -594,7 +764,7 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
       return;
     }
     if (!deliveryAllowed) {
-      setError("La entrega solo se puede registrar desde la hora programada del prestamo.");
+      setError("La entrega solo se puede registrar cuando la solicitud este preparada.");
       return;
     }
 
@@ -682,11 +852,23 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
               </div>
               <div className={`loan-delivery-window ${deliveryAllowed ? "is-open" : "is-closed"}`}>
                 <Clock3 size={16} />
-                {deliveryAllowed ? "Entrega habilitada desde la hora programada" : "Entrega disponible solo al iniciar el horario programado"}
+                {deliveryAllowed ? "Entrega habilitada" : "Entrega disponible cuando la solicitud este preparada"}
               </div>
             </header>
 
             <div className="loan-delivery-items">
+              <div className="loan-delivery-items__toolbar">
+                <p>Reestablece la entrega para volver a mostrar solo los implementos solicitados con sus cantidades reservadas.</p>
+                <button
+                  type="button"
+                  className="loan-secondary-btn"
+                  onClick={resetDeliveryItems}
+                  disabled={!canResetDelivery || submitting || loading}
+                >
+                  <RotateCcw size={15} />
+                  Reestablecer
+                </button>
+              </div>
               {items.length === 0 ? (
                 <p className="text-muted">No hay items para entregar.</p>
               ) : (
@@ -704,20 +886,26 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
                       <div className="loan-delivery-item-card__copy">
                         <strong>{item.implementName}</strong>
                         {item.isAdditional ? (
-                          <p>Adicional no solicitado | Se agregara a esta entrega</p>
+                          <p>Adicional no solicitado | Disponibles actualmente: {item.availableStock ?? "Sin dato"}</p>
                         ) : (
                           <p>
-                            Solicitado: {item.requested} | Reservado: {item.approved} | Ya entregado: {item.delivered} | Pendiente: {item.outstanding}
+                            Solicitado: {item.requested} | Disponibles actualmente: {item.availableStock ?? "Sin dato"}
                           </p>
                         )}
-                        {item.availableStock != null ? (
-                          <small>Disponibles actuales: {item.availableStock}</small>
-                        ) : null}
                         {item.stockError ? <small className="field-error">{item.stockError}</small> : null}
                         {!item.stockError && item.selected && item.outstanding > 0 && !isItemReadyForDelivery(item) ? (
                           <small className="field-error">Selecciona al menos una unidad disponible para incluirla en esta entrega.</small>
                         ) : null}
                       </div>
+                      <button
+                        type="button"
+                        className="loan-delivery-discard-btn"
+                        onClick={() => discardDeliveryItem(item.implementUuid)}
+                        aria-label={item.isAdditional ? "Eliminar implemento adicional de la entrega" : "Descartar implemento de esta entrega"}
+                        title={item.isAdditional ? "Eliminar implemento adicional" : "Descartar de esta entrega"}
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </div>
 
                     {item.itemType === "individual" ? (
@@ -769,15 +957,24 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
                           <button
                             type="button"
                             onClick={() => adjustFungibleQuantity(item.implementUuid, -1)}
-                            disabled={!item.selected || item.quantity <= 0}
+                            disabled={item.quantity <= 0}
                           >
                             <Minus size={14} />
                           </button>
-                          <span className="loan-stepper__value">{item.quantity}</span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            className="loan-stepper__input"
+                            aria-label={`Cantidad a entregar de ${item.implementName}`}
+                            value={String(item.quantity)}
+                            onChange={(event) => handleFungibleQuantityInput(item.implementUuid, event.target.value)}
+                            disabled={Boolean(item.stockError) || item.maxSelectableQuantity <= 0}
+                          />
                           <button
                             type="button"
                             onClick={() => adjustFungibleQuantity(item.implementUuid, 1)}
-                            disabled={!item.selected || item.quantity >= item.maxSelectableQuantity}
+                            disabled={Boolean(item.stockError) || item.quantity >= item.maxSelectableQuantity}
                           >
                             <Plus size={14} />
                           </button>
@@ -796,37 +993,75 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
                   <p>Usa esto cuando durante la entrega se solicita algo que no estaba en el formulario.</p>
                 </div>
               </div>
-              <label className="loan-delivery-additional__search">
-                <Search size={15} />
-                <input
-                  type="search"
-                  value={additionalSearch}
-                  onChange={(event) => setAdditionalSearch(event.target.value)}
-                  placeholder="Buscar implemento disponible..."
-                />
-              </label>
               <div className="loan-delivery-additional__controls">
-                <select
-                  value={selectedAdditionalUuid}
-                  onChange={(event) => setSelectedAdditionalUuid(event.target.value)}
-                  disabled={additionalCandidates.length === 0 || addingImplement}
+                <div
+                  ref={additionalMenuRef}
+                  className="inventory-multiselect inventory-implement-picker loan-delivery-additional__picker"
                 >
-                  <option value="">Selecciona un implemento</option>
-                  {additionalCandidates.map((implement) => (
-                    <option key={implement.uuid} value={implement.uuid}>
-                      {implement.name} ({implement.stock?.available ?? 0} disp.)
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  className="loan-secondary-btn"
-                  onClick={() => void addAdditionalImplement()}
-                  disabled={!selectedAdditionalUuid || addingImplement}
-                >
-                  <Plus size={15} />
-                  {addingImplement ? "Agregando..." : "Agregar"}
-                </button>
+                  <button
+                    type="button"
+                    className="inventory-multiselect__trigger inventory-implement-picker__trigger"
+                    onClick={toggleAdditionalMenu}
+                    aria-expanded={isAdditionalMenuOpen}
+                    aria-haspopup="listbox"
+                    aria-controls="loan-delivery-additional-menu"
+                    disabled={addingImplement || additionalOptions.length === 0}
+                  >
+                    <div className="inventory-implement-picker__trigger-copy">
+                      <strong>{addingImplement ? "Agregando implemento..." : "Selecciona un implemento"}</strong>
+                      <small>
+                        {addingImplement
+                          ? "Espera un momento mientras se incorpora a la entrega"
+                          : "Busca por nombre o codigo de barras"}
+                      </small>
+                    </div>
+                    <ChevronDown size={16} className={isAdditionalMenuOpen ? "is-open" : ""} />
+                  </button>
+
+                  {isAdditionalMenuOpen ? (
+                    <div
+                      id="loan-delivery-additional-menu"
+                      className="inventory-multiselect__menu inventory-implement-picker__menu"
+                      role="listbox"
+                      aria-label="Seleccionar implemento adicional"
+                    >
+                      <div className="inventory-search-input-wrap inventory-implement-picker__search">
+                        <Search size={16} />
+                        <input
+                          ref={additionalSearchInputRef}
+                          type="search"
+                          value={additionalSearch}
+                          onChange={(event) => setAdditionalSearch(event.target.value)}
+                          placeholder="Buscar implemento o codigo de barras"
+                        />
+                      </div>
+
+                      <div className="inventory-implement-picker__options">
+                        {additionalCandidates.length === 0 ? (
+                          <p className="inventory-multiselect__hint">Sin resultados</p>
+                        ) : null}
+                        {additionalCandidates.map((implement) => {
+                          const optionMeta = getAdditionalImplementMeta(implement);
+                          return (
+                            <button
+                              key={implement.uuid}
+                              type="button"
+                              className="inventory-multiselect__option inventory-implement-picker__option"
+                              onClick={() => selectAdditionalImplement(implement.uuid)}
+                              role="option"
+                              aria-selected="false"
+                            >
+                              <div className="inventory-implement-picker__option-copy">
+                                <strong>{implement.name}</strong>
+                                {optionMeta ? <small>{optionMeta}</small> : null}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
               </div>
               {additionalCandidates.length === 0 ? (
                 <small className="field-hint">No hay implementos disponibles para agregar con el filtro actual.</small>

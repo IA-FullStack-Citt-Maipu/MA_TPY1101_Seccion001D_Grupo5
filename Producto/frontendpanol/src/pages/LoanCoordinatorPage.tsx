@@ -13,7 +13,7 @@ import { LoanDetailModalFrame } from "../components/loans/LoanDetailModalFrame";
 import { PresencePollingModal } from "../components/ui/PresencePollingModal";
 import { useInactivityPollingGate } from "../hooks/useInactivityPollingGate";
 import { getErrorMessage } from "../services/apiClient";
-import { completeLoan, fetchLoansPage, prepareLoan } from "../services/loanService";
+import { fetchLoansPage } from "../services/loanService";
 import type { LoanSummary } from "../types/loan";
 import { buildLoanDetailHash, stripLoanDetailFromHash } from "../utils/loanDetailRouting";
 import { canStartDelivery, canStartPreparation } from "../utils/loanSchedule";
@@ -23,7 +23,6 @@ const PAGE_SIZE = 10;
 
 type LoanStatusFilter =
   | "all"
-  | "pending"
   | "approved"
   | "prepared"
   | "delivered"
@@ -74,7 +73,7 @@ function normalizeStatusLabel(status: string): string {
     prepared: "Preparado",
     delivered: "En uso",
     overdue: "Atrasado",
-    completed: "Completado",
+    completed: "Finalizado",
     cancelled: "Cancelado",
     rejected: "Rechazado",
     expired: "Expirado",
@@ -115,7 +114,6 @@ export function LoanCoordinatorPage({
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [processingLoanUuid, setProcessingLoanUuid] = useState<string | null>(null);
   const hasLoadedOnceRef = useRef(false);
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -124,9 +122,6 @@ export function LoanCoordinatorPage({
   const [toDate, setToDate] = useState("");
   const [roomFilter, setRoomFilter] = useState("");
   const [page, setPage] = useState(1);
-
-  const [completingLoan, setCompletingLoan] = useState<LoanSummary | null>(null);
-  const [completionNotes, setCompletionNotes] = useState("");
 
   const loadLoans = useCallback(async (mode: "initial" | "refresh" = "initial") => {
     const shouldShowInitialLoading = mode === "initial" && !hasLoadedOnceRef.current;
@@ -265,8 +260,8 @@ export function LoanCoordinatorPage({
     return Array.from({ length: end - start + 1 }, (_, index) => start + index);
   }, [safePage, totalPages]);
 
-  const pendingCount = useMemo(
-    () => allLoans.filter((loan) => loan.status === "pending").length,
+  const reservedCount = useMemo(
+    () => allLoans.filter((loan) => loan.status === "approved").length,
     [allLoans],
   );
   const inUseCount = useMemo(
@@ -303,45 +298,12 @@ export function LoanCoordinatorPage({
     );
   }
 
-  async function markLoanPrepared(loan: LoanSummary) {
-    setProcessingLoanUuid(loan.uuid);
-    setError(null);
-    try {
-      const updated = await prepareLoan(loan.uuid);
-      updateLoanInState(updated);
-    } catch (requestError) {
-      setError(getErrorMessage(requestError, "No se pudo preparar el prestamo."));
-    } finally {
-      setProcessingLoanUuid(null);
-    }
-  }
-
-  async function markLoanCompleted(loan: LoanSummary) {
-    setProcessingLoanUuid(loan.uuid);
-    setError(null);
-    try {
-      const updated = await completeLoan(loan.uuid, { notes: completionNotes.trim() || null });
-      updateLoanInState(updated);
-      closeCompleteModal();
-    } catch (requestError) {
-      setError(getErrorMessage(requestError, "No se pudo completar el prestamo."));
-    } finally {
-      setProcessingLoanUuid(null);
-    }
+  function goToPreparation(loanUuid: string) {
+    window.location.assign(`#/inventory/prestamos/${loanUuid}/preparacion`);
   }
 
   function goToDelivery(loanUuid: string) {
     window.location.assign(`#/inventory/prestamos/${loanUuid}/entrega`);
-  }
-
-  function openCompleteModal(loan: LoanSummary) {
-    setCompletingLoan(loan);
-    setCompletionNotes("");
-  }
-
-  function closeCompleteModal() {
-    setCompletingLoan(null);
-    setCompletionNotes("");
   }
 
   const content = (
@@ -356,8 +318,8 @@ export function LoanCoordinatorPage({
           <span className="coordinator-loans-kpi__strip" />
           <CircleAlert size={18} />
           <div>
-            <p>Pendientes</p>
-            <strong>{pendingCount}</strong>
+            <p>Reservados</p>
+            <strong>{reservedCount}</strong>
           </div>
         </article>
         <article className="coordinator-loans-kpi coordinator-loans-kpi--inuse">
@@ -372,7 +334,7 @@ export function LoanCoordinatorPage({
           <span className="coordinator-loans-kpi__strip" />
           <CheckCircle2 size={18} />
           <div>
-            <p>Completados hoy</p>
+            <p>Finalizados hoy</p>
             <strong>{completedToday}</strong>
           </div>
         </article>
@@ -410,12 +372,11 @@ export function LoanCoordinatorPage({
               }}
             >
               <option value="all">Todos</option>
-              <option value="pending">Pendiente</option>
               <option value="approved">Reservado</option>
               <option value="prepared">Preparado</option>
               <option value="delivered">En uso</option>
               <option value="overdue">Atrasado</option>
-              <option value="completed">Completado</option>
+              <option value="completed">Finalizado</option>
               <option value="cancelled">Cancelado</option>
               <option value="rejected">Rechazado</option>
               <option value="expired">Expirado</option>
@@ -485,7 +446,7 @@ export function LoanCoordinatorPage({
                 </tr>
               ) : (
                 pagedLoans.map((loan) => {
-                  const isProcessing = processingLoanUuid === loan.uuid;
+                  const isProcessing = false;
                   const preparationEnabled = canStartPreparation(loan);
                   const deliveryEnabled = canStartDelivery(loan);
                   return (
@@ -516,10 +477,10 @@ export function LoanCoordinatorPage({
                               type="button"
                               className="coordinator-loans-action-btn coordinator-loans-action-btn--approve"
                               disabled={isProcessing || !preparationEnabled}
-                              onClick={() => void markLoanPrepared(loan)}
+                              onClick={() => goToPreparation(loan.uuid)}
                               title="Preparar implementos reservados"
                             >
-                              Preparar
+                              Preparar implementos
                             </button>
                           ) : loan.status === "prepared" ? (
                             <button
@@ -536,9 +497,9 @@ export function LoanCoordinatorPage({
                               type="button"
                               className="coordinator-loans-action-btn coordinator-loans-action-btn--complete"
                               disabled={isProcessing}
-                              onClick={() => openCompleteModal(loan)}
+                              onClick={() => goToLoanDetail(loan.uuid)}
                             >
-                              Completar
+                              Registrar devolucion
                             </button>
                           ) : (
                             <button
@@ -594,36 +555,6 @@ export function LoanCoordinatorPage({
         </footer>
       </section>
 
-      {completingLoan ? (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h3>Completar prestamo</h3>
-            <p>Puedes agregar una nota opcional antes de cerrar esta solicitud.</p>
-            <label htmlFor="completion-notes">Notas</label>
-            <textarea
-              id="completion-notes"
-              rows={3}
-              value={completionNotes}
-              maxLength={1000}
-              onChange={(event) => setCompletionNotes(event.target.value)}
-              placeholder="Observaciones de cierre..."
-            />
-            <div className="modal-actions">
-              <button type="button" className="button button--ghost" onClick={closeCompleteModal}>
-                Cancelar
-              </button>
-              <button
-                type="button"
-                className="coordinator-loans-action-btn coordinator-loans-action-btn--complete"
-                onClick={() => void markLoanCompleted(completingLoan)}
-                disabled={processingLoanUuid === completingLoan.uuid}
-              >
-                Completar
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
       {activeDetailLoanUuid ? (
         <LoanDetailModalFrame onClose={closeLoanDetail}>
           <LoanDetailPage

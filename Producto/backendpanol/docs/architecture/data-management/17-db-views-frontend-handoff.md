@@ -1,6 +1,6 @@
 # Handoff IA Frontend - Vistas BD Vigentes
 
-- Fecha: 2026-05-31
+- Fecha: 2026-06-28
 - Fuente: `tmp/db-introspect/views.txt` y `tmp/db-introspect/columns.txt`
 - Alcance: todas las vistas SQL disponibles hoy en `public`
 - Objetivo: documento para que otro agente IA construya pantallas frontend basadas en estas vistas
@@ -77,6 +77,8 @@ Nota: para frontend web productivo, consumir endpoints backend. Si una vista no 
 | `reserved_quantity` | `int4` |
 | `delivered_quantity` | `int4` |
 | `returned_quantity` | `int4` |
+
+- Nota operativa: `returned_quantity` solo cuenta retorno util/bueno. El cierre por dano, perdida, descarte o consumo parcial vive en columnas internas de `loan_detail` y no se refleja en este contador.
 
 - UI sugerida: tablero coordinador para seguimiento de items en curso.
 
@@ -179,6 +181,8 @@ Nota: para frontend web productivo, consumir endpoints backend. Si una vista no 
   - `reserved_quantity`
   - `delivered_quantity`
   - `returned_quantity`
+
+- Nota operativa: `returned_quantity` y `total_returned_quantity` suman solo retorno util/bueno; no agregan cierres por dano, perdida, descarte o consumo.
 
 - UI sugerida: tabla principal de prestamos + expansion por fila para ver items.
 

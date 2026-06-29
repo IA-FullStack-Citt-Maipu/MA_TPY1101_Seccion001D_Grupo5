@@ -76,7 +76,7 @@ Si quieres que el build introspecte la base local en vez de Supabase, debes camb
 ## Seguridad en despliegue
 
 - `APP_SECURITY_ENABLED=true` por defecto.
-- `POST /api/v2/auth/login` es el unico endpoint publico de auth.
+- Endpoints publicos de auth: `POST /api/v2/auth/login`, `POST /api/v2/auth/logout` y `POST /api/v2/auth/refresh`.
 
 ## Nota operativa
 

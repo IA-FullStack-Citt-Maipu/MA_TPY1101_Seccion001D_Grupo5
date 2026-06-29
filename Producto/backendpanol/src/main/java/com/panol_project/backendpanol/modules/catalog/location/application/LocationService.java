@@ -62,11 +62,25 @@ public class LocationService implements LocationValidationContract {
 
     @Transactional
     public void eliminar(UUID uuid) {
-        LocationOption existing = requireLocation(uuid);
-        if (!Boolean.TRUE.equals(existing.active())) {
-            return;
+        requireLocation(uuid);
+
+        LocationAssociationSummary associations = countAssociations(uuid);
+        if (associations.totalAssociations() > 0) {
+            throw new BadRequestException(
+                    "LOCATION_HAS_ASSOCIATIONS",
+                    "No se puede eliminar la ubicacion porque tiene "
+                            + associations.totalAssociations()
+                            + " asociacion(es) activas entre implementos y unidades"
+            );
         }
-        repository.softDelete(uuid);
+
+        repository.deleteByUuid(uuid);
+    }
+
+    @Transactional(readOnly = true)
+    public LocationAssociationSummary obtenerResumenAsociaciones(UUID uuid) {
+        requireLocation(uuid);
+        return countAssociations(uuid);
     }
 
     @Override
@@ -99,5 +113,24 @@ public class LocationService implements LocationValidationContract {
         }
         String normalized = value.trim();
         return normalized.isEmpty() ? null : normalized;
+    }
+
+    private LocationAssociationSummary countAssociations(UUID uuid) {
+        int implementAssociations = repository.countImplementAssociationsByLocationUuid(uuid);
+        int individualAssociations = repository.countIndividualAssociationsByLocationUuid(uuid);
+        return new LocationAssociationSummary(
+                uuid,
+                implementAssociations,
+                individualAssociations,
+                implementAssociations + individualAssociations
+        );
+    }
+
+    public record LocationAssociationSummary(
+            UUID locationUuid,
+            int implementAssociations,
+            int individualAssociations,
+            int totalAssociations
+    ) {
     }
 }

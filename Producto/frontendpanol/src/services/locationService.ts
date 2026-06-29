@@ -1,5 +1,5 @@
 import { apiClient } from "./apiClient";
-import type { LocationOption } from "../types/location";
+import type { LocationAssociationSummary, LocationOption } from "../types/location";
 
 export async function fetchLocations(): Promise<LocationOption[]> {
   const response = await apiClient.get<LocationOption[]>("/api/v2/locations");
@@ -29,3 +29,24 @@ export async function setLocationActive(locationUuid: string, active: boolean): 
   return response.data;
 }
 
+export async function fetchLocationAssociation(locationUuid: string): Promise<LocationAssociationSummary> {
+  const response = await apiClient.get<{
+    location_uuid?: string;
+    association_count?: number;
+    implement_count?: number;
+    individual_count?: number;
+    can_delete: boolean;
+  }>(`/api/v2/locations/${locationUuid}/associations`);
+
+  return {
+    locationUuid: response.data.location_uuid ?? locationUuid,
+    associationCount: response.data.association_count ?? 0,
+    implementCount: response.data.implement_count ?? 0,
+    individualCount: response.data.individual_count ?? 0,
+    canDelete: response.data.can_delete,
+  };
+}
+
+export async function deleteLocation(locationUuid: string): Promise<void> {
+  await apiClient.delete(`/api/v2/locations/${locationUuid}`);
+}

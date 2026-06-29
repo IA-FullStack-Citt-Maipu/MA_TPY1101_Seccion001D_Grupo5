@@ -131,7 +131,7 @@ class ImplementServiceTest {
     }
 
     @Test
-    void editarDebeValidarCategoriaSiExisteImplemento() {
+    void editarDebePermitirActualizarManteniendoCategoriaYTipoOriginales() {
         OffsetDateTime now = OffsetDateTime.now();
         UUID implementUuid = UUID.randomUUID();
         UUID categoryUuid = UUID.randomUUID();
@@ -146,9 +146,62 @@ class ImplementServiceTest {
         Implemento result = service.editar(implementUuid, "Nuevo", null, categoryUuid, locationUuid, "individual", 1, "Obs", null, null);
 
         assertEquals(categoryUuid, result.categoriaUuid());
-        verify(categoryValidationContract).validarCategoriaActivaParaImplemento(categoryUuid);
+        verify(categoryValidationContract, never()).validarCategoriaActivaParaImplemento(categoryUuid);
         verify(locationValidationContract).validarLocationExistente(locationUuid);
         verify(repository).updateMinStockByImplementUuid(implementUuid, 1);
+    }
+
+    @Test
+    void editarDebeFallarSiIntentaCambiarCategoria() {
+        OffsetDateTime now = OffsetDateTime.now();
+        UUID implementUuid = UUID.randomUUID();
+        UUID currentCategoryUuid = UUID.randomUUID();
+        UUID newCategoryUuid = UUID.randomUUID();
+        UUID locationUuid = UUID.randomUUID();
+        Implemento existing = new Implemento(implementUuid, "Existente", null, currentCategoryUuid, locationUuid, ImplementItemType.INDIVIDUAL, null, null, null, true, now, now);
+        when(repository.findByUuid(implementUuid)).thenReturn(Optional.of(existing));
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () ->
+                service.editar(implementUuid, "Nuevo", null, newCategoryUuid, locationUuid, "individual", 1, null, null, null));
+
+        assertEquals("IMPLEMENT_CATEGORY_IMMUTABLE", ex.getCode());
+        verify(repository, never()).update(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any()
+        );
+    }
+
+    @Test
+    void editarDebeFallarSiIntentaCambiarTipo() {
+        OffsetDateTime now = OffsetDateTime.now();
+        UUID implementUuid = UUID.randomUUID();
+        UUID categoryUuid = UUID.randomUUID();
+        UUID locationUuid = UUID.randomUUID();
+        Implemento existing = new Implemento(implementUuid, "Existente", null, categoryUuid, locationUuid, ImplementItemType.INDIVIDUAL, null, null, null, true, now, now);
+        when(repository.findByUuid(implementUuid)).thenReturn(Optional.of(existing));
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () ->
+                service.editar(implementUuid, "Nuevo", null, categoryUuid, locationUuid, "consumable", 1, null, null, null));
+
+        assertEquals("IMPLEMENT_ITEM_TYPE_IMMUTABLE", ex.getCode());
+        verify(repository, never()).update(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any()
+        );
     }
 
     @Test

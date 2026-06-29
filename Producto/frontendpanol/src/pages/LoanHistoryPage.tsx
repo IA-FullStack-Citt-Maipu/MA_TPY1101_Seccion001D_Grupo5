@@ -98,7 +98,7 @@ function normalizeStatusLabel(status: string): string {
     prepared: "Preparado",
     delivered: "En uso",
     overdue: "Atrasado",
-    completed: "Completado",
+    completed: "Finalizado",
     cancelled: "Cancelado",
     rejected: "Rechazado",
     expired: "Expirado",
@@ -464,7 +464,7 @@ export function LoanHistoryPage({
                 <option value="prepared">Preparado</option>
                 <option value="delivered">En uso</option>
                 <option value="overdue">Atrasado</option>
-                <option value="completed">Completado</option>
+                <option value="completed">Finalizado</option>
                 <option value="cancelled">Cancelado</option>
                 <option value="rejected">Rechazado</option>
                 <option value="expired">Expirado</option>

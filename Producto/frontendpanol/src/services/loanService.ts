@@ -5,6 +5,7 @@ import type {
   CompleteLoanPayload,
   DeliverLoanPayload,
   LoanPage,
+  LoanReturnContext,
   PrepareLoanPayload,
   LoanStateDates,
   LoanStatusTimelineEntry,
@@ -16,17 +17,8 @@ export interface FetchLoansQuery {
   page?: number;
   size?: number;
   mine?: boolean;
-}
-
-export interface ReviewLoanItemPayload {
-  implement_uuid: string;
-  approved_quantity: number;
-}
-
-export interface ReviewLoanPayload {
-  decision: "APPROVE" | "REJECT";
-  notes?: string | null;
-  items?: ReviewLoanItemPayload[] | null;
+  from?: string;
+  to?: string;
 }
 
 export interface CancelLoanPayload {
@@ -49,9 +41,29 @@ export async function fetchLoansPage(query: FetchLoansQuery = {}): Promise<LoanP
       page: query.page ?? 1,
       size: query.size ?? 20,
       mine: query.mine ?? true,
+      from: query.from,
+      to: query.to,
     },
   });
   return response.data;
+}
+
+export async function fetchAllLoansPages(query: FetchLoansQuery = {}): Promise<LoanSummary[]> {
+  const firstPage = await fetchLoansPage({
+    ...query,
+    page: query.page ?? 1,
+    size: query.size ?? 50,
+  });
+  const merged: LoanSummary[] = [...firstPage.items];
+  for (let page = firstPage.page + 1; page <= firstPage.total_pages; page += 1) {
+    const nextPage = await fetchLoansPage({
+      ...query,
+      page,
+      size: firstPage.size,
+    });
+    merged.push(...nextPage.items);
+  }
+  return merged;
 }
 
 export async function fetchLoans(): Promise<LoanSummary[]> {
@@ -69,11 +81,6 @@ export async function fetchLoanByUuid(loanUuid: string): Promise<LoanSummary | n
     }
     throw error;
   }
-}
-
-export async function reviewLoan(loanUuid: string, payload: ReviewLoanPayload): Promise<LoanSummary> {
-  const response = await apiClient.patch<LoanSummary>(`/api/v2/loans/${loanUuid}/review`, payload);
-  return response.data;
 }
 
 export async function prepareLoan(loanUuid: string, payload: PrepareLoanPayload = {}): Promise<LoanSummary> {
@@ -103,6 +110,11 @@ export async function cancelLoan(loanUuid: string, payload: CancelLoanPayload = 
 
 export async function fetchLoanStateDates(loanUuid: string): Promise<LoanStateDates> {
   const response = await apiClient.get<LoanStateDates>(`/api/v2/loans/${loanUuid}/state-dates`);
+  return response.data;
+}
+
+export async function fetchLoanReturnContext(loanUuid: string): Promise<LoanReturnContext> {
+  const response = await apiClient.get<LoanReturnContext>(`/api/v2/loans/${loanUuid}/return-context`);
   return response.data;
 }
 

@@ -2,6 +2,7 @@ package com.panol_project.backendpanol.modules.loan.infrastructure;
 
 import static com.panol_project.backendpanol.jooq.tables.Implement.IMPLEMENT;
 import static com.panol_project.backendpanol.jooq.tables.Individual.INDIVIDUAL;
+import static com.panol_project.backendpanol.jooq.tables.InventoryMovement.INVENTORY_MOVEMENT;
 import static com.panol_project.backendpanol.jooq.tables.Loan.LOAN;
 import static com.panol_project.backendpanol.jooq.tables.LoanDetail.LOAN_DETAIL;
 import static com.panol_project.backendpanol.jooq.tables.LoanDetailIndividual.LOAN_DETAIL_INDIVIDUAL;
@@ -14,6 +15,7 @@ import static com.panol_project.backendpanol.jooq.tables.VLoanStateDates.V_LOAN_
 import static com.panol_project.backendpanol.jooq.tables.VLoanStatusTimeline.V_LOAN_STATUS_TIMELINE;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.panol_project.backendpanol.jooq.enums.InventoryMovementTypeEnum;
 import com.panol_project.backendpanol.jooq.enums.IndividualAllocationStatusEnum;
 import com.panol_project.backendpanol.jooq.enums.IndividualStatusEnum;
 import com.panol_project.backendpanol.jooq.enums.ItemTypeEnum;
@@ -34,6 +36,7 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanRequestedItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRequestedItemAvailability;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReturnCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReturnConsumableItem;
+import com.panol_project.backendpanol.modules.loan.domain.LoanReturnContextView;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReturnIndividual;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReturnResult;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReviewCommand;
@@ -156,21 +159,12 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 .from(IMPLEMENT)
                 .where(IMPLEMENT.UUID.in(filteredImplementUuids))
                 .fetch(record -> {
-                    Record availabilityRecord = dsl.fetchOne(
-                            "select * from public.fn_get_implement_availability(?::bigint, ?::timestamptz, ?::timestamptz, false, ?::bigint)",
+                    int availableQuantity = resolveAvailabilityQuantity(
                             record.get(IMPLEMENT.ID),
                             scheduledAt,
                             effectiveExpectedReturnAt,
                             excludeLoanId
                     );
-
-                    int availableQuantity = 0;
-                    if (availabilityRecord != null) {
-                        Integer rawAvailable = availabilityRecord.get("available_quantity", Integer.class);
-                        if (rawAvailable != null) {
-                            availableQuantity = rawAvailable;
-                        }
-                    }
 
                     return new LoanRequestedItemAvailability(
                             record.get(IMPLEMENT.UUID),
@@ -245,8 +239,19 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
     @Override
     public LoanAggregate createPendingLoan(LoanCreateCommand command) {
         Long requesterId = requireUserIdByUuid(command.requesterUuid());
+        Long actorUserId = requireUserIdByUuid(command.actorUuid());
         Long roomId = findRoomIdByUuid(command.roomUuid());
         Long subjectId = findSubjectIdByUuid(command.subjectUuid());
+        OffsetDateTime effectiveExpectedReturnAt = resolveExpectedReturnAt(command.scheduledAt(), command.expectedReturnAt());
+        List<RequestedReservation> requestedReservations = resolveRequestedReservations(command.requestedItems());
+
+        lockStockRows(requestedReservations.stream().map(RequestedReservation::implementId).distinct().toList());
+        validateRequestedAvailabilityUnderLock(
+                requestedReservations,
+                command.scheduledAt(),
+                effectiveExpectedReturnAt,
+                null
+        );
 
         OffsetDateTime now = OffsetDateTime.now();
         UUID loanUuid = UUID.randomUUID();
@@ -256,9 +261,9 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 .set(LOAN.REQUESTER_ID, requesterId)
                 .set(LOAN.ROOM_ID, roomId)
                 .set(LOAN.SUBJECT_ID, subjectId)
-                .set(LOAN.STATUS, LoanStatusEnum.pending)
+                .set(LOAN.STATUS, LoanStatusEnum.approved)
                 .set(LOAN.SCHEDULED_AT, command.scheduledAt())
-                .set(LOAN.EXPECTED_RETURN_AT, resolveExpectedReturnAt(command.scheduledAt(), command.expectedReturnAt()))
+                .set(LOAN.EXPECTED_RETURN_AT, effectiveExpectedReturnAt)
                 .set(LOAN.CREATED_AT, now)
                 .returning(LOAN.ID, LOAN.STATUS, LOAN.CREATED_AT, LOAN.UUID)
                 .fetchOne();
@@ -268,14 +273,14 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
         }
 
         Long loanId = insertedLoan.getId();
-        List<LoanDetailItem> details = insertLoanDetails(loanId, command.requestedItems());
+        List<LoanDetailItem> details = insertLoanDetails(loanId, command.requestedItems(), true);
 
         dsl.insertInto(LOAN_STATUS_HISTORY)
                 .set(LOAN_STATUS_HISTORY.LOAN_ID, loanId)
-                .set(LOAN_STATUS_HISTORY.ACTOR_USER_ID, requesterId)
+                .set(LOAN_STATUS_HISTORY.ACTOR_USER_ID, actorUserId)
                 .set(LOAN_STATUS_HISTORY.FROM_STATUS, (LoanStatusEnum) null)
-                .set(LOAN_STATUS_HISTORY.TO_STATUS, LoanStatusEnum.pending)
-                .set(LOAN_STATUS_HISTORY.NOTES, resolveStatusNotes("Solicitud creada", command.notes()))
+                .set(LOAN_STATUS_HISTORY.TO_STATUS, LoanStatusEnum.approved)
+                .set(LOAN_STATUS_HISTORY.NOTES, resolveStatusNotes("Reserva automatica al crear solicitud", command.notes()))
                 .set(LOAN_STATUS_HISTORY.CHANGED_AT, now)
                 .execute();
 
@@ -288,7 +293,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 command.subjectUuid(),
                 toDomainStatus(insertedLoan.getStatus()),
                 command.scheduledAt(),
-                resolveExpectedReturnAt(command.scheduledAt(), command.expectedReturnAt()),
+                effectiveExpectedReturnAt,
                 insertedLoan.getCreatedAt(),
                 details
         );
@@ -306,12 +311,34 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
 
         Long roomId = findRoomIdByUuid(command.roomUuid());
         Long subjectId = findSubjectIdByUuid(command.subjectUuid());
+        OffsetDateTime effectiveExpectedReturnAt = resolveExpectedReturnAt(command.scheduledAt(), command.expectedReturnAt());
+        List<RequestedReservation> requestedReservations = resolveRequestedReservations(command.requestedItems());
+        Set<Long> lockedImplementIds = new HashSet<>();
+        lockedImplementIds.addAll(
+                fetchLoanDetailContextByImplementUuid(current.loanId()).values().stream()
+                        .map(LoanDetailContext::implementId)
+                        .filter(Objects::nonNull)
+                        .toList()
+        );
+        lockedImplementIds.addAll(
+                requestedReservations.stream()
+                        .map(RequestedReservation::implementId)
+                        .filter(Objects::nonNull)
+                        .toList()
+        );
+        lockStockRows(new ArrayList<>(lockedImplementIds));
+        validateRequestedAvailabilityUnderLock(
+                requestedReservations,
+                command.scheduledAt(),
+                effectiveExpectedReturnAt,
+                current.loanId()
+        );
 
         dsl.update(LOAN)
                 .set(LOAN.ROOM_ID, roomId)
                 .set(LOAN.SUBJECT_ID, subjectId)
                 .set(LOAN.SCHEDULED_AT, command.scheduledAt())
-                .set(LOAN.EXPECTED_RETURN_AT, resolveExpectedReturnAt(command.scheduledAt(), command.expectedReturnAt()))
+                .set(LOAN.EXPECTED_RETURN_AT, effectiveExpectedReturnAt)
                 .where(LOAN.ID.eq(current.loanId()))
                 .execute();
 
@@ -346,7 +373,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 command.subjectUuid(),
                 LoanStatus.APPROVED,
                 command.scheduledAt(),
-                resolveExpectedReturnAt(command.scheduledAt(), command.expectedReturnAt()),
+                effectiveExpectedReturnAt,
                 current.createdAt(),
                 details
         );
@@ -354,7 +381,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
 
     @Override
     public Optional<LoanSummaryView> findVisibleLoanSummaryByUuid(UUID loanUuid) {
-        List<LoanSummaryRow> rows = fetchLoanSummaryRows(loanUuid, null, null, null);
+        List<LoanSummaryRow> rows = fetchLoanSummaryRows(loanUuid, null, null, null, null, null);
         if (rows.isEmpty()) {
             return Optional.empty();
         }
@@ -365,19 +392,19 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
     }
 
     @Override
-    public LoanSummaryPage findVisibleLoanSummaries(UUID requesterUuid, int page, int size) {
+    public LoanSummaryPage findVisibleLoanSummaries(UUID requesterUuid, OffsetDateTime from, OffsetDateTime to, int page, int size) {
         int safePage = Math.max(1, page);
         int safeSize = Math.max(1, size);
         int offset = (safePage - 1) * safeSize;
 
-        long totalItems = countLoanSummaryRows(requesterUuid);
+        long totalItems = countLoanSummaryRows(requesterUuid, from, to);
         int totalPages = totalItems == 0 ? 1 : (int) Math.ceil((double) totalItems / safeSize);
         if (safePage > totalPages) {
             safePage = totalPages;
             offset = (safePage - 1) * safeSize;
         }
 
-        List<LoanSummaryRow> rows = fetchLoanSummaryRows(null, requesterUuid, safeSize, offset);
+        List<LoanSummaryRow> rows = fetchLoanSummaryRows(null, requesterUuid, from, to, safeSize, offset);
         if (rows.isEmpty()) {
             return new LoanSummaryPage(List.of(), safePage, safeSize, totalItems, totalPages);
         }
@@ -391,7 +418,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
 
     @Override
     public List<LoanSummaryView> findAllVisibleLoanSummaries() {
-        List<LoanSummaryRow> rows = fetchLoanSummaryRows(null, null, null, null);
+        List<LoanSummaryRow> rows = fetchLoanSummaryRows(null, null, null, null, null, null);
         if (rows.isEmpty()) {
             return List.of();
         }
@@ -399,6 +426,17 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
         return rows.stream()
                 .map(row -> toSummaryView(row, itemsByLoanId.getOrDefault(row.loanId(), List.of())))
                 .toList();
+    }
+
+    private void lockStockRows(List<Long> implementIds) {
+        if (implementIds == null || implementIds.isEmpty()) {
+            return;
+        }
+        dsl.select(STOCK.IMPLEMENT_ID)
+                .from(STOCK)
+                .where(STOCK.IMPLEMENT_ID.in(implementIds))
+                .forUpdate()
+                .fetch();
     }
 
     @Override
@@ -556,6 +594,18 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
         }
 
         callDeliverLoanFunction(current.loanId(), actorUserId, resolveStatusNotes("Entrega registrada en panol", command.notes()));
+        DeliveryPostProcessOutcome deliveryOutcome = closeConsumablesAfterDelivery(current.loanId(), actorUserId);
+        if (deliveryOutcome.hasDeliveredItems() && !deliveryOutcome.hasPendingReturnables()) {
+            callLoanStatusChangeFunction(
+                    current.loanId(),
+                    actorUserId,
+                    LoanStatusEnum.completed,
+                    resolveStatusNotes(
+                            "Prestamo finalizado automaticamente al entregar implementos sin retorno",
+                            command.notes()
+                    )
+            );
+        }
 
         return new LoanDeliveryResult(loadLoanAggregateById(current.loanId()));
     }
@@ -603,6 +653,74 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 .execute();
     }
 
+    private DeliveryPostProcessOutcome closeConsumablesAfterDelivery(Long loanId, Long actorUserId) {
+        Map<UUID, LoanDetailContext> detailByImplement = fetchLoanDetailContextByImplementUuid(loanId);
+        boolean hasDeliveredItems = detailByImplement.values().stream().anyMatch(detail -> detail.deliveredQuantity() > 0);
+        boolean hasPendingReturnables = detailByImplement.values().stream()
+                .anyMatch(detail -> detail.isReturnable() && detail.pendingReturnQuantity() > 0);
+
+        List<LoanDetailContext> consumableDetails = detailByImplement.values().stream()
+                .filter(detail -> detail.isConsumable() && detail.pendingReturnQuantity() > 0)
+                .toList();
+        if (consumableDetails.isEmpty()) {
+            return new DeliveryPostProcessOutcome(hasDeliveredItems, hasPendingReturnables);
+        }
+
+        lockStockRows(consumableDetails.stream().map(LoanDetailContext::implementId).toList());
+        OffsetDateTime now = OffsetDateTime.now();
+        for (LoanDetailContext detail : consumableDetails) {
+            int quantityToConsume = detail.pendingReturnQuantity();
+            if (quantityToConsume <= 0) {
+                continue;
+            }
+
+            dsl.update(LOAN_DETAIL)
+                    .set(LOAN_DETAIL.CONSUMED_QUANTITY, LOAN_DETAIL.CONSUMED_QUANTITY.add(quantityToConsume))
+                    .where(
+                            LOAN_DETAIL.LOAN_ID.eq(loanId)
+                                    .and(LOAN_DETAIL.IMPLEMENT_ID.eq(detail.implementId()))
+                    )
+                    .execute();
+
+            int updated = dsl.update(STOCK)
+                    .set(STOCK.LOANED, STOCK.LOANED.add(-quantityToConsume))
+                    .set(STOCK.TOTAL_STOCK, STOCK.TOTAL_STOCK.add(-quantityToConsume))
+                    .set(STOCK.UPDATED_AT, now)
+                    .where(
+                            STOCK.IMPLEMENT_ID.eq(detail.implementId())
+                                    .and(STOCK.LOANED.ge(quantityToConsume))
+                                    .and(STOCK.TOTAL_STOCK.ge(quantityToConsume))
+                    )
+                    .execute();
+            if (updated == 0) {
+                throw new ConflictException(
+                        "LOAN_DELIVERY_CONSUMABLE_STOCK_CONFLICT",
+                        "No fue posible cerrar el consumo definitivo de los implementos consumibles entregados"
+                );
+            }
+
+            dsl.insertInto(INVENTORY_MOVEMENT)
+                    .set(INVENTORY_MOVEMENT.IMPLEMENT_ID, detail.implementId())
+                    .set(INVENTORY_MOVEMENT.ACTOR_USER_ID, actorUserId)
+                    .set(INVENTORY_MOVEMENT.MOVEMENT_TYPE, InventoryMovementTypeEnum.consumption)
+                    .set(INVENTORY_MOVEMENT.QUANTITY, -quantityToConsume)
+                    .set(INVENTORY_MOVEMENT.DELTA_CHANGES, toJsonb(Map.of(
+                            "loan_id", loanId,
+                            "implement_id", detail.implementId(),
+                            "consumed_quantity", quantityToConsume,
+                            "source", "loan_delivery_autoclose"
+                    )))
+                    .set(INVENTORY_MOVEMENT.SYSTEMIC_METADATA, toJsonb(Map.of(
+                            "source", "loan_delivery_autoclose",
+                            "loan_id", loanId
+                    )))
+                    .set(INVENTORY_MOVEMENT.CREATED_AT, now)
+                    .execute();
+        }
+
+        return new DeliveryPostProcessOutcome(hasDeliveredItems, hasPendingReturnables);
+    }
+
     @Override
     public LoanReturnResult returnLoan(LoanReturnCommand command) {
         LoanRow current = requireLoanRowForUpdate(command.loanUuid());
@@ -623,6 +741,43 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
         );
 
         return new LoanReturnResult(loadLoanAggregateById(current.loanId()));
+    }
+
+    @Override
+    public Optional<LoanReturnContextView> findLoanReturnContextByUuid(UUID loanUuid) {
+        if (loanUuid == null) {
+            return Optional.empty();
+        }
+
+        Record loanRecord = dsl.select(LOAN.ID, LOAN.UUID)
+                .from(LOAN)
+                .where(LOAN.UUID.eq(loanUuid))
+                .fetchOne();
+        if (loanRecord == null) {
+            return Optional.empty();
+        }
+
+        Long loanId = loanRecord.get(LOAN.ID);
+        Map<UUID, LoanDetailContext> detailByImplement = fetchLoanDetailContextByImplementUuid(loanId);
+        Map<Long, List<LoanReturnContextView.IndividualView>> individualsByImplementId =
+                fetchPendingReturnIndividualsByImplementId(loanId);
+
+        List<LoanReturnContextView.ItemView> items = detailByImplement.values().stream()
+                .filter(detail -> detail.isReturnable() && detail.pendingReturnQuantity() > 0)
+                .map(detail -> new LoanReturnContextView.ItemView(
+                        detail.implementUuid(),
+                        detail.implementName(),
+                        detail.itemType() == null ? null : detail.itemType().getLiteral(),
+                        detail.deliveredQuantity(),
+                        detail.pendingReturnQuantity(),
+                        individualsByImplementId.getOrDefault(detail.implementId(), List.of())
+                ))
+                .toList();
+
+        return Optional.of(new LoanReturnContextView(
+                loanRecord.get(LOAN.UUID),
+                items
+        ));
     }
 
     @Override
@@ -701,13 +856,20 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
         return toAggregate(row, detailsByLoanId.getOrDefault(row.loanId(), List.of()));
     }
 
-    private List<LoanSummaryRow> fetchLoanSummaryRows(UUID onlyLoanUuid, UUID requesterUuid, Integer limit, Integer offset) {
+    private List<LoanSummaryRow> fetchLoanSummaryRows(
+            UUID onlyLoanUuid,
+            UUID requesterUuid,
+            OffsetDateTime from,
+            OffsetDateTime to,
+            Integer limit,
+            Integer offset
+    ) {
         Field<UUID> requesterUuidField = USER.UUID.as("requester_uuid");
         Field<UUID> roomUuidField = ROOM.UUID.as("room_uuid");
         Field<String> roomNameField = ROOM.NAME.as("room_name");
         Field<UUID> subjectUuidField = SUBJECT.UUID.as("subject_uuid");
         Field<String> subjectNameField = SUBJECT.NAME.as("subject_name");
-        Condition condition = buildLoanSummaryCondition(onlyLoanUuid, requesterUuid);
+        Condition condition = buildLoanSummaryCondition(onlyLoanUuid, requesterUuid, from, to);
 
         var query = dsl.select(
                         LOAN.ID,
@@ -796,8 +958,8 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 ));
     }
 
-    private long countLoanSummaryRows(UUID requesterUuid) {
-        Condition condition = buildLoanSummaryCondition(null, requesterUuid);
+    private long countLoanSummaryRows(UUID requesterUuid, OffsetDateTime from, OffsetDateTime to) {
+        Condition condition = buildLoanSummaryCondition(null, requesterUuid, from, to);
         Integer count = dsl.selectCount()
                 .from(LOAN)
                 .join(USER).on(USER.ID.eq(LOAN.REQUESTER_ID))
@@ -808,13 +970,16 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
         return count == null ? 0L : count.longValue();
     }
 
-    private Condition buildLoanSummaryCondition(UUID onlyLoanUuid, UUID requesterUuid) {
+    private Condition buildLoanSummaryCondition(UUID onlyLoanUuid, UUID requesterUuid, OffsetDateTime from, OffsetDateTime to) {
         Condition condition = DSL.trueCondition();
         if (onlyLoanUuid != null) {
             condition = condition.and(LOAN.UUID.eq(onlyLoanUuid));
         }
         if (requesterUuid != null) {
             condition = condition.and(USER.UUID.eq(requesterUuid));
+        }
+        if (from != null && to != null) {
+            condition = condition.and(LOAN.SCHEDULED_AT.ge(from)).and(LOAN.SCHEDULED_AT.lt(to));
         }
         return condition;
     }
@@ -911,6 +1076,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                         LOAN_DETAIL.LOAN_ID,
                         IMPLEMENT.UUID,
                         IMPLEMENT.NAME,
+                        IMPLEMENT.ITEM_TYPE,
                         LOAN_DETAIL.REQUESTED_QUANTITY,
                         LOAN_DETAIL.RESERVED_QUANTITY,
                         LOAN_DETAIL.DELIVERED_QUANTITY,
@@ -925,6 +1091,7 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                     LoanSummaryView.ItemView item = new LoanSummaryView.ItemView(
                             record.get(IMPLEMENT.UUID),
                             record.get(IMPLEMENT.NAME),
+                            record.get(IMPLEMENT.ITEM_TYPE) == null ? null : record.get(IMPLEMENT.ITEM_TYPE).getLiteral(),
                             record.get(LOAN_DETAIL.REQUESTED_QUANTITY),
                             record.get(LOAN_DETAIL.RESERVED_QUANTITY),
                             record.get(LOAN_DETAIL.DELIVERED_QUANTITY),
@@ -977,10 +1144,16 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
         dsl.select(
                         LOAN_DETAIL.IMPLEMENT_ID,
                         IMPLEMENT.UUID,
+                        IMPLEMENT.NAME,
                         IMPLEMENT.ITEM_TYPE,
                         LOAN_DETAIL.REQUESTED_QUANTITY,
                         LOAN_DETAIL.RESERVED_QUANTITY,
-                        LOAN_DETAIL.DELIVERED_QUANTITY
+                        LOAN_DETAIL.DELIVERED_QUANTITY,
+                        LOAN_DETAIL.RETURNED_QUANTITY,
+                        LOAN_DETAIL.DAMAGED_QUANTITY,
+                        LOAN_DETAIL.LOST_QUANTITY,
+                        LOAN_DETAIL.CONSUMED_QUANTITY,
+                        LOAN_DETAIL.DISCARDED_QUANTITY
                 )
                 .from(LOAN_DETAIL)
                 .join(IMPLEMENT).on(IMPLEMENT.ID.eq(LOAN_DETAIL.IMPLEMENT_ID))
@@ -990,10 +1163,16 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                     contexts.put(implementUuid, new LoanDetailContext(
                             record.get(LOAN_DETAIL.IMPLEMENT_ID),
                             implementUuid,
+                            record.get(IMPLEMENT.NAME),
                             record.get(IMPLEMENT.ITEM_TYPE),
                             safe(record.get(LOAN_DETAIL.REQUESTED_QUANTITY)),
                             safe(record.get(LOAN_DETAIL.RESERVED_QUANTITY)),
-                            safe(record.get(LOAN_DETAIL.DELIVERED_QUANTITY))
+                            safe(record.get(LOAN_DETAIL.DELIVERED_QUANTITY)),
+                            safe(record.get(LOAN_DETAIL.RETURNED_QUANTITY)),
+                            safe(record.get(LOAN_DETAIL.DAMAGED_QUANTITY)),
+                            safe(record.get(LOAN_DETAIL.LOST_QUANTITY)),
+                            safe(record.get(LOAN_DETAIL.CONSUMED_QUANTITY)),
+                            safe(record.get(LOAN_DETAIL.DISCARDED_QUANTITY))
                     ));
                     return null;
                 });
@@ -1002,11 +1181,12 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
     }
 
     private ImplementContext requireImplementContextByUuid(UUID implementUuid) {
-        return dsl.select(IMPLEMENT.ID, IMPLEMENT.ITEM_TYPE)
+        return dsl.select(IMPLEMENT.ID, IMPLEMENT.NAME, IMPLEMENT.ITEM_TYPE)
                 .from(IMPLEMENT)
                 .where(IMPLEMENT.UUID.eq(implementUuid).and(IMPLEMENT.ACTIVE.isTrue()))
                 .fetchOptional(record -> new ImplementContext(
                         record.get(IMPLEMENT.ID),
+                        record.get(IMPLEMENT.NAME),
                         record.get(IMPLEMENT.ITEM_TYPE)
                 ))
                 .orElseThrow(() -> new NotFoundException(
@@ -1056,6 +1236,37 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 ));
     }
 
+    private Map<Long, List<LoanReturnContextView.IndividualView>> fetchPendingReturnIndividualsByImplementId(Long loanId) {
+        if (loanId == null) {
+            return Map.of();
+        }
+
+        Map<Long, List<LoanReturnContextView.IndividualView>> individualsByImplementId = new HashMap<>();
+        dsl.select(
+                        LOAN_DETAIL_INDIVIDUAL.IMPLEMENT_ID,
+                        INDIVIDUAL.UUID,
+                        INDIVIDUAL.ASSET_CODE
+                )
+                .from(LOAN_DETAIL_INDIVIDUAL)
+                .join(INDIVIDUAL).on(INDIVIDUAL.ID.eq(LOAN_DETAIL_INDIVIDUAL.INDIVIDUAL_ID))
+                .where(
+                        LOAN_DETAIL_INDIVIDUAL.LOAN_ID.eq(loanId)
+                                .and(LOAN_DETAIL_INDIVIDUAL.ALLOCATION_STATUS.eq(IndividualAllocationStatusEnum.delivered))
+                )
+                .orderBy(LOAN_DETAIL_INDIVIDUAL.IMPLEMENT_ID.asc(), INDIVIDUAL.ASSET_CODE.asc())
+                .fetch(record -> {
+                    Long implementId = record.get(LOAN_DETAIL_INDIVIDUAL.IMPLEMENT_ID);
+                    LoanReturnContextView.IndividualView individual = new LoanReturnContextView.IndividualView(
+                            record.get(INDIVIDUAL.UUID),
+                            record.get(INDIVIDUAL.ASSET_CODE)
+                    );
+                    individualsByImplementId.computeIfAbsent(implementId, ignored -> new ArrayList<>()).add(individual);
+                    return null;
+                });
+
+        return individualsByImplementId;
+    }
+
     private Map<UUID, LoanDeliveryItem> toDeliveryItemMap(List<LoanDeliveryItem> items) {
         Map<UUID, LoanDeliveryItem> mapped = new LinkedHashMap<>();
         for (LoanDeliveryItem item : items) {
@@ -1090,21 +1301,12 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
             return;
         }
 
-        Record availabilityRecord = dsl.fetchOne(
-                "select * from public.fn_get_implement_availability(?::bigint, ?::timestamptz, ?::timestamptz, false, ?::bigint)",
+        int availableQuantity = resolveAvailabilityQuantity(
                 detail.implementId(),
                 current.scheduledAt(),
                 resolveExpectedReturnAt(current.scheduledAt(), current.expectedReturnAt()),
                 current.loanId()
         );
-
-        int availableQuantity = 0;
-        if (availabilityRecord != null) {
-            Integer rawAvailable = availabilityRecord.get("available_quantity", Integer.class);
-            if (rawAvailable != null) {
-                availableQuantity = rawAvailable;
-            }
-        }
 
         if (availableQuantity < approvedQuantity) {
             throw new ConflictException(
@@ -1138,8 +1340,14 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
             detailByImplementUuid.put(item.implementUuid(), new LoanDetailContext(
                     implement.implementId(),
                     item.implementUuid(),
+                    implement.implementName(),
                     implement.itemType(),
                     requestedQuantity,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
                     0,
                     0
             ));
@@ -1615,19 +1823,28 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
 
         List<LoanReturnPayloadItem> payloadItems = new ArrayList<>();
         for (LoanDetailContext detail : detailByImplement.values()) {
-            int deliveredQuantity = detail.deliveredQuantity();
-            if (deliveredQuantity < 0) {
+            int pendingReturnQuantity = detail.pendingReturnQuantity();
+            if (pendingReturnQuantity < 0) {
                 throw new BadRequestException("LOAN_COMPLETE_INVALID_DETAIL", "El prestamo contiene cantidades invalidas");
+            }
+            if (!detail.isReturnable() || pendingReturnQuantity == 0) {
+                continue;
             }
             payloadItems.add(new LoanReturnPayloadItem(
                     detail.implementId(),
-                    deliveredQuantity,
+                    pendingReturnQuantity,
                     0,
                     0,
                     0,
                     0,
                     null
             ));
+        }
+        if (payloadItems.isEmpty()) {
+            throw new BadRequestException(
+                    "LOAN_COMPLETE_NOTHING_TO_RETURN",
+                    "El prestamo ya no tiene implementos pendientes de devolucion"
+            );
         }
         return payloadItems;
     }
@@ -1654,7 +1871,11 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
 
         List<LoanReturnPayloadItem> payloadItems = new ArrayList<>();
         for (LoanDetailContext detail : detailByImplement.values()) {
-            int deliveredQuantity = detail.deliveredQuantity();
+            int pendingReturnQuantity = detail.pendingReturnQuantity();
+            if (!detail.isReturnable() || pendingReturnQuantity == 0) {
+                continue;
+            }
+
             if (detail.itemType() == ItemTypeEnum.individual) {
                 MutableReturnBreakdown breakdown = individualBreakdownByImplement.getOrDefault(
                         detail.implementUuid(),
@@ -1662,10 +1883,10 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 );
 
                 if (breakdown.total() == 0 && returnedIndividuals.isEmpty()) {
-                    breakdown.good = deliveredQuantity;
+                    breakdown.good = pendingReturnQuantity;
                 }
 
-                if (breakdown.total() != deliveredQuantity) {
+                if (breakdown.total() != pendingReturnQuantity) {
                     throw new BadRequestException(
                             "LOAN_RETURN_PENDING_INDIVIDUALS",
                             "Debes registrar el retorno de todos los individuales entregados"
@@ -1685,19 +1906,16 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
             }
 
             Integer returnedQuantity = returnedConsumableByImplement.get(detail.implementUuid());
-            if (returnedQuantity == null && deliveredQuantity == 0) {
-                returnedQuantity = 0;
-            }
             if (returnedQuantity == null) {
                 throw new BadRequestException(
-                        "LOAN_RETURN_CONSUMABLE_MISSING",
-                        "Debes indicar retorno para todos los implementos consumable/reusable"
+                    "LOAN_RETURN_CONSUMABLE_MISSING",
+                    "Debes indicar retorno para todos los implementos reutilizables pendientes"
                 );
             }
-            if (returnedQuantity < 0 || returnedQuantity > deliveredQuantity) {
+            if (returnedQuantity < 0 || returnedQuantity > pendingReturnQuantity) {
                 throw new BadRequestException(
-                        "LOAN_RETURN_CONSUMABLE_QUANTITY_INVALID",
-                        "La cantidad de retorno supera lo entregado"
+                    "LOAN_RETURN_CONSUMABLE_QUANTITY_INVALID",
+                    "La cantidad de retorno supera lo entregado"
                 );
             }
 
@@ -1706,12 +1924,18 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                     returnedQuantity,
                     0,
                     0,
-                    deliveredQuantity - returnedQuantity,
+                    pendingReturnQuantity - returnedQuantity,
                     0,
                     null
             ));
         }
 
+        if (payloadItems.isEmpty()) {
+            throw new BadRequestException(
+                    "LOAN_RETURN_NOTHING_TO_RETURN",
+                    "El prestamo ya no tiene implementos pendientes de devolucion"
+            );
+        }
         return payloadItems;
     }
 
@@ -1739,15 +1963,15 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
             requestedIndividualUuids.add(returned.individualUuid());
         }
 
-        Field<UUID> individualUuidField = INDIVIDUAL.UUID.as("individual_uuid");
-        Field<UUID> implementUuidField = IMPLEMENT.UUID.as("implement_uuid");
+        Field<UUID> individualUuidField = INDIVIDUAL.UUID;
+        Field<UUID> implementUuidField = IMPLEMENT.UUID;
         Map<UUID, UUID> implementByIndividual = dsl.select(individualUuidField, implementUuidField)
                 .from(LOAN_DETAIL_INDIVIDUAL)
                 .join(INDIVIDUAL).on(INDIVIDUAL.ID.eq(LOAN_DETAIL_INDIVIDUAL.INDIVIDUAL_ID))
                 .join(IMPLEMENT).on(IMPLEMENT.ID.eq(LOAN_DETAIL_INDIVIDUAL.IMPLEMENT_ID))
                 .where(
                         LOAN_DETAIL_INDIVIDUAL.LOAN_ID.eq(loanId)
-                                .and(individualUuidField.in(requestedIndividualUuids))
+                                .and(INDIVIDUAL.UUID.in(requestedIndividualUuids))
                 )
                 .fetchMap(individualUuidField, implementUuidField);
 
@@ -1790,13 +2014,13 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
             if (consumableReturn == null || consumableReturn.implementUuid() == null) {
                 throw new BadRequestException(
                         "LOAN_RETURN_CONSUMABLE_IMPLEMENT_REQUIRED",
-                        "implement_uuid es obligatorio para retornos de implementos consumables/reusables"
+                        "implement_uuid es obligatorio para retornos de implementos reutilizables"
                 );
             }
             if (returnedByImplement.containsKey(consumableReturn.implementUuid())) {
                 throw new BadRequestException(
                         "LOAN_RETURN_CONSUMABLE_DUPLICATE",
-                        "No puedes repetir implementos consumables/reusables en el mismo retorno"
+                        "No puedes repetir implementos reutilizables en el mismo retorno"
                 );
             }
             if (consumableReturn.quantity() == null || consumableReturn.quantity() < 0) {
@@ -1810,13 +2034,13 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
             if (detail == null) {
                 throw new BadRequestException(
                         "LOAN_RETURN_CONSUMABLE_NOT_REQUESTED",
-                        "El implemento consumable/reusable no forma parte del prestamo"
+                        "El implemento reutilizable no forma parte del prestamo"
                 );
             }
-            if (detail.itemType() == ItemTypeEnum.individual) {
+            if (detail.itemType() == ItemTypeEnum.individual || detail.itemType() == ItemTypeEnum.consumable) {
                 throw new BadRequestException(
                         "LOAN_RETURN_CONSUMABLE_TYPE_INVALID",
-                        "El implemento indicado no corresponde a un tipo consumable/reusable"
+                        "El implemento indicado no corresponde a un tipo reutilizable pendiente de devolucion"
                 );
             }
 
@@ -1857,6 +2081,14 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
             return org.jooq.JSONB.valueOf(objectMapper.writeValueAsString(payload));
         } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
             throw new IllegalStateException("No fue posible serializar el payload de cierre de prestamo", ex);
+        }
+    }
+
+    private org.jooq.JSONB toJsonb(Map<String, Object> payload) {
+        try {
+            return org.jooq.JSONB.valueOf(objectMapper.writeValueAsString(payload));
+        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+            throw new IllegalStateException("No fue posible serializar el payload jsonb", ex);
         }
     }
 
@@ -2037,6 +2269,74 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
         return scheduledAt.plusHours(2);
     }
 
+    private List<RequestedReservation> resolveRequestedReservations(List<LoanRequestedItem> requestedItems) {
+        List<RequestedReservation> reservations = new ArrayList<>();
+        for (LoanRequestedItem item : requestedItems) {
+            ImplementContext implement = requireImplementContextByUuid(item.implementUuid());
+            reservations.add(new RequestedReservation(
+                    implement.implementId(),
+                    implement.implementName(),
+                    item.requestedQuantity()
+            ));
+        }
+        return reservations;
+    }
+
+    private void validateRequestedAvailabilityUnderLock(
+            List<RequestedReservation> requestedReservations,
+            OffsetDateTime scheduledAt,
+            OffsetDateTime expectedReturnAt,
+            Long excludeLoanId
+    ) {
+        for (RequestedReservation reservation : requestedReservations) {
+            int availableQuantity = resolveAvailabilityQuantity(
+                    reservation.implementId(),
+                    scheduledAt,
+                    expectedReturnAt,
+                    excludeLoanId
+            );
+            if (availableQuantity < reservation.requestedQuantity()) {
+                throw new ConflictException(
+                        "LOAN_STOCK_CONFLICT",
+                        "Solo puedes solicitar dentro del stock disponible. "
+                                + reservation.implementName()
+                                + " tiene "
+                                + availableQuantity
+                                + " unidad(es) disponibles para esta solicitud."
+                );
+            }
+        }
+    }
+
+    private int resolveAvailabilityQuantity(
+            Long implementId,
+            OffsetDateTime scheduledAt,
+            OffsetDateTime expectedReturnAt,
+            Long excludeLoanId
+    ) {
+        if (implementId == null || scheduledAt == null || expectedReturnAt == null) {
+            return 0;
+        }
+
+        Record availabilityRecord = dsl.fetchOne(
+                "select * from public.fn_get_implement_availability(?::bigint, ?::timestamptz, ?::timestamptz, false, ?::bigint)",
+                implementId,
+                scheduledAt,
+                expectedReturnAt,
+                excludeLoanId
+        );
+
+        int rangeAwareAvailable = 0;
+        if (availabilityRecord != null) {
+            Integer rawAvailable = availabilityRecord.get("available_quantity", Integer.class);
+            if (rawAvailable != null) {
+                return Math.max(rawAvailable, 0);
+            }
+        }
+
+        return rangeAwareAvailable;
+    }
+
     private record LoanRow(
             Long loanId,
             UUID loanUuid,
@@ -2069,16 +2369,45 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
     private record LoanDetailContext(
             Long implementId,
             UUID implementUuid,
+            String implementName,
             ItemTypeEnum itemType,
             int requestedQuantity,
             int reservedQuantity,
-            int deliveredQuantity
+            int deliveredQuantity,
+            int returnedQuantity,
+            int damagedQuantity,
+            int lostQuantity,
+            int consumedQuantity,
+            int discardedQuantity
     ) {
+        private int closedQuantity() {
+            return returnedQuantity + damagedQuantity + lostQuantity + consumedQuantity + discardedQuantity;
+        }
+
+        private int pendingReturnQuantity() {
+            return Math.max(0, deliveredQuantity - closedQuantity());
+        }
+
+        private boolean isConsumable() {
+            return itemType == ItemTypeEnum.consumable;
+        }
+
+        private boolean isReturnable() {
+            return itemType == ItemTypeEnum.reusable || itemType == ItemTypeEnum.individual;
+        }
     }
 
     private record ImplementContext(
             Long implementId,
+            String implementName,
             ItemTypeEnum itemType
+    ) {
+    }
+
+    private record RequestedReservation(
+            Long implementId,
+            String implementName,
+            int requestedQuantity
     ) {
     }
 
@@ -2086,6 +2415,12 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
             Long individualId,
             UUID individualUuid,
             String assetCode
+    ) {
+    }
+
+    private record DeliveryPostProcessOutcome(
+            boolean hasDeliveredItems,
+            boolean hasPendingReturnables
     ) {
     }
 

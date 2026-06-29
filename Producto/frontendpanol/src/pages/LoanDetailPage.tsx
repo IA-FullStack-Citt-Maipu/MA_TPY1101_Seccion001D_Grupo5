@@ -25,31 +25,38 @@ import {
   cancelLoan,
   completeLoan,
   fetchLoanByUuid,
-  prepareLoan,
+  fetchLoanReturnContext,
   fetchLoanStateDates,
   fetchLoanStatusTimeline,
   returnLoan,
 } from "../services/loanService";
-import { fetchImplementStock } from "../services/stockService";
 import {
   clearLastCreatedLoan,
   loadLastCreatedLoan,
 } from "../services/loanSessionService";
-import type { LoanStateDates, LoanStatusTimelineEntry, LoanSummary } from "../types/loan";
-import type { StockDetail } from "../types/stock";
+import type { LoanReturnContextItem, LoanStateDates, LoanStatusTimelineEntry, LoanSummary } from "../types/loan";
 import { getSessionUser, getSessionUserRole } from "../utils/auth";
 import { canStartDelivery, canStartPreparation } from "../utils/loanSchedule";
 import { canRequesterCancelLoan } from "../utils/loanStatus";
 
 const DELETE_CONFIRM_TEXT = "eliminar";
+const SYSTEM_OUTBOX_NAME = "SISTEMA_OUTBOX";
+const SYSTEM_OUTBOX_EMAIL = "sistema.outbox@duocuc.cl";
 
 interface ReturnItemState {
   implementUuid: string;
   implementName: string;
   deliveredQuantity: number;
+  pendingReturnQuantity: number;
   returnedQuantity: number;
-  itemType: NonNullable<StockDetail["item_type"]> | "unknown";
-  stockError: string | null;
+  itemType: LoanReturnContextItem["item_type"] | "unknown";
+  individuals: ReturnIndividualState[];
+}
+
+interface ReturnIndividualState {
+  individualUuid: string;
+  assetCode: string;
+  returnCondition: "good" | "damaged" | "lost" | "discarded";
 }
 
 function parseDate(value: string): Date | null {
@@ -84,7 +91,7 @@ function normalizeStatusLabel(status: string): string {
     prepared: "Preparado",
     delivered: "En uso",
     overdue: "Atrasado",
-    completed: "Completado",
+    completed: "Finalizado",
     cancelled: "Cancelado",
     rejected: "Rechazado",
     expired: "Expirado",
@@ -117,69 +124,14 @@ function statusClassName(status: string): string {
   return "teacher-loans-status teacher-loans-status--completed";
 }
 
-function itemStatusLabel(item: LoanSummary["items"][number], loanStatus: LoanSummary["status"]): string {
-  const plannedQuantity = item.reserved_quantity > 0 || loanStatus !== "pending"
-    ? item.reserved_quantity
-    : item.requested_quantity;
-
-  if (loanStatus === "completed" && item.delivered_quantity > 0) {
-    if (item.returned_quantity >= item.delivered_quantity) {
-      return "Devuelto";
-    }
-    if (item.returned_quantity > 0) {
-      return "Devuelto parcial";
-    }
-  }
-  if (item.delivered_quantity >= plannedQuantity && plannedQuantity > 0) {
-    return "Entregado";
-  }
-  if (item.delivered_quantity > 0) {
-    return "Parcial";
-  }
-  if (item.reserved_quantity > 0) {
-    return item.reserved_quantity < item.requested_quantity ? "Reservado parcial" : "Reservado";
-  }
-  if (loanStatus !== "pending" && item.requested_quantity > 0) {
-    return "Sin reserva";
-  }
-  return "Por procesar";
-}
-
-function itemStatusClassName(item: LoanSummary["items"][number], loanStatus: LoanSummary["status"]): string {
-  const plannedQuantity = item.reserved_quantity > 0 || loanStatus !== "pending"
-    ? item.reserved_quantity
-    : item.requested_quantity;
-
-  if (loanStatus === "completed" && item.delivered_quantity > 0) {
-    if (item.returned_quantity >= item.delivered_quantity) {
-      return "teacher-loan-item-status teacher-loan-item-status--delivered";
-    }
-    if (item.returned_quantity > 0) {
-      return "teacher-loan-item-status teacher-loan-item-status--partial";
-    }
-  }
-  if (item.delivered_quantity >= plannedQuantity && plannedQuantity > 0) {
-    return "teacher-loan-item-status teacher-loan-item-status--delivered";
-  }
-  if (item.delivered_quantity > 0 || item.reserved_quantity > 0) {
-    return "teacher-loan-item-status teacher-loan-item-status--partial";
-  }
-  if (loanStatus !== "pending" && item.requested_quantity > 0) {
-    return "teacher-loan-item-status teacher-loan-item-status--danger";
-  }
-  return "teacher-loan-item-status teacher-loan-item-status--pending";
-}
-
 function timelineTransitionTitle(entry: LoanStatusTimelineEntry): string {
-  if (entry.from_status == null && entry.to_status === "pending") {
-    return "Creacion de Solicitud";
+  if (entry.from_status == null && entry.to_status === "approved") {
+    return "Reserva automatica";
   }
 
   const transitionKey = `${entry.from_status ?? "new"}->${entry.to_status}`;
   const labels: Record<string, string> = {
-    "pending->approved": "Reserva automatica",
-    "pending->rejected": "Rechazo de Solicitud",
-    "pending->cancelled": "Cancelacion de Solicitud",
+    "approved->approved": "Reserva actualizada",
     "approved->prepared": "Preparacion de Implementos",
     "prepared->delivered": "Entrega de Implementos",
     "delivered->completed": "Cierre de Prestamo",
@@ -206,7 +158,15 @@ function timelineStatusChipClass(
   return "teacher-loan-timeline-chip";
 }
 
+function isSystemTimelineActor(entry: Pick<LoanStatusTimelineEntry, "actor_name" | "actor_email">): boolean {
+  return entry.actor_name?.trim() === SYSTEM_OUTBOX_NAME
+    || entry.actor_email?.trim()?.toLowerCase() === SYSTEM_OUTBOX_EMAIL;
+}
+
 function resolveTimelineActorLabel(entry: LoanStatusTimelineEntry): string {
+  if (isSystemTimelineActor(entry)) {
+    return "Sistema";
+  }
   return entry.actor_name?.trim() || entry.actor_email?.trim() || `User #${entry.actor_user_id}`;
 }
 
@@ -241,7 +201,7 @@ export function LoanDetailPage({
   const [completionNotes, setCompletionNotes] = useState("");
   const [returnItems, setReturnItems] = useState<ReturnItemState[]>([]);
   const [loadingReturnItems, setLoadingReturnItems] = useState(false);
-  const [returnVariationConfirm, setReturnVariationConfirm] = useState(false);
+  const [returnMode, setReturnMode] = useState<"all_good" | "variation" | null>(null);
 
   useEffect(() => {
     const cached = loadLastCreatedLoan(loanUuid);
@@ -340,8 +300,14 @@ export function LoanDetailPage({
     if (!creationEntry) {
       return loadingTraceability ? "Cargando solicitante..." : "Solicitante no disponible";
     }
+    if (isSystemTimelineActor(creationEntry)) {
+      if (loan?.requester_uuid === currentUser?.id && currentUser?.name) {
+        return currentUser.name;
+      }
+      return "Solicitante registrado";
+    }
     return creationEntry.actor_name?.trim() || creationEntry.actor_email?.trim() || "Solicitante no disponible";
-  }, [loadingTraceability, timeline]);
+  }, [currentUser?.id, currentUser?.name, loadingTraceability, loan?.requester_uuid, timeline]);
   const orderedTimeline = useMemo(
     () =>
       [...timeline].sort((left, right) => {
@@ -357,19 +323,30 @@ export function LoanDetailPage({
   const timelineContentId = `loan-timeline-${loanUuid}`;
 
   const canConfirmDeletion = deleteConfirmationInput.trim().toLowerCase() === DELETE_CONFIRM_TEXT;
-  const returnableFungibleItems = useMemo(
+  const returnableReusableItems = useMemo(
     () =>
       returnItems.filter(
         (item) =>
-          item.deliveredQuantity > 0 &&
-          (item.itemType === "consumable" || item.itemType === "reusable"),
+          item.pendingReturnQuantity > 0 && item.itemType === "reusable",
       ),
     [returnItems],
   );
-  const hasReturnVariation = useMemo(
-    () => returnableFungibleItems.some((item) => item.returnedQuantity !== item.deliveredQuantity),
-    [returnableFungibleItems],
+  const returnableActiveItems = useMemo(
+    () =>
+      returnItems.filter(
+        (item) => item.pendingReturnQuantity > 0 && item.itemType === "individual",
+      ),
+    [returnItems],
   );
+  const selectedReturnModeLabel = useMemo(() => {
+    if (returnMode === "all_good") {
+      return "Devolucion completa sin variaciones";
+    }
+    if (returnMode === "variation") {
+      return "Devolucion con variaciones por cantidad o condicion";
+    }
+    return null;
+  }, [returnMode]);
 
   function goBackToList() {
     window.location.hash = "#/inventory/prestamos";
@@ -379,27 +356,12 @@ export function LoanDetailPage({
     window.location.hash = `#/inventory/prestamos/${loanUuid}/editar`;
   }
 
-  function goToLoanDelivery() {
-    window.location.hash = `#/inventory/prestamos/${loanUuid}/entrega`;
+  function goToLoanPreparation() {
+    window.location.hash = `#/inventory/prestamos/${loanUuid}/preparacion`;
   }
 
-  async function handlePrepareLoan() {
-    if (!loan || loan.status !== "approved") {
-      return;
-    }
-
-    setError(null);
-    setProcessingLoan(true);
-    try {
-      const updated = await prepareLoan(loan.uuid);
-      setLoan(updated);
-      onLoanChanged?.(updated);
-      await refreshTraceability(updated.uuid);
-    } catch (requestError) {
-      setError(getErrorMessage(requestError, "No se pudo preparar la solicitud."));
-    } finally {
-      setProcessingLoan(false);
-    }
+  function goToLoanDelivery() {
+    window.location.hash = `#/inventory/prestamos/${loanUuid}/entrega`;
   }
 
   async function refreshTraceability(loanId: string) {
@@ -414,42 +376,23 @@ export function LoanDetailPage({
   async function loadReturnItems(currentLoan: LoanSummary) {
     setLoadingReturnItems(true);
     try {
-      const rows: ReturnItemState[] = await Promise.all(
-        currentLoan.items.map(async (item) => {
-          if (item.delivered_quantity <= 0) {
-            return {
-              implementUuid: item.implement_uuid,
-              implementName: item.implement_name,
-              deliveredQuantity: item.delivered_quantity,
-              returnedQuantity: 0,
-              itemType: "unknown" as const,
-              stockError: null,
-            };
-          }
-
-          try {
-            const stock = await fetchImplementStock(item.implement_uuid);
-            return {
-              implementUuid: item.implement_uuid,
-              implementName: item.implement_name,
-              deliveredQuantity: item.delivered_quantity,
-              returnedQuantity: item.delivered_quantity,
-              itemType: (stock.item_type ?? "unknown") as ReturnItemState["itemType"],
-              stockError: null,
-            };
-          } catch (requestError) {
-            return {
-              implementUuid: item.implement_uuid,
-              implementName: item.implement_name,
-              deliveredQuantity: item.delivered_quantity,
-              returnedQuantity: item.delivered_quantity,
-              itemType: "unknown" as const,
-              stockError: getErrorMessage(requestError, "No se pudo consultar el tipo de implemento."),
-            };
-          }
-        }),
-      );
+      const context = await fetchLoanReturnContext(currentLoan.uuid);
+      const rows: ReturnItemState[] = context.items.map((item) => ({
+        implementUuid: item.implement_uuid,
+        implementName: item.implement_name,
+        deliveredQuantity: item.delivered_quantity,
+        pendingReturnQuantity: item.pending_return_quantity,
+        returnedQuantity: item.pending_return_quantity,
+        itemType: (item.item_type ?? "unknown") as ReturnItemState["itemType"],
+        individuals: item.individuals.map((individual) => ({
+          individualUuid: individual.individual_uuid,
+          assetCode: individual.asset_code,
+          returnCondition: "good" as const,
+        })),
+      }));
       setReturnItems(rows);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, "No se pudo cargar el contexto de devolucion."));
     } finally {
       setLoadingReturnItems(false);
     }
@@ -460,7 +403,7 @@ export function LoanDetailPage({
       return;
     }
     setCompletionNotes("");
-    setReturnVariationConfirm(false);
+    setReturnMode(null);
     setShowCompleteModal(true);
     void loadReturnItems(loan);
   }
@@ -469,31 +412,51 @@ export function LoanDetailPage({
     setShowCompleteModal(false);
     setCompletionNotes("");
     setReturnItems([]);
-    setReturnVariationConfirm(false);
+    setReturnMode(null);
   }
 
   function adjustReturnQuantity(implementUuid: string, delta: number) {
-    setReturnVariationConfirm(false);
     setReturnItems((previous) =>
       previous.map((item) => {
         if (item.implementUuid !== implementUuid) {
           return item;
         }
-        const next = Math.max(0, Math.min(item.deliveredQuantity, item.returnedQuantity + delta));
+        const next = Math.max(0, Math.min(item.pendingReturnQuantity, item.returnedQuantity + delta));
         return { ...item, returnedQuantity: next };
       }),
     );
   }
 
-  async function handleCompleteLoan(confirmedVariation = false) {
+  function updateIndividualReturnCondition(
+    implementUuid: string,
+    individualUuid: string,
+    returnCondition: ReturnIndividualState["returnCondition"],
+  ) {
+    setReturnItems((previous) =>
+      previous.map((item) =>
+        item.implementUuid !== implementUuid
+          ? item
+          : {
+              ...item,
+              individuals: item.individuals.map((individual) =>
+                individual.individualUuid === individualUuid
+                  ? { ...individual, returnCondition }
+                  : individual,
+              ),
+            },
+      ),
+    );
+  }
+
+  async function handleCompleteLoan() {
     if (!loan || (loan.status !== "delivered" && loan.status !== "overdue")) {
       return;
     }
     if (loadingReturnItems) {
       return;
     }
-    if (hasReturnVariation && !confirmedVariation) {
-      setReturnVariationConfirm(true);
+    if (returnMode == null) {
+      setError("Selecciona como registrar la devolucion antes de continuar.");
       return;
     }
 
@@ -501,13 +464,19 @@ export function LoanDetailPage({
     setProcessingLoan(true);
     try {
       const notes = completionNotes.trim() || null;
-      const updated = hasReturnVariation
+      const updated = returnMode === "variation"
         ? await returnLoan(loan.uuid, {
             notes,
-            consumable_returns: returnableFungibleItems.map((item) => ({
+            consumable_returns: returnableReusableItems.map((item) => ({
               implement_uuid: item.implementUuid,
               quantity: item.returnedQuantity,
             })),
+            returned_individuals: returnableActiveItems.flatMap((item) =>
+              item.individuals.map((individual) => ({
+                individual_uuid: individual.individualUuid,
+                return_condition: individual.returnCondition,
+              })),
+            ),
           })
         : await completeLoan(loan.uuid, { notes });
       setLoan(updated);
@@ -666,9 +635,9 @@ export function LoanDetailPage({
                     <button
                       type="button"
                       className="teacher-loan-detail-action-btn teacher-loan-detail-action-btn--complete"
-                      onClick={() => void handlePrepareLoan()}
+                      onClick={goToLoanPreparation}
                       disabled={processingLoan || !canPrepareNow}
-                      title="Preparar implementos reservados"
+                      title="Abrir preparacion operativa"
                     >
                       <CheckCircle2 size={16} />
                       Preparar implementos
@@ -694,7 +663,7 @@ export function LoanDetailPage({
                       disabled={processingLoan}
                     >
                       <CheckCircle2 size={16} />
-                      Completar prestamo
+                      Registrar devolucion
                     </button>
                   ) : null}
                   {canCancelLoan ? (
@@ -726,17 +695,15 @@ export function LoanDetailPage({
                   <thead>
                     <tr>
                       <th>Descripcion del implemento</th>
-                      <th>Solicitado</th>
                       <th>Reservado</th>
                       <th>Entregado</th>
                       <th>Devuelto</th>
-                      <th>Estado</th>
                     </tr>
                   </thead>
                   <tbody>
                     {loan.items.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="teacher-loan-detail-items__empty">
+                        <td colSpan={4} className="teacher-loan-detail-items__empty">
                           Esta solicitud no contiene implementos.
                         </td>
                       </tr>
@@ -751,13 +718,9 @@ export function LoanDetailPage({
                               <strong>{item.implement_name}</strong>
                             </div>
                           </td>
-                          <td>{item.requested_quantity}</td>
                           <td>{item.reserved_quantity}</td>
                           <td>{item.delivered_quantity}</td>
                           <td>{item.returned_quantity}</td>
-                          <td>
-                            <span className={itemStatusClassName(item, loan.status)}>{itemStatusLabel(item, loan.status)}</span>
-                          </td>
                         </tr>
                       ))
                     )}
@@ -786,7 +749,7 @@ export function LoanDetailPage({
                 <div><span>Preparado</span><p>{stateDates?.prepared_at ? formatDateTime(stateDates.prepared_at) : "--"}</p></div>
                 <div><span>Entregado</span><p>{stateDates?.delivered_at ? formatDateTime(stateDates.delivered_at) : "--"}</p></div>
                 <div><span>Atrasado</span><p>{stateDates?.overdue_at ? formatDateTime(stateDates.overdue_at) : "--"}</p></div>
-                <div><span>Completado</span><p>{stateDates?.completed_at ? formatDateTime(stateDates.completed_at) : "--"}</p></div>
+                <div><span>Finalizado</span><p>{stateDates?.completed_at ? formatDateTime(stateDates.completed_at) : "--"}</p></div>
                 <div><span>Cancelado</span><p>{stateDates?.cancelled_at ? formatDateTime(stateDates.cancelled_at) : "--"}</p></div>
               </div>
             </article>
@@ -906,8 +869,8 @@ export function LoanDetailPage({
       {showCompleteModal ? (
         <div className="modal-overlay">
           <div className="modal teacher-loans-return-modal">
-            <h3>Completar prestamo</h3>
-            <p>Registra notas opcionales y confirma las cantidades devueltas antes de cerrar el prestamo.</p>
+            <h3>Registrar devolucion</h3>
+            <p>Define si todo fue devuelto correctamente o si hubo variacion antes de cerrar el prestamo.</p>
 
             <label htmlFor="loan-complete-notes">Notas (opcional)</label>
             <textarea
@@ -919,20 +882,63 @@ export function LoanDetailPage({
               placeholder="Observaciones del cierre o devolucion..."
             />
 
-            {loadingReturnItems ? (
-              <p className="text-muted">Cargando cantidades entregadas...</p>
+            {loadingReturnItems ? <p className="text-muted">Cargando contexto de devolucion...</p> : null}
+
+            {!loadingReturnItems ? (
+              <div className="loan-return-choice-group">
+                <p className="loan-return-choice-group__label">Como quieres registrar esta devolucion?</p>
+                <div className="loan-return-choice-list">
+                  <button
+                    type="button"
+                    className={`loan-return-choice${returnMode === "all_good" ? " is-selected" : ""}`}
+                    onClick={() => setReturnMode("all_good")}
+                    aria-pressed={returnMode === "all_good"}
+                  >
+                    <span className="loan-return-choice__copy">
+                      <strong>Se devolvio todo correctamente</strong>
+                      <small>Cierra todos los implementos retornables como devueltos en buen estado.</small>
+                    </span>
+                    <span className="loan-return-choice__state">
+                      {returnMode === "all_good" ? "Seleccionado" : "Seleccionar"}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`loan-return-choice${returnMode === "variation" ? " is-selected" : ""}`}
+                    onClick={() => setReturnMode("variation")}
+                    aria-pressed={returnMode === "variation"}
+                  >
+                    <span className="loan-return-choice__copy">
+                      <strong>Hubo variacion en la cantidad devuelta</strong>
+                      <small>Permite ajustar cantidades reutilizables y clasificar activos por condicion.</small>
+                    </span>
+                    <span className="loan-return-choice__state">
+                      {returnMode === "variation" ? "Seleccionado" : "Seleccionar"}
+                    </span>
+                  </button>
+                </div>
+                <p className={`loan-return-choice__hint${returnMode == null ? "" : " is-selected"}`}>
+                  {selectedReturnModeLabel ?? "Selecciona una opcion para habilitar la confirmacion de devolucion."}
+                </p>
+              </div>
             ) : null}
 
-            {!loadingReturnItems && returnableFungibleItems.length > 0 ? (
+            {!loadingReturnItems && returnMode === "variation" && returnableReusableItems.length > 0 ? (
               <div className="loan-return-list">
-                {returnableFungibleItems.map((item) => {
-                  const consumedQuantity = item.deliveredQuantity - item.returnedQuantity;
+                <div className="loan-return-section__header">
+                  <strong>Implementos reutilizables</strong>
+                  <p>Indica cuantas unidades volvieron efectivamente. La diferencia quedara registrada como consumo o merma.</p>
+                </div>
+                {returnableReusableItems.map((item) => {
+                  const consumedQuantity = item.pendingReturnQuantity - item.returnedQuantity;
                   return (
                     <article key={item.implementUuid} className="loan-return-row">
                       <div>
                         <strong>{item.implementName}</strong>
-                        <p>Entregado: {item.deliveredQuantity} | Devuelto: {item.returnedQuantity} | Usado/gastado: {consumedQuantity}</p>
-                        {item.stockError ? <small className="field-error">{item.stockError}</small> : null}
+                        <p>
+                          Entregado: {item.deliveredQuantity} | Pendiente: {item.pendingReturnQuantity} | Devuelto: {item.returnedQuantity} | Consumido: {consumedQuantity}
+                        </p>
                       </div>
                       <div className="loan-stepper">
                         <button
@@ -946,7 +952,7 @@ export function LoanDetailPage({
                         <button
                           type="button"
                           onClick={() => adjustReturnQuantity(item.implementUuid, 1)}
-                          disabled={item.returnedQuantity >= item.deliveredQuantity || processingLoan}
+                          disabled={item.returnedQuantity >= item.pendingReturnQuantity || processingLoan}
                         >
                           <Plus size={14} />
                         </button>
@@ -957,16 +963,48 @@ export function LoanDetailPage({
               </div>
             ) : null}
 
-            {!loadingReturnItems && returnableFungibleItems.length === 0 ? (
-              <p className="text-muted">
-                No hay consumibles o reutilizables entregados para ajustar. Los individuales se cerraran como devueltos en buen estado.
-              </p>
+            {!loadingReturnItems && returnMode === "variation" && returnableActiveItems.length > 0 ? (
+              <div className="loan-return-list">
+                <div className="loan-return-section__header">
+                  <strong>Activos entregados</strong>
+                  <p>Selecciona la condicion final de cada unidad para dejar claro que vuelve disponible y que no.</p>
+                </div>
+                {returnableActiveItems.map((item) => (
+                  <article key={item.implementUuid} className="loan-return-row loan-return-row--stacked">
+                    <div>
+                      <strong>{item.implementName}</strong>
+                      <p>Activo entregado: {item.deliveredQuantity} | Pendiente: {item.pendingReturnQuantity}</p>
+                    </div>
+                    <div className="loan-return-individuals">
+                      {item.individuals.map((individual) => (
+                        <label key={individual.individualUuid} className="loan-return-individual">
+                          <span>{individual.assetCode}</span>
+                          <select
+                            value={individual.returnCondition}
+                            onChange={(event) =>
+                              updateIndividualReturnCondition(
+                                item.implementUuid,
+                                individual.individualUuid,
+                                event.target.value as ReturnIndividualState["returnCondition"],
+                              )
+                            }
+                            disabled={processingLoan}
+                          >
+                            <option value="good">Devuelto bueno</option>
+                            <option value="damaged">Devuelto danado</option>
+                            <option value="lost">Perdido</option>
+                            <option value="discarded">Descartado</option>
+                          </select>
+                        </label>
+                      ))}
+                    </div>
+                  </article>
+                ))}
+              </div>
             ) : null}
 
-            {returnVariationConfirm ? (
-              <div className="loan-return-warning">
-                Se esta cerrando con diferencias entre lo entregado y lo devuelto. Seguro que quieres seguir?
-              </div>
+            {!loadingReturnItems && returnMode === "variation" && returnableReusableItems.length === 0 && returnableActiveItems.length === 0 ? (
+              <p className="text-muted">No hay implementos retornables pendientes para esta solicitud.</p>
             ) : null}
 
             <div className="modal-actions">
@@ -976,15 +1014,11 @@ export function LoanDetailPage({
               <button
                 type="button"
                 className="button"
-                disabled={processingLoan || loadingReturnItems}
-                onClick={() => void handleCompleteLoan(returnVariationConfirm)}
+                disabled={processingLoan || loadingReturnItems || returnMode == null}
+                onClick={() => void handleCompleteLoan()}
               >
                 <CheckCircle2 size={16} />
-                {processingLoan
-                  ? "Completando..."
-                  : returnVariationConfirm
-                    ? "Si, cerrar con variacion"
-                    : "Completar prestamo"}
+                {processingLoan ? "Registrando..." : returnMode === "variation" ? "Registrar variacion" : "Confirmar devolucion"}
               </button>
             </div>
           </div>

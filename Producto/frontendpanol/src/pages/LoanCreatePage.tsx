@@ -344,7 +344,7 @@ function normalizeLoanStatusLabel(status: LoanStatus): string {
     approved: "Reservado",
     prepared: "Preparado",
     delivered: "Entregado",
-    completed: "Completado",
+    completed: "Finalizado",
     rejected: "Rechazado",
     cancelled: "Cancelado",
     expired: "Expirado",
@@ -469,11 +469,17 @@ export function LoanCreatePage({
     let cancelled = false;
 
     async function loadCatalog() {
+      if (!scheduledAt || !effectiveExpectedReturnAt) {
+        setAllImplements([]);
+        setCatalogLoading(false);
+        return;
+      }
+
       setCatalogLoading(true);
       try {
         const rows = await fetchImplements({
-          scheduledAt: scheduledAt ?? undefined,
-          expectedReturnAt: effectiveExpectedReturnAt ?? undefined,
+          scheduledAt,
+          expectedReturnAt: effectiveExpectedReturnAt,
           excludeLoanUuid: editLoanUuid ?? undefined,
         });
 
@@ -646,7 +652,7 @@ export function LoanCreatePage({
     const implement = implementByUuid.get(stockConflict.implement_uuid);
     const availableStock = implement ? getAvailableStock(implement) : null;
     setSearchInlineError(
-      `Solo puedes solicitar dentro del stock disponible. ${stockConflict.implement_name} tiene ${availableStock ?? 0} unidad(es) disponibles para la fecha y hora seleccionadas.`,
+      `Solo puedes solicitar dentro del stock disponible. ${stockConflict.implement_name} tiene ${availableStock ?? 0} unidad(es) disponibles para esta solicitud.`,
     );
   }, [cart, implementByUuid, searchInlineError]);
 
@@ -848,7 +854,7 @@ export function LoanCreatePage({
       const implement = implementByUuid.get(stockConflict.implement_uuid);
       const availableStock = implement ? getAvailableStock(implement) : null;
       setSearchInlineError(
-        `Solo puedes solicitar dentro del stock disponible. ${stockConflict.implement_name} tiene ${availableStock ?? 0} unidad(es) disponibles para la fecha y hora seleccionadas.`,
+        `Solo puedes solicitar dentro del stock disponible. ${stockConflict.implement_name} tiene ${availableStock ?? 0} unidad(es) disponibles para esta solicitud.`,
       );
       return;
     }
@@ -1072,7 +1078,7 @@ export function LoanCreatePage({
                 en caso de que no se ingrese una fecha y hora de devolucion, se usara la misma fecha y hora de solicitud con un incremento de 2 horas
               </div>
               <div className="loan-create-note loan-create-note--warning">
-                la cantidad disponible de los implementos cambiara segun el rango de fecha y hora en la que los solicite. Si solo marcas la fecha y hora de solicitud, el sistema considerara como devolucion esa misma fecha con un incremento de 2 horas para validar la disponibilidad.
+                la disponibilidad se valida para esta solicitud. Si solo marcas la fecha y hora de solicitud, el sistema considerara como devolucion esa misma fecha con un incremento de 2 horas. En implementos consumibles de uso unico, una vez reservados quedan bloqueados para nuevas solicitudes hasta su entrega, cancelacion o expiracion.
               </div>
               {scheduleInlineError ? <p className="field-error loan-create-form-grid__error">{scheduleInlineError}</p> : null}
             </div>

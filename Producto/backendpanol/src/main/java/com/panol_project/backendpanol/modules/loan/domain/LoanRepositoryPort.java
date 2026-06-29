@@ -43,7 +43,13 @@ public interface LoanRepositoryPort {
 
     Optional<LoanSummaryView> findVisibleLoanSummaryByUuid(UUID loanUuid);
 
-    LoanSummaryPage findVisibleLoanSummaries(UUID requesterUuid, int page, int size);
+    LoanSummaryPage findVisibleLoanSummaries(
+            UUID requesterUuid,
+            OffsetDateTime from,
+            OffsetDateTime to,
+            int page,
+            int size
+    );
 
     List<LoanSummaryView> findAllVisibleLoanSummaries();
 
@@ -58,6 +64,8 @@ public interface LoanRepositoryPort {
     LoanReturnResult completeLoan(LoanCompleteCommand command);
 
     LoanReturnResult returnLoan(LoanReturnCommand command);
+
+    Optional<LoanReturnContextView> findLoanReturnContextByUuid(UUID loanUuid);
 
     Optional<LoanStateDatesView> findLoanStateDatesByUuid(UUID loanUuid);
 

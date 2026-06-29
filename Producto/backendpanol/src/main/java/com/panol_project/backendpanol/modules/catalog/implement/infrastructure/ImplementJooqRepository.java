@@ -2,6 +2,7 @@ package com.panol_project.backendpanol.modules.catalog.implement.infrastructure;
 
 import static com.panol_project.backendpanol.jooq.tables.Category.CATEGORY;
 import static com.panol_project.backendpanol.jooq.tables.Implement.IMPLEMENT;
+import static com.panol_project.backendpanol.jooq.tables.Individual.INDIVIDUAL;
 import static com.panol_project.backendpanol.jooq.tables.Location.LOCATION;
 import static com.panol_project.backendpanol.jooq.tables.Stock.STOCK;
 
@@ -15,6 +16,7 @@ import com.panol_project.backendpanol.modules.catalog.implement.domain.Implement
 import com.panol_project.backendpanol.modules.catalog.implement.domain.Implemento;
 import com.panol_project.backendpanol.modules.catalog.implement.domain.StockStatusFilter;
 import java.time.OffsetDateTime;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -34,6 +36,15 @@ public class ImplementJooqRepository implements ImplementRepository {
 
     private static final Field<UUID> CATEGORY_UUID = DSL.field(DSL.name("category", "uuid"), UUID.class);
     private static final Field<UUID> LOCATION_UUID = DSL.field(DSL.name("location", "uuid"), UUID.class);
+    private static final Field<String[]> INDIVIDUAL_ASSET_CODES = DSL.field(
+            "coalesce((" +
+                    "select array_agg(i.asset_code order by i.asset_code) " +
+                    "from public.individual i " +
+                    "where i.implement_id = {0} and i.active = true" +
+                    "), array[]::text[])",
+            String[].class,
+            IMPLEMENT.ID
+    ).as("individual_asset_codes");
 
     public ImplementJooqRepository(DSLContext dsl) {
         this.dsl = dsl;
@@ -64,13 +75,15 @@ public class ImplementJooqRepository implements ImplementRepository {
 
     @Override
     public Optional<ImplementSummary> findSummaryByUuid(UUID uuid) {
-        return dsl.select(
+                return dsl.select(
                         IMPLEMENT.UUID,
                         IMPLEMENT.NAME,
                         IMPLEMENT.DESCRIPTION,
                         IMPLEMENT.BARCODE,
+                        INDIVIDUAL_ASSET_CODES,
                         IMPLEMENT.IMG_URL,
                         IMPLEMENT.ACTIVE,
+                        IMPLEMENT.ITEM_TYPE,
                         CATEGORY_UUID,
                         CATEGORY.NAME,
                         CATEGORY.ACTIVE,
@@ -104,7 +117,20 @@ public class ImplementJooqRepository implements ImplementRepository {
         Condition condition = IMPLEMENT.ACTIVE.isTrue();
 
         if (name != null) {
-            condition = condition.and(DSL.lower(IMPLEMENT.NAME).like("%" + name.toLowerCase(Locale.ROOT) + "%"));
+            String normalizedQuery = name.toLowerCase(Locale.ROOT);
+            String likeQuery = "%" + normalizedQuery + "%";
+            Condition matchesName = DSL.lower(IMPLEMENT.NAME).like(likeQuery);
+            Condition matchesBarcode = IMPLEMENT.BARCODE.isNotNull()
+                    .and(DSL.lower(IMPLEMENT.BARCODE).like(likeQuery));
+            Condition matchesIndividualAssetCode = DSL.exists(
+                    DSL.selectOne()
+                            .from(INDIVIDUAL)
+                            .where(INDIVIDUAL.IMPLEMENT_ID.eq(IMPLEMENT.ID)
+                                    .and(INDIVIDUAL.ACTIVE.isTrue())
+                                    .and(DSL.lower(INDIVIDUAL.ASSET_CODE).like(likeQuery)))
+            );
+
+            condition = condition.and(matchesName.or(matchesBarcode).or(matchesIndividualAssetCode));
         }
 
         if (categoryUuid != null) {
@@ -116,13 +142,15 @@ public class ImplementJooqRepository implements ImplementRepository {
         }
 
         if (scheduledAt == null) {
-            return dsl.select(
+                return dsl.select(
                         IMPLEMENT.UUID,
                         IMPLEMENT.NAME,
                         IMPLEMENT.DESCRIPTION,
                         IMPLEMENT.BARCODE,
+                        INDIVIDUAL_ASSET_CODES,
                         IMPLEMENT.IMG_URL,
                         IMPLEMENT.ACTIVE,
+                        IMPLEMENT.ITEM_TYPE,
                         CATEGORY_UUID,
                         CATEGORY.NAME,
                         CATEGORY.ACTIVE,
@@ -167,8 +195,10 @@ public class ImplementJooqRepository implements ImplementRepository {
                         IMPLEMENT.NAME,
                         IMPLEMENT.DESCRIPTION,
                         IMPLEMENT.BARCODE,
+                        INDIVIDUAL_ASSET_CODES,
                         IMPLEMENT.IMG_URL,
                         IMPLEMENT.ACTIVE,
+                        IMPLEMENT.ITEM_TYPE,
                         CATEGORY_UUID,
                         CATEGORY.NAME,
                         CATEGORY.ACTIVE,
@@ -356,14 +386,23 @@ public class ImplementJooqRepository implements ImplementRepository {
         Integer available = availableOverride == null
                 ? record.get(STOCK.AVAILABLE)
                 : record.get(availableOverride);
+        String[] individualAssetCodes = record.get(INDIVIDUAL_ASSET_CODES);
 
         return new ImplementSummary(
                 record.get(IMPLEMENT.UUID),
                 record.get(IMPLEMENT.NAME),
                 record.get(IMPLEMENT.DESCRIPTION),
                 record.get(IMPLEMENT.BARCODE),
+                individualAssetCodes == null
+                        ? List.of()
+                        : Arrays.stream(individualAssetCodes)
+                                .filter(Objects::nonNull)
+                                .map(String::trim)
+                                .filter(value -> !value.isEmpty())
+                                .toList(),
                 record.get(IMPLEMENT.IMG_URL),
                 record.get(IMPLEMENT.ACTIVE),
+                toDomainItemType(record.get(IMPLEMENT.ITEM_TYPE)),
                 category,
                 location,
                 new ImplementStockSummary(

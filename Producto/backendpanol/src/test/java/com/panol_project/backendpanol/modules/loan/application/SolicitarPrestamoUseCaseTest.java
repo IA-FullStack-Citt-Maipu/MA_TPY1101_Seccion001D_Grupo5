@@ -116,11 +116,11 @@ class SolicitarPrestamoUseCaseTest {
                 requesterUuid,
                 roomUuid,
                 subjectUuid,
-                LoanStatus.PENDING,
+                LoanStatus.APPROVED,
                 scheduledAt,
                 null,
                 OffsetDateTime.parse("2026-05-21T21:00:00-04:00"),
-                List.of(new LoanDetailItem(implementUuid, 2, 0, 0))
+                List.of(new LoanDetailItem(implementUuid, 2, 2, 0))
         );
         LoanSummaryView expectedSummary = new LoanSummaryView(
                 loanUuid,
@@ -158,6 +158,7 @@ class SolicitarPrestamoUseCaseTest {
 
         LoanCreateCommand persisted = createCommandCaptor.getValue();
         assertEquals(requesterUuid, persisted.requesterUuid());
+        assertEquals(UUID.fromString("99999999-9999-9999-9999-999999999999"), persisted.actorUuid());
         assertEquals(roomUuid, persisted.roomUuid());
         assertEquals(subjectUuid, persisted.subjectUuid());
         assertEquals(scheduledAt, persisted.scheduledAt());
@@ -171,7 +172,6 @@ class SolicitarPrestamoUseCaseTest {
         verify(loanRepositoryPort).findImplementAvailabilityByUuid(implementUuid);
         verify(loanRepositoryPort).findRequestedItemAvailabilities(List.of(implementUuid), scheduledAt, null, null);
         verify(loanRepositoryPort).existsPendingLoanConflict(requesterUuid, scheduledAt, null, List.of(implementUuid));
-        verify(loanRepositoryPort).reviewLoan(any());
         verify(loanRepositoryPort).findVisibleLoanSummaryByUuid(loanUuid);
         verifyNoMoreInteractions(loanRepositoryPort);
     }
@@ -476,7 +476,7 @@ class SolicitarPrestamoUseCaseTest {
 
         assertEquals("LOAN_STOCK_CONFLICT", ex.getCode());
         assertEquals(
-                "Solo puedes solicitar dentro del stock disponible. Arcillas de dientes tiene 5 unidad(es) disponibles para la fecha y hora seleccionadas.",
+                "Solo puedes solicitar dentro del stock disponible. Arcillas de dientes tiene 5 unidad(es) disponibles para esta solicitud.",
                 ex.getMessage()
         );
         verify(loanRepositoryPort).existsActiveRequesterByUuid(requesterUuid);

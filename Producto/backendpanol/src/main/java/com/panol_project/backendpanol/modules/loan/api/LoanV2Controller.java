@@ -6,6 +6,9 @@ import com.panol_project.backendpanol.modules.loan.api.dto.CreateLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.api.dto.DeliverLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanItemV2Response;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanPageV2Response;
+import com.panol_project.backendpanol.modules.loan.api.dto.LoanReturnContextIndividualV2Response;
+import com.panol_project.backendpanol.modules.loan.api.dto.LoanReturnContextItemV2Response;
+import com.panol_project.backendpanol.modules.loan.api.dto.LoanReturnContextV2Response;
 import com.panol_project.backendpanol.modules.loan.api.dto.PrepareLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanRoomV2Response;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanStateDatesV2Response;
@@ -13,7 +16,6 @@ import com.panol_project.backendpanol.modules.loan.api.dto.LoanStatusTimelineEnt
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanSubjectV2Response;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanV2Response;
 import com.panol_project.backendpanol.modules.loan.api.dto.ReturnLoanV2Request;
-import com.panol_project.backendpanol.modules.loan.api.dto.ReviewLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.application.GestionPrestamoUseCase;
 import com.panol_project.backendpanol.modules.loan.application.SolicitarPrestamoUseCase;
 import com.panol_project.backendpanol.modules.loan.application.dto.CancelarPrestamoCommand;
@@ -24,22 +26,23 @@ import com.panol_project.backendpanol.modules.loan.application.dto.DevolverPrest
 import com.panol_project.backendpanol.modules.loan.application.dto.EntregarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.EntregarPrestamoItemCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.PrepararPrestamoCommand;
-import com.panol_project.backendpanol.modules.loan.application.dto.RevisarPrestamoCommand;
-import com.panol_project.backendpanol.modules.loan.application.dto.RevisarPrestamoItemCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.SolicitarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.SolicitarPrestamoItemCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStateDatesView;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStatus;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryPage;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStatusTimelineEntry;
+import com.panol_project.backendpanol.modules.loan.domain.LoanReturnContextView;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
 import com.panol_project.backendpanol.shared.error.ApiException;
 import com.panol_project.backendpanol.shared.error.BadRequestException;
 import com.panol_project.backendpanol.shared.error.NotFoundException;
 import com.panol_project.backendpanol.shared.security.CurrentUserUuidResolver;
 import jakarta.validation.Valid;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -137,12 +140,17 @@ public class LoanV2Controller {
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "20") Integer size,
             @RequestParam(defaultValue = "false") Boolean mine,
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            @RequestParam(required = false) OffsetDateTime from,
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            @RequestParam(required = false) OffsetDateTime to,
             Authentication authentication
     ) {
         int resolvedPage = page == null ? DEFAULT_PAGE : page;
         int resolvedSize = size == null ? DEFAULT_SIZE : size;
 
         validatePagination(resolvedPage, resolvedSize);
+        validateRange(from, to);
 
         UUID currentUserUuid = resolveCurrentUserUuid(authentication);
         boolean isDocente = hasRole(authentication, "ROLE_DOCENTE");
@@ -150,6 +158,8 @@ public class LoanV2Controller {
 
         LoanSummaryPage summaryPage = gestionPrestamoUseCase.listar(
                 onlyMine ? currentUserUuid : null,
+                from,
+                to,
                 resolvedPage,
                 resolvedSize
         );
@@ -175,6 +185,16 @@ public class LoanV2Controller {
         return toStateDatesResponse(gestionPrestamoUseCase.obtenerFechasEstado(loanUuid));
     }
 
+    @GetMapping("/{loanUuid}/return-context")
+    @PreAuthorize("hasRole('COORDINADOR')")
+    public LoanReturnContextV2Response obtenerContextoDevolucionPrestamo(
+            @PathVariable UUID loanUuid,
+            Authentication authentication
+    ) {
+        findLoanVisibleForCurrentUser(authentication, loanUuid);
+        return toReturnContextResponse(gestionPrestamoUseCase.obtenerContextoDevolucion(loanUuid));
+    }
+
     @GetMapping("/{loanUuid}/status-timeline")
     public List<LoanStatusTimelineEntryV2Response> obtenerTimelineEstadoPrestamo(
             @PathVariable UUID loanUuid,
@@ -184,34 +204,6 @@ public class LoanV2Controller {
         return gestionPrestamoUseCase.obtenerTimelineEstado(loanUuid).stream()
                 .map(this::toTimelineResponse)
                 .toList();
-    }
-
-    @PatchMapping("/{loanUuid}/review")
-    @PreAuthorize("hasRole('COORDINADOR')")
-    public LoanV2Response revisarPrestamo(
-            @PathVariable UUID loanUuid,
-            @Valid @RequestBody ReviewLoanV2Request request,
-            Authentication authentication
-    ) {
-        requireCoordinatorReviewer(authentication, loanUuid);
-        UUID actorUuid = resolveCurrentUserUuid(authentication);
-        LoanSummaryView reviewed = gestionPrestamoUseCase.revisar(
-                new RevisarPrestamoCommand(
-                        loanUuid,
-                        actorUuid,
-                        request.decision(),
-                        request.notes(),
-                        request.items() == null
-                                ? List.of()
-                                : request.items().stream()
-                                        .map(item -> new RevisarPrestamoItemCommand(
-                                                item.implementUuid(),
-                                                item.approvedQuantity()
-                                        ))
-                                        .toList()
-                )
-        );
-        return toResponse(reviewed);
     }
 
     @PostMapping("/{loanUuid}/prepare")
@@ -340,6 +332,7 @@ public class LoanV2Controller {
                         .map(item -> new LoanItemV2Response(
                                 item.implementUuid(),
                                 item.implementName(),
+                                item.itemType(),
                                 item.requestedQuantity(),
                                 item.reservedQuantity(),
                                 item.deliveredQuantity(),
@@ -359,6 +352,27 @@ public class LoanV2Controller {
                 dates.cancelledAt(),
                 dates.expiredAt(),
                 dates.overdueAt()
+        );
+    }
+
+    private LoanReturnContextV2Response toReturnContextResponse(LoanReturnContextView context) {
+        return new LoanReturnContextV2Response(
+                context.loanUuid(),
+                context.items().stream()
+                        .map(item -> new LoanReturnContextItemV2Response(
+                                item.implementUuid(),
+                                item.implementName(),
+                                item.itemType(),
+                                item.deliveredQuantity(),
+                                item.pendingReturnQuantity(),
+                                item.individuals().stream()
+                                        .map(individual -> new LoanReturnContextIndividualV2Response(
+                                                individual.individualUuid(),
+                                                individual.assetCode()
+                                        ))
+                                        .toList()
+                        ))
+                        .toList()
         );
     }
 
@@ -399,6 +413,15 @@ public class LoanV2Controller {
         }
     }
 
+    private void validateRange(OffsetDateTime from, OffsetDateTime to) {
+        if ((from == null) != (to == null)) {
+            throw new BadRequestException("LOAN_RANGE_PAIR_REQUIRED", "from y to deben enviarse juntos");
+        }
+        if (from != null && !from.isBefore(to)) {
+            throw new BadRequestException("LOAN_RANGE_INVALID", "from debe ser anterior a to");
+        }
+    }
+
     private boolean hasRole(Authentication authentication, String role) {
         if (authentication == null || authentication.getAuthorities() == null) {
             return false;
@@ -435,20 +458,7 @@ public class LoanV2Controller {
                 && loan.status() != LoanStatus.PREPARED) {
             throw new BadRequestException(
                     invalidStateCode,
-                    "Solo puedes cancelar prestamos en estado pending, approved o prepared"
-            );
-        }
-        return loan;
-    }
-
-    private LoanSummaryView requireCoordinatorReviewer(Authentication authentication, UUID loanUuid) {
-        LoanSummaryView loan = findLoanVisibleForCurrentUser(authentication, loanUuid);
-        UUID currentUserUuid = resolveCurrentUserUuid(authentication);
-        if (currentUserUuid.equals(loan.requesterUuid())) {
-            throw new ApiException(
-                    HttpStatus.FORBIDDEN,
-                    "LOAN_SELF_REVIEW_FORBIDDEN",
-                    "No puedes revisar una solicitud creada por ti mismo"
+                    "Solo puedes cancelar prestamos en estado approved o prepared"
             );
         }
         return loan;

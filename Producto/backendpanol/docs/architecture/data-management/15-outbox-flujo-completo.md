@@ -1,8 +1,8 @@
 ﻿# 15 - Outbox: Flujo Completo y Limites
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-05-31
-- Fuente de verdad: `OutboxService`, `OutboxWorker`, `OutboxJooqRepository`, `Producto/databasepanol/migrations/v25/V25..V35`, `16-catalogo-bd-v31.md`
+- Ultima verificacion: 2026-06-28
+- Fuente de verdad: `OutboxService`, `OutboxWorker`, `OutboxJooqRepository`, `Producto/databasepanol/migrations/v25/V25..V47`, `03-postgresql-guia-tecnica.md`
 
 ## Objetivo
 

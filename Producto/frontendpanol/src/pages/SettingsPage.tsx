@@ -138,7 +138,7 @@ export function SettingsPage({
   onThemeModeChange,
 }: SettingsPageProps) {
   const [profile, setProfile] = useState<SessionUserSummary | null>(sessionUser);
-  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [loadingProfile, setLoadingProfile] = useState(sessionUser == null);
   const [profileError, setProfileError] = useState<string | null>(null);
 
   const [emailDraft, setEmailDraft] = useState(sessionUser?.email ?? "");
@@ -160,6 +160,21 @@ export function SettingsPage({
   const [closingSessionId, setClosingSessionId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!sessionUser) {
+      return;
+    }
+
+    setProfile(sessionUser);
+    setEmailDraft(sessionUser.email ?? "");
+    setProfileError(null);
+    setLoadingProfile(false);
+  }, [sessionUser]);
+
+  useEffect(() => {
+    if (sessionUser) {
+      return;
+    }
+
     let cancelled = false;
     setLoadingProfile(true);
     setProfileError(null);
@@ -183,7 +198,7 @@ export function SettingsPage({
     return () => {
       cancelled = true;
     };
-  }, [onSessionUserChange]);
+  }, [onSessionUserChange, sessionUser]);
 
   useEffect(() => {
     let cancelled = false;

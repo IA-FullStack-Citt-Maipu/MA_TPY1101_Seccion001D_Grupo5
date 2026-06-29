@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, RefreshCcw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, RefreshCcw } from "lucide-react";
 import { CategoryTable } from "../components/categories/CategoryTable";
 import { ConfirmModal } from "../components/categories/ConfirmModal";
 import { CategoryFormModal } from "../components/categories/CategoryFormModal";
@@ -13,6 +13,8 @@ interface ModalState {
   category?: Categoria;
   message?: string;
 }
+
+const PAGE_SIZE = 10;
 
 export function InventoryCategoriesPage({ embedded = false }: { embedded?: boolean }) {
   const {
@@ -33,6 +35,7 @@ export function InventoryCategoriesPage({ embedded = false }: { embedded?: boole
   } = useCategories();
 
   const [modal, setModal] = useState<ModalState>({ type: "none" });
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     void load();
@@ -42,6 +45,28 @@ export function InventoryCategoriesPage({ embedded = false }: { embedded?: boole
     () => [...categories].sort((a, b) => Number(b.activa) - Number(a.activa) || a.nombre.localeCompare(b.nombre)),
     [categories],
   );
+
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(sortedCategories.length / PAGE_SIZE)), [sortedCategories.length]);
+  const safePage = useMemo(() => {
+    if (page < 1) {
+      return 1;
+    }
+    if (page > totalPages) {
+      return totalPages;
+    }
+    return page;
+  }, [page, totalPages]);
+  const pageStart = (safePage - 1) * PAGE_SIZE;
+  const pagedCategories = sortedCategories.slice(pageStart, pageStart + PAGE_SIZE);
+  const rangeStart = sortedCategories.length === 0 ? 0 : pageStart + 1;
+  const rangeEnd = sortedCategories.length === 0 ? 0 : Math.min(pageStart + pagedCategories.length, sortedCategories.length);
+  const pageNumbers = useMemo(() => {
+    const windowSize = 5;
+    let start = Math.max(1, safePage - 2);
+    const end = Math.min(totalPages, start + windowSize - 1);
+    start = Math.max(1, end - windowSize + 1);
+    return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+  }, [safePage, totalPages]);
 
   function closeModal() {
     clearFieldError();
@@ -147,7 +172,7 @@ export function InventoryCategoriesPage({ embedded = false }: { embedded?: boole
         {error ? <div className="error-banner">{error}</div> : null}
 
         <CategoryTable
-          categories={sortedCategories}
+          categories={pagedCategories}
           associations={associations}
           loading={loading}
           onEdit={(category) => setModal({ type: "edit", category })}
@@ -155,6 +180,42 @@ export function InventoryCategoriesPage({ embedded = false }: { embedded?: boole
           onDeactivate={(category) => setModal({ type: "deactivate", category })}
           onDelete={(category) => setModal({ type: "delete", category })}
         />
+
+        {!loading && sortedCategories.length > 0 ? (
+          <div className="inventory-table-footer">
+            <p>
+              Mostrando {rangeStart} a {rangeEnd} de {sortedCategories.length} categorias
+            </p>
+            <div className="inventory-pagination">
+              <button
+                type="button"
+                className="inventory-pagination__btn"
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                disabled={safePage <= 1}
+              >
+                <ChevronLeft size={16} />
+              </button>
+              {pageNumbers.map((pageNumber) => (
+                <button
+                  key={pageNumber}
+                  type="button"
+                  className={pageNumber === safePage ? "inventory-pagination__btn inventory-pagination__btn--active" : "inventory-pagination__btn"}
+                  onClick={() => setPage(pageNumber)}
+                >
+                  {pageNumber}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="inventory-pagination__btn"
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                disabled={safePage >= totalPages}
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <CategoryFormModal

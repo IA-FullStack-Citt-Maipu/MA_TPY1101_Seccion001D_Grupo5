@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -24,6 +25,7 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanImplementAvailabil
 import com.panol_project.backendpanol.modules.loan.domain.LoanRepositoryPort;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRequestedItemAvailability;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStatus;
+import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryPage;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
 import com.panol_project.backendpanol.shared.error.security.RestAccessDeniedHandler;
 import com.panol_project.backendpanol.shared.error.security.RestAuthenticationEntryPoint;
@@ -102,11 +104,11 @@ class LoanV2ControllerTest {
                 authenticatedUserUuid,
                 roomUuid,
                 subjectUuid,
-                LoanStatus.PENDING,
+                LoanStatus.APPROVED,
                 scheduledAt,
                 null,
                 OffsetDateTime.parse("2026-05-21T21:00:00-04:00"),
-                List.of(new LoanDetailItem(implementUuid, 2, 0, 0))
+                List.of(new LoanDetailItem(implementUuid, 2, 2, 0))
         );
         LoanSummaryView response = new LoanSummaryView(
                 loanUuid,
@@ -183,6 +185,7 @@ class LoanV2ControllerTest {
 
         LoanCreateCommand command = commandCaptor.getValue();
         org.junit.jupiter.api.Assertions.assertEquals(authenticatedUserUuid, command.requesterUuid());
+        org.junit.jupiter.api.Assertions.assertEquals(UUID.fromString("99999999-9999-9999-9999-999999999999"), command.actorUuid());
         org.junit.jupiter.api.Assertions.assertEquals(roomUuid, command.roomUuid());
         org.junit.jupiter.api.Assertions.assertEquals(subjectUuid, command.subjectUuid());
         org.junit.jupiter.api.Assertions.assertEquals(expectedReturnAt.toInstant(), command.expectedReturnAt().toInstant());
@@ -204,11 +207,11 @@ class LoanV2ControllerTest {
                 authenticatedUserUuid,
                 roomUuid,
                 null,
-                LoanStatus.PENDING,
+                LoanStatus.APPROVED,
                 scheduledAt,
                 null,
                 OffsetDateTime.parse("2026-05-21T21:00:00-04:00"),
-                List.of(new LoanDetailItem(implementUuid, 1, 0, 0))
+                List.of(new LoanDetailItem(implementUuid, 1, 1, 0))
         );
         LoanSummaryView response = new LoanSummaryView(
                 loanUuid,
@@ -260,41 +263,65 @@ class LoanV2ControllerTest {
     }
 
     @Test
-    void revisarPrestamoDebeBloquearAutoRevisionDelCoordinador() throws Exception {
-        UUID coordinatorUuid = UUID.randomUUID();
+    void listarPrestamosDebeDelegarFiltroPorRangoYForzarMineParaDocente() throws Exception {
+        UUID requesterUuid = UUID.randomUUID();
         UUID loanUuid = UUID.randomUUID();
-        OffsetDateTime scheduledAt = OffsetDateTime.parse(FUTURE_SCHEDULED_AT);
-
-        LoanSummaryView ownPendingLoan = new LoanSummaryView(
+        UUID roomUuid = UUID.randomUUID();
+        OffsetDateTime from = OffsetDateTime.parse("2099-06-01T00:00:00-04:00");
+        OffsetDateTime to = OffsetDateTime.parse("2099-07-01T00:00:00-04:00");
+        LoanSummaryView loan = new LoanSummaryView(
                 loanUuid,
-                coordinatorUuid,
-                LoanStatus.PENDING,
-                scheduledAt,
-                null,
+                requesterUuid,
+                LoanStatus.APPROVED,
+                OffsetDateTime.parse(FUTURE_SCHEDULED_AT),
+                OffsetDateTime.parse(FUTURE_EXPECTED_RETURN_AT),
                 OffsetDateTime.parse("2026-05-21T21:00:00-04:00"),
                 null,
-                null,
+                new LoanSummaryView.RoomView(roomUuid, "Sala 410"),
                 null,
                 List.of()
         );
 
-        when(loanRepositoryPort.findVisibleLoanSummaryByUuid(loanUuid)).thenReturn(Optional.of(ownPendingLoan));
+        when(loanRepositoryPort.findVisibleLoanSummaries(requesterUuid, from, to, 2, 10))
+                .thenReturn(new LoanSummaryPage(List.of(loan), 2, 10, 11, 2));
 
-        mockMvc.perform(patch("/api/v2/loans/{loanUuid}/review", loanUuid)
-                        .with(authentication(jwtAuthentication(coordinatorUuid, "COORDINADOR")))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "decision": "APPROVE",
-                                  "notes": "Revision operativa",
-                                  "items": []
-                                }
-                                """))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("LOAN_SELF_REVIEW_FORBIDDEN"));
+        mockMvc.perform(get("/api/v2/loans")
+                        .with(authentication(jwtAuthentication(requesterUuid, "DOCENTE")))
+                        .param("page", "2")
+                        .param("size", "10")
+                        .param("mine", "false")
+                        .param("from", from.toString())
+                        .param("to", to.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].uuid").value(loanUuid.toString()))
+                .andExpect(jsonPath("$.items[0].status").value("approved"))
+                .andExpect(jsonPath("$.page").value(2))
+                .andExpect(jsonPath("$.size").value(10))
+                .andExpect(jsonPath("$.total_items").value(11))
+                .andExpect(jsonPath("$.total_pages").value(2));
+    }
 
-        verify(loanRepositoryPort).findVisibleLoanSummaryByUuid(loanUuid);
-        verify(loanRepositoryPort, never()).reviewLoan(any());
+    @Test
+    void listarPrestamosDebeRetornar400CuandoFaltaUnoDeLosExtremosDelRango() throws Exception {
+        mockMvc.perform(get("/api/v2/loans")
+                        .with(authentication(jwtAuthentication(UUID.randomUUID(), "COORDINADOR")))
+                        .param("from", "2099-06-01T00:00:00-04:00"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("LOAN_RANGE_PAIR_REQUIRED"));
+
+        verifyNoInteractions(loanRepositoryPort);
+    }
+
+    @Test
+    void listarPrestamosDebeRetornar400CuandoElRangoNoEsAscendente() throws Exception {
+        mockMvc.perform(get("/api/v2/loans")
+                        .with(authentication(jwtAuthentication(UUID.randomUUID(), "COORDINADOR")))
+                        .param("from", "2099-07-01T00:00:00-04:00")
+                        .param("to", "2099-07-01T00:00:00-04:00"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("LOAN_RANGE_INVALID"));
+
+        verifyNoInteractions(loanRepositoryPort);
     }
 
     @Test

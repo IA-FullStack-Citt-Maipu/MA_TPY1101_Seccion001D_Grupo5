@@ -13,6 +13,7 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanDeliveryItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanDeliveryResult;
 import com.panol_project.backendpanol.modules.loan.domain.LoanPrepareCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRepositoryPort;
+import com.panol_project.backendpanol.modules.loan.domain.LoanReturnContextView;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReturnCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReturnConsumableItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReturnIndividual;
@@ -27,10 +28,10 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryPage;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
 import com.panol_project.backendpanol.shared.error.BadRequestException;
 import com.panol_project.backendpanol.shared.error.NotFoundException;
-import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,15 +41,9 @@ public class GestionPrestamoUseCase {
     private static final int MAX_NOTES_LENGTH = 1000;
 
     private final LoanRepositoryPort loanRepositoryPort;
-    private final Clock clock;
-
+    @Autowired
     public GestionPrestamoUseCase(LoanRepositoryPort loanRepositoryPort) {
-        this(loanRepositoryPort, Clock.systemDefaultZone());
-    }
-
-    public GestionPrestamoUseCase(LoanRepositoryPort loanRepositoryPort, Clock clock) {
         this.loanRepositoryPort = loanRepositoryPort;
-        this.clock = clock;
     }
 
     @Transactional(readOnly = true)
@@ -57,8 +52,8 @@ public class GestionPrestamoUseCase {
     }
 
     @Transactional(readOnly = true)
-    public LoanSummaryPage listar(UUID requesterUuid, int page, int size) {
-        return loanRepositoryPort.findVisibleLoanSummaries(requesterUuid, page, size);
+    public LoanSummaryPage listar(UUID requesterUuid, OffsetDateTime from, OffsetDateTime to, int page, int size) {
+        return loanRepositoryPort.findVisibleLoanSummaries(requesterUuid, from, to, page, size);
     }
 
     @Transactional(readOnly = true)
@@ -161,7 +156,7 @@ public class GestionPrestamoUseCase {
         boolean hasIndividuals = command.returnedIndividuals() != null && !command.returnedIndividuals().isEmpty();
         boolean hasConsumable = command.consumableReturns() != null && !command.consumableReturns().isEmpty();
         if (!hasIndividuals && !hasConsumable) {
-            throw new BadRequestException("LOAN_RETURN_EMPTY", "Debes incluir al menos un retorno (individual o consumable/reusable)");
+            throw new BadRequestException("LOAN_RETURN_EMPTY", "Debes incluir al menos un retorno (activo o reutilizable)");
         }
 
         LoanReturnResult returned = loanRepositoryPort.returnLoan(
@@ -206,6 +201,12 @@ public class GestionPrestamoUseCase {
     }
 
     @Transactional(readOnly = true)
+    public LoanReturnContextView obtenerContextoDevolucion(UUID loanUuid) {
+        return loanRepositoryPort.findLoanReturnContextByUuid(loanUuid)
+                .orElseThrow(() -> new NotFoundException("LOAN_NOT_FOUND", "Prestamo no encontrado"));
+    }
+
+    @Transactional(readOnly = true)
     public List<LoanStatusTimelineEntry> obtenerTimelineEstado(UUID loanUuid) {
         findVisibleLoanSummaryOrThrow(loanUuid);
         return loanRepositoryPort.findLoanStatusTimelineByUuid(loanUuid);
@@ -242,14 +243,6 @@ public class GestionPrestamoUseCase {
                     "Solo se puede preparar un prestamo en estado approved"
             );
         }
-
-        OffsetDateTime scheduledAt = loan.scheduledAt();
-        if (scheduledAt != null && OffsetDateTime.now(clock).isBefore(scheduledAt.minusMinutes(60))) {
-            throw new BadRequestException(
-                    "LOAN_PREPARE_TOO_EARLY",
-                    "La preparacion solo se puede iniciar desde 60 minutos antes de la hora programada"
-            );
-        }
     }
 
     private void validateDeliveryAllowed(LoanSummaryView loan) {
@@ -257,14 +250,6 @@ public class GestionPrestamoUseCase {
             throw new BadRequestException(
                     "LOAN_DELIVERY_INVALID_STATE",
                     "Solo se puede entregar un prestamo en estado prepared"
-            );
-        }
-
-        OffsetDateTime scheduledAt = loan.scheduledAt();
-        if (scheduledAt != null && OffsetDateTime.now(clock).isBefore(scheduledAt)) {
-            throw new BadRequestException(
-                    "LOAN_DELIVERY_TOO_EARLY",
-                    "La entrega solo se puede registrar desde la hora programada del prestamo"
             );
         }
     }

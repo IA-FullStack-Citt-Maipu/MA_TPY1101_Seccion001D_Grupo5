@@ -8,8 +8,6 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanImplementAvailabil
 import com.panol_project.backendpanol.modules.loan.domain.LoanRepositoryPort;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRequestedItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRequestedItemAvailability;
-import com.panol_project.backendpanol.modules.loan.domain.LoanReviewCommand;
-import com.panol_project.backendpanol.modules.loan.domain.LoanReviewDecision;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStatus;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
 import com.panol_project.backendpanol.modules.loan.domain.LoanUpdateCommand;
@@ -116,6 +114,7 @@ public class SolicitarPrestamoUseCase {
         LoanAggregate loan = loanRepositoryPort.createPendingLoan(
                 new LoanCreateCommand(
                         requesterUuid,
+                        systemUserUuid,
                         roomUuid,
                         subjectUuid,
                         command.scheduledAt(),
@@ -124,14 +123,6 @@ public class SolicitarPrestamoUseCase {
                         requestedItems
                 )
         );
-
-        loanRepositoryPort.reviewLoan(new LoanReviewCommand(
-                loan.uuid(),
-                systemUserUuid,
-                LoanReviewDecision.APPROVE,
-                "Reserva automatica al crear solicitud",
-                List.of()
-        ));
 
         return loanRepositoryPort.findVisibleLoanSummaryByUuid(loan.uuid())
                 .orElseThrow(() -> new NotFoundException("LOAN_NOT_FOUND", "Prestamo no encontrado"));
@@ -378,7 +369,7 @@ public class SolicitarPrestamoUseCase {
                 throw new ConflictException(
                         "LOAN_STOCK_CONFLICT",
                         String.format(
-                                "Solo puedes solicitar dentro del stock disponible. %s tiene %d unidad(es) disponibles para la fecha y hora seleccionadas.",
+                                "Solo puedes solicitar dentro del stock disponible. %s tiene %d unidad(es) disponibles para esta solicitud.",
                                 availability.implementName(),
                                 availability.availableQuantity()
                         )
