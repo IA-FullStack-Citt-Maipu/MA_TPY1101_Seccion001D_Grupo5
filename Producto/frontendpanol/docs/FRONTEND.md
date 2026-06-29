@@ -36,6 +36,11 @@ Frontend para gestion operativa de inventario consumiendo API v2 del backend.
   `Authorization: Bearer <token>` al bot.
 - La base del bot se configura con `VITE_BOT_API_BASE_URL`.
 - Si `VITE_BOT_API_BASE_URL` no existe, el cliente usa `VITE_API_BASE_URL` como fallback.
+- La respuesta del bot mantiene `response` como texto Markdown y puede incluir
+  `ui_blocks` opcional para renderizar listas compactas y metricas del asistente.
+- El frontend no debe mostrar UUIDs por defecto en el chat; si el backend
+  entrega un identificador tecnico permitido, debe presentarlo solo como dato
+  tecnico explicito y no como parte visual principal de las tarjetas.
 
 ### CRUD de categorias
 

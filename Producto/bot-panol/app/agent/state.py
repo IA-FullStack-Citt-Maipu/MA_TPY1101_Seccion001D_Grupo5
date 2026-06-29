@@ -9,4 +9,5 @@ class AgentState(TypedDict):
     user_role: str
     user_uuid: str
     conversation_id: str
+    query_intent: str
     tools_used: list[str]

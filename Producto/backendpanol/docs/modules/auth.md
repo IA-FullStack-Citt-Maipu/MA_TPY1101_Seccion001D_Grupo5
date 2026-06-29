@@ -43,6 +43,8 @@ Base path: `/api/v2/auth`
   del frontend; el JWT ya no se expone en el body.
 - `POST /me/bot-token` emite un JWT efimero para `bot-panol` con
   `aud = bot-panol`; no reemplaza la sesion web basada en cookies.
+- Ese JWT queda acotado al canal `AI-Agent`: no debe reutilizarse contra el
+  backend general fuera del flujo del bot.
 - `GET /me/sessions` devuelve solo las sesiones del usuario autenticado.
 - `DELETE /me/sessions/{sessionId}` revoca una sesion puntual del mismo usuario,
   revoca su `currentAccessJti` cuando existe y elimina la fila refresh.
@@ -247,6 +249,10 @@ Base path: `/api/v2/auth`
 4. El frontend guarda ese token solo en memoria.
 5. El frontend llama `POST /api/v1/chat` del bot usando
    `Authorization: Bearer <token-puente>`.
+6. Si ese token se usa contra `/api/v2/**`, el backend exige ademas:
+   - `X-Client-Origin: AI-Agent`
+   - `X-Client-Secret` valido
+   - uso exclusivo de metodos de lectura
 6. Si el bot responde `401`, el frontend solicita un nuevo token puente y
    reintenta una sola vez.
 

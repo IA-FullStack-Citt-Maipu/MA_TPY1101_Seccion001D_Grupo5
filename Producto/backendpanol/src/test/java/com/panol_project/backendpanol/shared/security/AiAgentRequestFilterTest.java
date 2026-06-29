@@ -10,6 +10,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.panol_project.backendpanol.shared.error.security.RestAccessDeniedHandler;
 import com.panol_project.backendpanol.shared.error.security.RestAuthenticationEntryPoint;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -66,6 +68,36 @@ class AiAgentRequestFilterTest {
     }
 
     @Test
+    void botTokenSinOrigenAiAgentDebeRetornar403() throws Exception {
+        mockMvc.perform(get(BASE_PATH)
+                        .with(authentication(jwtAuthentication(UUID.randomUUID(), "COORDINADOR")))
+                        .header("Authorization", "Bearer " + unsignedBotToken("bot-panol")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("AI_AGENT_TOKEN_SCOPE_FORBIDDEN"))
+                .andExpect(jsonPath("$.message").value("El token del asistente solo puede usarse desde AI-Agent."));
+    }
+
+    @Test
+    void botTokenConOrigenAiAgentYSecretCorrectoDebePermitirGet() throws Exception {
+        mockMvc.perform(get(BASE_PATH)
+                        .with(authentication(jwtAuthentication(UUID.randomUUID(), "COORDINADOR")))
+                        .header("Authorization", "Bearer " + unsignedBotToken("bot-panol"))
+                        .header("X-Client-Origin", "AI-Agent")
+                        .header("X-Client-Secret", SECRET))
+                .andExpect(status().isOk())
+                .andExpect(content().string("ok"));
+    }
+
+    @Test
+    void tokenWebNormalSinTokenUseNoDebeActivarFiltroAiAgent() throws Exception {
+        mockMvc.perform(get(BASE_PATH)
+                        .with(authentication(jwtAuthentication(UUID.randomUUID(), "COORDINADOR")))
+                        .header("Authorization", "Bearer " + unsignedWebToken()))
+                .andExpect(status().isOk())
+                .andExpect(content().string("ok"));
+    }
+
+    @Test
     void requestConOrigenAiAgentYSinSecretDebeRetornar403() throws Exception {
         mockMvc.perform(get(BASE_PATH)
                         .with(authentication(jwtAuthentication(UUID.randomUUID(), "COORDINADOR")))
@@ -106,6 +138,26 @@ class AiAgentRequestFilterTest {
                 .claim("role", role)
                 .build();
         return new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("ROLE_" + role)));
+    }
+
+    private String unsignedBotToken(String audience) {
+        String header = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString("{\"alg\":\"none\"}".getBytes(StandardCharsets.UTF_8));
+        String payload = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(("""
+                        {"sub":"%s","role":"COORDINADOR","token_use":"bot-panol","aud":["%s"]}
+                        """.formatted(UUID.randomUUID(), audience)).getBytes(StandardCharsets.UTF_8));
+        return header + "." + payload + ".";
+    }
+
+    private String unsignedWebToken() {
+        String header = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString("{\"alg\":\"none\"}".getBytes(StandardCharsets.UTF_8));
+        String payload = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(("""
+                        {"sub":"%s","role":"COORDINADOR"}
+                        """.formatted(UUID.randomUUID())).getBytes(StandardCharsets.UTF_8));
+        return header + "." + payload + ".";
     }
 
     @TestConfiguration

@@ -5,6 +5,7 @@ _jwt_token: ContextVar[str] = ContextVar("jwt_token", default="")
 _request_id: ContextVar[str] = ContextVar("request_id", default="")
 _user_role: ContextVar[str] = ContextVar("user_role", default="")
 _user_uuid: ContextVar[str] = ContextVar("user_uuid", default="")
+_query_intent: ContextVar[str] = ContextVar("query_intent", default="read_query")
 
 
 def set_token(token: str) -> None:
@@ -37,3 +38,11 @@ def set_user_uuid(user_uuid: str) -> None:
 
 def get_user_uuid() -> str:
     return _user_uuid.get()
+
+
+def set_query_intent(intent: str) -> None:
+    _query_intent.set(intent)
+
+
+def get_query_intent() -> str:
+    return _query_intent.get()

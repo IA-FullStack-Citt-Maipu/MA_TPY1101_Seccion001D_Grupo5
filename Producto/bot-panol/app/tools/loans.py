@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import date, datetime
 from time import perf_counter
 from typing import Any, Callable
@@ -6,6 +8,7 @@ from langchain_core.tools import tool
 
 from app.client.backend import backend_client
 from app.observability.metrics import record_tool_call
+from app.tools.common import build_entity_list_block, build_tool_output, safe_int
 
 
 _VALID_LOAN_STATES = {
@@ -21,26 +24,16 @@ _VALID_LOAN_STATES = {
 }
 
 _VALID_LOAN_STATES_MESSAGE = (
-    "estado invalido. Usa pending, approved, prepared, rejected, "
-    "delivered, completed, cancelled, expired o overdue."
+    "Estado invalido. Usa pending, approved, prepared, rejected, delivered, completed, cancelled, expired u overdue."
 )
-_VALID_LOAN_DATE_MESSAGE = "fecha invalida. Usa formato YYYY-MM-DD."
-
-
-def _safe_int(value: Any) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return 0
+_VALID_LOAN_DATE_MESSAGE = "Fecha invalida. Usa formato YYYY-MM-DD."
 
 
 def _normalize_estado(value: str | None) -> str | None:
     if value is None:
         return None
     normalized = value.strip().lower()
-    if not normalized:
-        return None
-    return normalized
+    return normalized or None
 
 
 def _normalize_limited_items(value: int | None) -> int:
@@ -67,10 +60,7 @@ def _normalize_fecha(value: str | None) -> tuple[date | None, str | None]:
 
 
 def _build_pagination_params(page: int, size: int) -> dict[str, int]:
-    return {
-        "page": page,
-        "size": size,
-    }
+    return {"page": page, "size": size}
 
 
 def _extract_page_payload(payload: Any, requested_page: int) -> tuple[list[dict[str, Any]], bool, int]:
@@ -83,8 +73,8 @@ def _extract_page_payload(payload: Any, requested_page: int) -> tuple[list[dict[
 
     raw_items = payload.get("items")
     items = raw_items if isinstance(raw_items, list) else []
-    current_page = _safe_int(payload.get("page")) or requested_page
-    total_pages = _safe_int(payload.get("total_pages"))
+    current_page = safe_int(payload.get("page")) or requested_page
+    total_pages = safe_int(payload.get("total_pages"))
     has_next = payload.get("has_next")
 
     if isinstance(has_next, bool):
@@ -104,21 +94,26 @@ def _build_loan_summary(row: dict[str, Any]) -> dict[str, Any]:
     requested_total = 0
     reserved_total = 0
     delivered_total = 0
-
     for item in items:
         if not isinstance(item, dict):
             continue
-        requested_total += _safe_int(item.get("requested_quantity"))
-        reserved_total += _safe_int(item.get("reserved_quantity"))
-        delivered_total += _safe_int(item.get("delivered_quantity"))
+        requested_total += safe_int(item.get("requested_quantity"))
+        reserved_total += safe_int(item.get("reserved_quantity"))
+        delivered_total += safe_int(item.get("delivered_quantity"))
+
+    room = row.get("room")
+    if not isinstance(room, dict):
+        room = {}
+    subject = row.get("subject")
+    if not isinstance(subject, dict):
+        subject = {}
 
     return {
-        "uuid": row.get("uuid"),
         "status": row.get("status"),
         "scheduled_at": row.get("scheduled_at"),
         "created_at": row.get("created_at"),
-        "room": row.get("room"),
-        "subject": row.get("subject"),
+        "room_name": room.get("name"),
+        "subject_name": subject.get("name"),
         "items_count": len(items),
         "totals": {
             "requested": requested_total,
@@ -152,10 +147,7 @@ def _iter_filtered_loans(
     pages_scanned = 0
 
     while True:
-        result = backend_client.get_safe(
-            "/api/v2/loans",
-            params=_build_pagination_params(page=page, size=page_size),
-        )
+        result = backend_client.get_safe("/api/v2/loans", params=_build_pagination_params(page=page, size=page_size))
         if not result.get("ok"):
             status_code = int(result.get("status_code", 500))
             record_tool_call(tool_name, "error", status_code, perf_counter() - started_at)
@@ -168,26 +160,40 @@ def _iter_filtered_loans(
         for row in items:
             if not predicate(row):
                 continue
-
             filtered.append(_build_loan_summary(row))
             if len(filtered) >= normalized_limite:
                 break
 
-        if len(filtered) >= normalized_limite:
+        if len(filtered) >= normalized_limite or not has_next:
             break
-        if not has_next:
-            break
-
         page = current_page + 1
 
     return None, filtered[:normalized_limite], pages_scanned
 
 
+def _loan_entities(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    entities: list[dict[str, Any]] = []
+    for row in items:
+        totals = row.get("totals", {})
+        if not isinstance(totals, dict):
+            totals = {}
+        entities.append(
+            {
+                "title": f"Prestamo {row.get('status') or 'sin estado'}",
+                "subtitle": row.get("subject_name") or "Sin asignatura visible",
+                "meta": [
+                    f"Fecha programada: {row.get('scheduled_at') or 'Sin fecha'}",
+                    f"Sala: {row.get('room_name') or 'No visible'}",
+                    f"Solicitado: {totals.get('requested') or 0}",
+                ],
+                "badges": [str(row.get("status") or "sin estado").upper()],
+            }
+        )
+    return entities
+
+
 @tool
-def listar_prestamos(
-    estado: str | None = None,
-    limite: int | None = 20,
-) -> dict[str, Any]:
+def listar_prestamos(estado: str | None = None, limite: int | None = 20) -> dict[str, Any]:
     """
     Lista prestamos y permite filtrar por estado.
     """
@@ -209,10 +215,7 @@ def listar_prestamos(
 
     def predicate(row: dict[str, Any]) -> bool:
         row_status = str(row.get("status") or "").strip().lower()
-
-        if normalized_estado and row_status != normalized_estado:
-            return False
-        return True
+        return not normalized_estado or row_status == normalized_estado
 
     error_result, sliced, pages_scanned = _iter_filtered_loans(
         normalized_limite=normalized_limite,
@@ -223,28 +226,22 @@ def listar_prestamos(
     if error_result is not None:
         return error_result
 
-    output = {
-        "ok": True,
-        "source": "backend",
-        "data": {
-            "filters": {
-                "estado": normalized_estado,
-                "limite": normalized_limite,
-            },
+    output = build_tool_output(
+        data={
+            "filters": {"estado": normalized_estado, "limite": normalized_limite},
             "count": len(sliced),
             "items": sliced,
             "pages_scanned": pages_scanned,
         },
-    }
+        summary=f"Se listaron {len(sliced)} prestamos dentro del filtro solicitado.",
+        ui_blocks=[build_entity_list_block("Prestamos", _loan_entities(sliced))] if sliced else [],
+    )
     record_tool_call("listar_prestamos", "success", 200, perf_counter() - started_at)
     return output
 
 
 @tool
-def listar_prestamos_programados(
-    fecha: str | None = None,
-    limite: int | None = 20,
-) -> dict[str, Any]:
+def listar_prestamos_programados(fecha: str | None = None, limite: int | None = 20) -> dict[str, Any]:
     """
     Lista prestamos programados para una fecha especifica en formato YYYY-MM-DD.
     Si no se indica fecha, usa la fecha local actual del sistema.
@@ -266,8 +263,7 @@ def listar_prestamos_programados(
         return result
 
     def predicate(row: dict[str, Any]) -> bool:
-        scheduled_date = _extract_scheduled_date(row)
-        return scheduled_date == target_date
+        return _extract_scheduled_date(row) == target_date
 
     error_result, sliced, pages_scanned = _iter_filtered_loans(
         normalized_limite=normalized_limite,
@@ -278,18 +274,15 @@ def listar_prestamos_programados(
     if error_result is not None:
         return error_result
 
-    output = {
-        "ok": True,
-        "source": "backend",
-        "data": {
-            "filters": {
-                "fecha": normalized_fecha,
-                "limite": normalized_limite,
-            },
+    output = build_tool_output(
+        data={
+            "filters": {"fecha": normalized_fecha, "limite": normalized_limite},
             "count": len(sliced),
             "items": sliced,
             "pages_scanned": pages_scanned,
         },
-    }
+        summary=f"Se encontraron {len(sliced)} prestamos programados para {normalized_fecha}.",
+        ui_blocks=[build_entity_list_block("Prestamos programados", _loan_entities(sliced))] if sliced else [],
+    )
     record_tool_call("listar_prestamos_programados", "success", 200, perf_counter() - started_at)
     return output

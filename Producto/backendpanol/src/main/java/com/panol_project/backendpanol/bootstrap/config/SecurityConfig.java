@@ -1,6 +1,7 @@
 package com.panol_project.backendpanol.bootstrap.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.panol_project.backendpanol.modules.auth.infrastructure.BotTokenScopeValidator;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import com.panol_project.backendpanol.modules.auth.infrastructure.TokenRevocationValidator;
 import com.panol_project.backendpanol.shared.error.security.RestAccessDeniedHandler;
@@ -82,12 +83,17 @@ public class SecurityConfig {
     @Bean
     JwtDecoder jwtDecoder(
             @Value("${app.auth.jwt.secret}") String secret,
+            @Value("${app.auth.bot-token.audience:bot-panol}") String botTokenAudience,
             TokenRevocationValidator tokenRevocationValidator
     ) {
         SecretKeySpec key = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(key).build();
         OAuth2TokenValidator<Jwt> withDefaults = JwtValidators.createDefault();
-        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(withDefaults, tokenRevocationValidator));
+        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
+                withDefaults,
+                tokenRevocationValidator,
+                new BotTokenScopeValidator(botTokenAudience)
+        ));
         return decoder;
     }
 

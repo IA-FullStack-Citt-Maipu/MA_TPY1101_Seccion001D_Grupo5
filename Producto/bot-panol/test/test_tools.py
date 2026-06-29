@@ -83,8 +83,10 @@ def test_buscar_implementos_success_truncates_top_10(monkeypatch) -> None:
     result = buscar_implementos.invoke({"nombre": "gasa"})
     assert result["ok"] is True
     assert result["data"]["count"] == 10
-    assert result["data"]["items"][0]["uuid"] == "uuid-0"
-    assert result["data"]["items"][-1]["uuid"] == "uuid-9"
+    assert result["data"]["items"][0]["nombre"] == "item-0"
+    assert "uuid" not in result["data"]["items"][0]
+    assert result["presentation"]["ui_blocks"][0]["type"] == "entity_list"
+    assert "technical" not in result["presentation"]
 
 
 def test_listar_implementos_bajo_stock_minimo_success(monkeypatch) -> None:
@@ -127,8 +129,9 @@ def test_listar_implementos_bajo_stock_minimo_success(monkeypatch) -> None:
 
     assert result["ok"] is True
     assert result["data"]["count"] == 1
-    assert result["data"]["items"][0]["uuid"] == "uuid-1"
+    assert result["data"]["items"][0]["nombre"] == "Guantes"
     assert result["data"]["items"][0]["stock_gap"] == 2
+    assert "technical" not in result["presentation"]
 
 
 def test_consultar_stock_success_is_sanitized(monkeypatch) -> None:
@@ -149,16 +152,23 @@ def test_consultar_stock_success_is_sanitized(monkeypatch) -> None:
         ],
     }
 
-    monkeypatch.setattr(
-        "app.tools.stock.backend_client.get_safe",
-        lambda *_args, **_kwargs: {"ok": True, "source": "backend", "data": payload},
-    )
-    result = consultar_stock.invoke({"implement_uuid": "impl-1"})
+    def fake_get_safe(path, params=None):
+        if path == "/api/v2/implements":
+            assert params == {"name": "Microscopio"}
+            return {"ok": True, "source": "backend", "data": [{"uuid": "impl-1", "name": "Microscopio"}]}
+        if path == "/api/v2/implements/impl-1/stock":
+            return {"ok": True, "source": "backend", "data": payload}
+        raise AssertionError(f"Unexpected path: {path}")
+
+    monkeypatch.setattr("app.tools.stock.backend_client.get_safe", fake_get_safe)
+    result = consultar_stock.invoke({"implemento": "Microscopio"})
 
     assert result["ok"] is True
     assert result["data"]["stock"]["total_stock"] == 12
     assert result["data"]["individuals_count"] == 8
-    assert "individuals_preview" not in result["data"]
+    assert result["data"]["implemento"] == "Microscopio"
+    assert result["presentation"]["ui_blocks"][0]["type"] == "stat_group"
+    assert "technical" not in result["presentation"]
 
 
 def test_detalle_implemento_success_is_sanitized(monkeypatch) -> None:
@@ -190,17 +200,24 @@ def test_detalle_implemento_success_is_sanitized(monkeypatch) -> None:
         ],
     }
 
-    monkeypatch.setattr(
-        "app.tools.details.backend_client.get_safe",
-        lambda *_args, **_kwargs: {"ok": True, "source": "backend", "data": payload},
-    )
-    result = detalle_implemento.invoke({"implement_uuid": "impl-1"})
+    def fake_get_safe(path, params=None):
+        if path == "/api/v2/implements":
+            assert params == {"name": "Microscopio"}
+            return {"ok": True, "source": "backend", "data": [{"uuid": "impl-1", "name": "Microscopio"}]}
+        if path == "/api/v2/implements/impl-1":
+            return {"ok": True, "source": "backend", "data": payload}
+        raise AssertionError(f"Unexpected path: {path}")
+
+    monkeypatch.setattr("app.tools.details.backend_client.get_safe", fake_get_safe)
+    result = detalle_implemento.invoke({"implemento": "Microscopio"})
 
     assert result["ok"] is True
-    assert result["data"]["uuid"] == "impl-1"
+    assert result["data"]["nombre"] == "Microscopio"
     assert result["data"]["item_type"] == "reusable"
     assert result["data"]["stock"]["min_stock"] == 3
     assert "recent_movements" not in result["data"]
+    assert result["presentation"]["ui_blocks"][0]["type"] == "entity_list"
+    assert "technical" not in result["presentation"]
 
 
 def test_listar_ubicaciones_success(monkeypatch) -> None:
@@ -218,6 +235,7 @@ def test_listar_ubicaciones_success(monkeypatch) -> None:
     assert result["ok"] is True
     assert result["data"]["count"] == 2
     assert result["data"]["items"][0]["nombre"] == "Bodega"
+    assert "uuid" not in result["data"]["items"][0]
 
 
 def test_listar_categorias_success(monkeypatch) -> None:
@@ -235,6 +253,7 @@ def test_listar_categorias_success(monkeypatch) -> None:
     assert result["ok"] is True
     assert result["data"]["count"] == 2
     assert result["data"]["items"][1]["nombre"] == "Optica"
+    assert "uuid" not in result["data"]["items"][1]
 
 
 def test_listar_prestamos_success_filters_and_limits_across_pages(monkeypatch) -> None:
@@ -323,6 +342,8 @@ def test_listar_prestamos_success_filters_and_limits_across_pages(monkeypatch) -
     first = result["data"]["items"][0]
     assert first["status"] == "prepared"
     assert "requester_uuid" not in first
+    assert "room" not in first
+    assert "subject" not in first
     assert first["items_count"] == 1
     assert first["totals"] == {"requested": 3, "reserved": 3, "delivered": 0}
 
@@ -460,8 +481,14 @@ def test_contar_prestamos_por_producto_counts_unique_loans(monkeypatch) -> None:
             return {"ok": True, "source": "backend", "data": page_two}
         raise AssertionError(f"Unexpected params: {params}")
 
-    monkeypatch.setattr("app.tools.analytics.backend_client.get_safe", fake_get_safe)
-    result = contar_prestamos_por_producto.invoke({"implement_uuid": "impl-1"})
+    def fake_get_safe_with_lookup(path, params=None):
+        if path == "/api/v2/implements":
+            assert params == {"name": "Microscopio"}
+            return {"ok": True, "source": "backend", "data": [{"uuid": "impl-1", "name": "Microscopio"}]}
+        return fake_get_safe(path, params=params)
+
+    monkeypatch.setattr("app.tools.analytics.backend_client.get_safe", fake_get_safe_with_lookup)
+    result = contar_prestamos_por_producto.invoke({"implemento": "Microscopio"})
 
     assert result["ok"] is True
     assert result["data"]["loan_count"] == 3
@@ -469,6 +496,7 @@ def test_contar_prestamos_por_producto_counts_unique_loans(monkeypatch) -> None:
     assert result["data"]["status_breakdown"]["approved"] == 2
     assert result["data"]["status_breakdown"]["overdue"] == 1
     assert result["data"]["count_mode"] == "unique_loans"
+    assert "technical" not in result["presentation"]
 
 
 def test_recomendar_reposicion_uses_operational_rule(monkeypatch) -> None:
@@ -549,10 +577,10 @@ def test_recomendar_reposicion_uses_operational_rule(monkeypatch) -> None:
     assert result["ok"] is True
     assert result["data"]["count"] == 2
     first = result["data"]["items"][0]
-    assert first["uuid"] == "impl-1"
+    assert first["nombre"] == "Guantes"
     assert first["recommendation_level"] == "critical"
     assert "stock disponible bajo el minimo" in first["reasons"]
-    assert result["data"]["items"][1]["uuid"] == "impl-3"
+    assert result["data"]["items"][1]["nombre"] == "Gasas"
 
 
 def test_resumen_inventario_por_categoria_groups_stock(monkeypatch) -> None:
@@ -611,3 +639,28 @@ def test_resumen_inventario_por_categoria_groups_stock(monkeypatch) -> None:
     assert first["implements_total"] == 2
     assert first["low_stock_items"] == 1
     assert first["stock"]["total_stock"] == 30
+
+
+def test_identifier_request_exposes_technical_block_only_for_coordinator(monkeypatch) -> None:
+    from app.client.context import set_query_intent, set_user_role
+
+    payload = [
+        {
+            "uuid": "impl-1",
+            "name": "Microscopio",
+            "active": True,
+            "available": True,
+            "stock": {"total_stock": 2, "available": 1, "min_stock": 1},
+        }
+    ]
+
+    monkeypatch.setattr(
+        "app.tools.catalog.backend_client.get_safe",
+        lambda *_args, **_kwargs: {"ok": True, "source": "backend", "data": payload},
+    )
+    set_user_role("COORDINADOR")
+    set_query_intent("identifier_request")
+
+    result = buscar_implementos.invoke({"nombre": "Microscopio"})
+
+    assert result["presentation"]["technical"]["items"][0]["uuid"] == "impl-1"
