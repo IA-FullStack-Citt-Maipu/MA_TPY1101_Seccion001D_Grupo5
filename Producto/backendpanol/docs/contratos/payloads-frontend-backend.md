@@ -66,14 +66,14 @@ Campos:
 
 ```json
 {
-  "rut": "22307980",
+  "rut": "223079801",
   "password": "******",
   "rememberMe": true
 }
 ```
 
 Nota frontend:
-- El RUT puede visualizarse formateado (`22.307.980`), pero se envia limpio (`22307980`).
+- El RUT puede visualizarse formateado (`22.307.980-1`), pero se envia limpio y completo con DV (`223079801`).
 
 ### Response 200
 
