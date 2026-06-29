@@ -56,7 +56,9 @@ public class ImplementV2Controller {
                 request.minStock(),
                 request.barcode(),
                 request.imgUrl(),
-                request.observations()
+                request.observations(),
+                request.costCenter(),
+                request.netValue()
         );
         return buildDetailResponse(created, authentication);
     }
@@ -74,7 +76,9 @@ public class ImplementV2Controller {
                 request.minStock(),
                 request.barcode(),
                 request.imgUrl(),
-                request.observations()
+                request.observations(),
+                request.costCenter(),
+                request.netValue()
         );
         return buildDetailResponse(updated, authentication);
     }
@@ -178,6 +182,8 @@ public class ImplementV2Controller {
                 summary.barcode(),
                 summary.imgUrl(),
                 implemento.observations(),
+                implemento.costCenter(),
+                implemento.netValue(),
                 implemento.activo(),
                 implemento.createdAt(),
                 implemento.updatedAt(),

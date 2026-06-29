@@ -16,3 +16,9 @@
 \ir ./V40__notification_role_routing_and_stock_alerts.sql
 \ir ./V41__email_outbox_resend_pipeline.sql
 \ir ./V42__fix_loan_request_notification_title.sql
+\ir ./V43__auto_reserved_loan_flow_notifications.sql
+\ir ./V44__loan_reserved_flow_consumable_closure.sql
+\ir ./V45__consumable_global_reservation_availability.sql
+\ir ./V46__loan_prepare_reserved_stock_reconciliation.sql
+\ir ./V47__loan_history_and_stock_reconciliation.sql
+\ir ./V48__implement_and_individual_accounting_fields.sql

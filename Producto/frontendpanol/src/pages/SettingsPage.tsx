@@ -353,10 +353,6 @@ export function SettingsPage({
               <dt>Rol asignado</dt>
               <dd>{roleLabel}</dd>
             </div>
-            <div className="settings-summary-list__row">
-              <dt>ID de usuario</dt>
-              <dd className="settings-summary-list__mono">{profile?.id ?? sessionUser?.id ?? "-"}</dd>
-            </div>
           </dl>
         </article>
 

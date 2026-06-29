@@ -91,7 +91,9 @@ public class StockJooqRepository implements StockRepository {
                         INDIVIDUAL.CONDITION,
                         INDIVIDUAL.NOTES,
                         LOCATION_UUID,
-                        INDIVIDUAL.ACTIVE
+                        INDIVIDUAL.ACTIVE,
+                        INDIVIDUAL.REMAINING_LIFE,
+                        INDIVIDUAL.ASSET_CODE_REPRINT_REQUIRED
                 )
                 .from(INDIVIDUAL)
                 .leftJoin(LOCATION).on(LOCATION.ID.eq(INDIVIDUAL.CURRENT_LOCATION_ID))
@@ -105,7 +107,9 @@ public class StockJooqRepository implements StockRepository {
                         record.get(INDIVIDUAL.CONDITION) == null ? null : record.get(INDIVIDUAL.CONDITION).getLiteral(),
                         record.get(INDIVIDUAL.NOTES),
                         record.get(LOCATION_UUID),
-                        record.get(INDIVIDUAL.ACTIVE)
+                        record.get(INDIVIDUAL.ACTIVE),
+                        record.get(INDIVIDUAL.REMAINING_LIFE),
+                        record.get(INDIVIDUAL.ASSET_CODE_REPRINT_REQUIRED)
                 ));
     }
 
@@ -127,7 +131,9 @@ public class StockJooqRepository implements StockRepository {
                         INDIVIDUAL.CONDITION,
                         INDIVIDUAL.NOTES,
                         LOCATION_UUID,
-                        INDIVIDUAL.ACTIVE
+                        INDIVIDUAL.ACTIVE,
+                        INDIVIDUAL.REMAINING_LIFE,
+                        INDIVIDUAL.ASSET_CODE_REPRINT_REQUIRED
                 )
                 .from(INDIVIDUAL)
                 .leftJoin(LOCATION).on(LOCATION.ID.eq(INDIVIDUAL.CURRENT_LOCATION_ID))
@@ -143,7 +149,9 @@ public class StockJooqRepository implements StockRepository {
                         record.get(INDIVIDUAL.CONDITION) == null ? null : record.get(INDIVIDUAL.CONDITION).getLiteral(),
                         record.get(INDIVIDUAL.NOTES),
                         record.get(LOCATION_UUID),
-                        record.get(INDIVIDUAL.ACTIVE)
+                        record.get(INDIVIDUAL.ACTIVE),
+                        record.get(INDIVIDUAL.REMAINING_LIFE),
+                        record.get(INDIVIDUAL.ASSET_CODE_REPRINT_REQUIRED)
                 ));
     }
 
@@ -167,6 +175,7 @@ public class StockJooqRepository implements StockRepository {
                 INDIVIDUAL.STATUS,
                 INDIVIDUAL.CONDITION,
                 INDIVIDUAL.CURRENT_LOCATION_ID,
+                INDIVIDUAL.ASSET_CODE_REPRINT_REQUIRED,
                 INDIVIDUAL.ACTIVE,
                 INDIVIDUAL.CREATED_AT,
                 INDIVIDUAL.UPDATED_AT
@@ -179,6 +188,7 @@ public class StockJooqRepository implements StockRepository {
                     IndividualStatusEnum.available,
                     IndividualConditionEnum.good,
                     locationId,
+                    false,
                     true,
                     now,
                     now
@@ -229,7 +239,10 @@ public class StockJooqRepository implements StockRepository {
             String conditionLiteral,
             String notes,
             UUID locationUuid,
-            Boolean active
+            Boolean active,
+            Integer remainingLife,
+            boolean remainingLifePresent,
+            Boolean assetCodeReprintRequired
     ) {
         if (individualUuids == null || individualUuids.isEmpty()) {
             return;
@@ -253,6 +266,12 @@ public class StockJooqRepository implements StockRepository {
         }
         if (active != null) {
             update = update.set(INDIVIDUAL.ACTIVE, active);
+        }
+        if (remainingLifePresent) {
+            update = update.set(INDIVIDUAL.REMAINING_LIFE, remainingLife);
+        }
+        if (assetCodeReprintRequired != null) {
+            update = update.set(INDIVIDUAL.ASSET_CODE_REPRINT_REQUIRED, assetCodeReprintRequired);
         }
 
         update.where(INDIVIDUAL.UUID.in(individualUuids)).execute();

@@ -28,7 +28,10 @@ public interface StockRepository {
             String conditionLiteral,
             String notes,
             UUID locationUuid,
-            Boolean active
+            Boolean active,
+            Integer remainingLife,
+            boolean remainingLifePresent,
+            Boolean assetCodeReprintRequired
     );
 
     record ImplementStockContext(UUID implementUuid, UUID locationUuid, StockItemType itemType, Boolean active) {

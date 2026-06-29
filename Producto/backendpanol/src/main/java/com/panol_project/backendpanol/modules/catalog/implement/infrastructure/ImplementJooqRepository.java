@@ -15,6 +15,7 @@ import com.panol_project.backendpanol.modules.catalog.implement.domain.Implement
 import com.panol_project.backendpanol.modules.catalog.implement.domain.ImplementSummary;
 import com.panol_project.backendpanol.modules.catalog.implement.domain.Implemento;
 import com.panol_project.backendpanol.modules.catalog.implement.domain.StockStatusFilter;
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.List;
@@ -62,6 +63,8 @@ public class ImplementJooqRepository implements ImplementRepository {
                         IMPLEMENT.BARCODE,
                         IMPLEMENT.IMG_URL,
                         IMPLEMENT.OBSERVATIONS,
+                        IMPLEMENT.COST_CENTER,
+                        IMPLEMENT.NET_VALUE,
                         IMPLEMENT.ACTIVE,
                         IMPLEMENT.CREATED_AT,
                         IMPLEMENT.UPDATED_AT
@@ -262,7 +265,9 @@ public class ImplementJooqRepository implements ImplementRepository {
             ImplementItemType itemType,
             String barcode,
             String imgUrl,
-            String observations
+            String observations,
+            String costCenter,
+            BigDecimal netValue
     ) {
         Long categoryId = findCategoryIdByUuid(categoriaUuid);
         Long locationId = findLocationIdByUuid(locationUuid);
@@ -276,6 +281,8 @@ public class ImplementJooqRepository implements ImplementRepository {
                 .set(IMPLEMENT.BARCODE, barcode)
                 .set(IMPLEMENT.IMG_URL, imgUrl)
                 .set(IMPLEMENT.OBSERVATIONS, observations)
+                .set(IMPLEMENT.COST_CENTER, costCenter)
+                .set(IMPLEMENT.NET_VALUE, netValue)
                 .returningResult(IMPLEMENT.UUID)
                 .fetchOptional(record -> record.get(IMPLEMENT.UUID))
                 .orElseThrow();
@@ -293,7 +300,9 @@ public class ImplementJooqRepository implements ImplementRepository {
             ImplementItemType itemType,
             String barcode,
             String imgUrl,
-            String observations
+            String observations,
+            String costCenter,
+            BigDecimal netValue
     ) {
         Long categoryId = findCategoryIdByUuid(categoriaUuid);
         Long locationId = findLocationIdByUuid(locationUuid);
@@ -307,6 +316,8 @@ public class ImplementJooqRepository implements ImplementRepository {
                 .set(IMPLEMENT.BARCODE, barcode)
                 .set(IMPLEMENT.IMG_URL, imgUrl)
                 .set(IMPLEMENT.OBSERVATIONS, observations)
+                .set(IMPLEMENT.COST_CENTER, costCenter)
+                .set(IMPLEMENT.NET_VALUE, netValue)
                 .set(IMPLEMENT.UPDATED_AT, OffsetDateTime.now())
                 .where(IMPLEMENT.UUID.eq(uuid))
                 .execute();
@@ -427,6 +438,8 @@ public class ImplementJooqRepository implements ImplementRepository {
                 record.get(IMPLEMENT.BARCODE),
                 record.get(IMPLEMENT.IMG_URL),
                 record.get(IMPLEMENT.OBSERVATIONS),
+                record.get(IMPLEMENT.COST_CENTER),
+                record.get(IMPLEMENT.NET_VALUE),
                 record.get(IMPLEMENT.ACTIVE),
                 record.get(IMPLEMENT.CREATED_AT),
                 record.get(IMPLEMENT.UPDATED_AT)

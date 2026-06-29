@@ -162,7 +162,10 @@ public class StockService implements StockMovementContract {
             String conditionRaw,
             String notesRaw,
             UUID locationUuid,
-            Boolean active
+            Boolean active,
+            Integer remainingLife,
+            boolean remainingLifePresent,
+            Boolean assetCodeReprintRequired
     ) {
         var context = requireContext(implementUuid);
         if (context.itemType() != StockItemType.INDIVIDUAL) {
@@ -178,7 +181,17 @@ public class StockService implements StockMovementContract {
             throw new NotFoundException("INDIVIDUAL_NOT_FOUND", "Individual no encontrado para el implemento");
         }
 
-        repository.updateIndividualsState(List.of(individualUuid), status, condition, notes, locationUuid, active);
+        repository.updateIndividualsState(
+                List.of(individualUuid),
+                status,
+                condition,
+                notes,
+                locationUuid,
+                active,
+                remainingLife,
+                remainingLifePresent,
+                assetCodeReprintRequired
+        );
         syncStockRowForIndividuals(implementUuid);
         recordInventoryMovement(implementUuid, MovementAction.MANUAL_ADJUSTMENT, 1, "Individual updated");
         outboxService.enqueue("implement", implementUuid, "StockIndividualUpdated", null, java.util.Map.of("individual_uuid", individualUuid.toString()));
@@ -220,31 +233,31 @@ public class StockService implements StockMovementContract {
             case STOCK_IN -> throw new BadRequestException("INDIVIDUAL_MOVEMENT_INVALID", "Para sumar stock individual usa /entries con asset_codes");
             case STOCK_OUT -> {
                 applyMovementDelta(context.implementUuid(), movementType, qty);
-                repository.updateIndividualsState(uuids, "retired", condition == null ? "irreparable" : condition, null, null, false);
+                repository.updateIndividualsState(uuids, "retired", condition == null ? "irreparable" : condition, null, null, false, null, false, null);
             }
             case LOAN_DELIVERY -> {
                 applyMovementDelta(context.implementUuid(), movementType, qty);
-                repository.updateIndividualsState(uuids, "loaned", condition, null, null, null);
+                repository.updateIndividualsState(uuids, "loaned", condition, null, null, null, null, false, null);
             }
             case LOAN_RETURN -> {
                 applyMovementDelta(context.implementUuid(), movementType, qty);
-                repository.updateIndividualsState(uuids, "available", condition == null ? "good" : condition, null, context.locationUuid(), null);
+                repository.updateIndividualsState(uuids, "available", condition == null ? "good" : condition, null, context.locationUuid(), null, null, false, null);
             }
             case DAMAGE_REPORT -> {
                 applyMovementDelta(context.implementUuid(), movementType, qty);
-                repository.updateIndividualsState(uuids, "damaged", condition == null ? "damaged_no_diagnosis" : condition, null, null, null);
+                repository.updateIndividualsState(uuids, "damaged", condition == null ? "damaged_no_diagnosis" : condition, null, null, null, null, false, null);
             }
             case MANUAL_ADJUSTMENT ->
-                    repository.updateIndividualsState(uuids, "available", condition == null ? "good" : condition, null, null, null);
+                    repository.updateIndividualsState(uuids, "available", condition == null ? "good" : condition, null, null, null, null, false, null);
             case CONSUMPTION ->
                     throw new BadRequestException("INDIVIDUAL_MOVEMENT_INVALID", "consumption solo aplica para implementos no individuales");
             case DISCARD -> {
                 applyMovementDelta(context.implementUuid(), movementType, qty);
-                repository.updateIndividualsState(uuids, "retired", condition == null ? "irreparable" : condition, null, null, false);
+                repository.updateIndividualsState(uuids, "retired", condition == null ? "irreparable" : condition, null, null, false, null, false, null);
             }
             case LOSS -> {
                 applyMovementDelta(context.implementUuid(), movementType, qty);
-                repository.updateIndividualsState(uuids, "retired", condition == null ? "irreparable" : condition, null, null, false);
+                repository.updateIndividualsState(uuids, "retired", condition == null ? "irreparable" : condition, null, null, false, null, false, null);
             }
         }
 

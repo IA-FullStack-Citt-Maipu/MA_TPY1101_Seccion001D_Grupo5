@@ -1,7 +1,7 @@
 ﻿# Modulo: catalog/implement
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-06-28
+- Ultima verificacion: 2026-06-29
 - Fuente de verdad: `ImplementV2Controller`, `ImplementService`, `ImplementJooqRepository`, contratos `application.contract`
 
 ## Responsabilidad
@@ -41,3 +41,12 @@ Notas de contrato:
 - Categoria y ubicacion validadas por contrato.
 - Reglas de nombre y estado activo/inactivo.
 - Respuesta de error con `code` estable.
+
+## Campos informativos vigentes
+
+- Todo implemento puede guardar `cost_center` y `net_value` como metadata contable opcional.
+- `cost_center` se captura solo con digitos y con maximo 10 caracteres.
+- `net_value` se captura como monto entero de hasta 9 digitos.
+- Solo las unidades `individual` pueden guardar `remaining_life` y `asset_code_reprint_required`.
+- `asset_code_reprint_required` queda persistido por unidad y nace en `false` para activos existentes y nuevos.
+- En el estado actual estos campos son solo informativos: no participan en reglas de stock, prestamos ni disponibilidad.

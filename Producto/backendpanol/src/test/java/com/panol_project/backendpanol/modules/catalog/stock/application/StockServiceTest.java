@@ -58,9 +58,9 @@ class StockServiceTest {
                 .thenReturn(Optional.of(new StockCounters(3, 2, 1, 1, 0, 1)));
         when(repository.findActiveIndividualsByImplementUuid(implementUuid))
                 .thenReturn(List.of(
-                        new IndividualItem(UUID.randomUUID(), implementUuid, "A1", "available", "good", null, locationUuid, true),
-                        new IndividualItem(UUID.randomUUID(), implementUuid, "A2", "loaned", "damaged_repairable", null, locationUuid, true),
-                        new IndividualItem(UUID.randomUUID(), implementUuid, "A3", "damaged", "damaged_no_diagnosis", null, locationUuid, true)
+                        new IndividualItem(UUID.randomUUID(), implementUuid, "A1", "available", "good", null, locationUuid, true, 38, false),
+                        new IndividualItem(UUID.randomUUID(), implementUuid, "A2", "loaned", "damaged_repairable", null, locationUuid, true, null, false),
+                        new IndividualItem(UUID.randomUUID(), implementUuid, "A3", "damaged", "damaged_no_diagnosis", null, locationUuid, true, -13, true)
                 ));
 
         StockService service = new StockService(repository, outboxService, inventoryMovementRepository, currentUserUuidResolver);
@@ -71,6 +71,8 @@ class StockServiceTest {
         assertEquals(1, detail.stock().available());
         assertEquals(1, detail.stock().reserved());
         assertEquals(1, detail.stock().damaged());
+        assertEquals(38, detail.individuals().getFirst().remainingLife());
+        assertEquals(false, detail.individuals().getFirst().assetCodeReprintRequired());
     }
 
     @Test
@@ -99,6 +101,78 @@ class StockServiceTest {
 
         assertEquals("INDIVIDUAL_NOT_ALLOWED_FOR_ITEM_TYPE", ex.getCode());
         verify(repository, never()).updateStock(eq(implementUuid), anyInt(), anyInt(), anyInt(), anyInt(), anyInt());
+    }
+
+    @Test
+    void updateIndividualDebePropagarRemainingLifeYReprintFlag() {
+        UUID implementUuid = UUID.randomUUID();
+        UUID locationUuid = UUID.randomUUID();
+        UUID individualUuid = UUID.randomUUID();
+
+        when(repository.findImplementContext(implementUuid))
+                .thenReturn(Optional.of(new StockRepository.ImplementStockContext(
+                        implementUuid,
+                        locationUuid,
+                        StockItemType.INDIVIDUAL,
+                        true
+                )));
+        when(repository.findActiveIndividualsByUuids(implementUuid, List.of(individualUuid)))
+                .thenReturn(List.of(new IndividualItem(
+                        individualUuid,
+                        implementUuid,
+                        "ACT-001",
+                        "available",
+                        "good",
+                        null,
+                        locationUuid,
+                        true,
+                        null,
+                        false
+                )));
+        when(repository.findStockByImplementUuid(implementUuid))
+                .thenReturn(Optional.of(new StockCounters(1, 0, 1, 0, 0, 0)));
+        when(repository.findActiveIndividualsByImplementUuid(implementUuid))
+                .thenReturn(List.of(new IndividualItem(
+                        individualUuid,
+                        implementUuid,
+                        "ACT-001",
+                        "available",
+                        "good",
+                        "Actualizado",
+                        locationUuid,
+                        true,
+                        38,
+                        true
+                )));
+        when(currentUserUuidResolver.resolveCurrentUserUuid()).thenReturn(Optional.of(UUID.randomUUID()));
+
+        StockService service = new StockService(repository, outboxService, inventoryMovementRepository, currentUserUuidResolver);
+        StockDetail detail = service.updateIndividual(
+                implementUuid,
+                individualUuid,
+                "available",
+                "good",
+                "Actualizado",
+                locationUuid,
+                true,
+                38,
+                true,
+                true
+        );
+
+        verify(repository).updateIndividualsState(
+                List.of(individualUuid),
+                "available",
+                "good",
+                "Actualizado",
+                locationUuid,
+                true,
+                38,
+                true,
+                true
+        );
+        assertEquals(38, detail.individuals().getFirst().remainingLife());
+        assertEquals(true, detail.individuals().getFirst().assetCodeReprintRequired());
     }
 
     @Test

@@ -12,6 +12,10 @@ public record IndividualV2Response(
         String notes,
         @JsonProperty("current_location_uuid")
         UUID currentLocationUuid,
-        Boolean active
+        Boolean active,
+        @JsonProperty("remaining_life")
+        Integer remainingLife,
+        @JsonProperty("asset_code_reprint_required")
+        Boolean assetCodeReprintRequired
 ) {
 }

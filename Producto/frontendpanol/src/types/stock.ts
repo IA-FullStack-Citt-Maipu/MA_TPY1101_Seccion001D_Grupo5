@@ -26,6 +26,8 @@ export interface IndividualItem {
   notes: string | null;
   current_location_uuid: string | null;
   active: boolean;
+  remaining_life: number | null;
+  asset_code_reprint_required: boolean;
 }
 
 export interface StockDetail {
@@ -53,4 +55,6 @@ export interface IndividualUpdatePayload {
   notes?: string | null;
   current_location_uuid?: string | null;
   active?: boolean;
+  remaining_life?: number | null;
+  asset_code_reprint_required?: boolean;
 }

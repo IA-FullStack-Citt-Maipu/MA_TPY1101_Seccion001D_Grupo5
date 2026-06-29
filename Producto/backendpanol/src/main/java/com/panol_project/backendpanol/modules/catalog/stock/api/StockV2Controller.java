@@ -56,7 +56,10 @@ public class StockV2Controller {
                 request.condition(),
                 request.notes(),
                 request.currentLocationUuid(),
-                request.active()
+                request.active(),
+                request.remainingLife(),
+                request.remainingLifePresent(),
+                request.assetCodeReprintRequired()
         ));
     }
 
@@ -79,7 +82,9 @@ public class StockV2Controller {
                         item.condition(),
                         item.notes(),
                         item.currentLocationUuid(),
-                        item.active()
+                        item.active(),
+                        item.remainingLife(),
+                        item.assetCodeReprintRequired()
                 )).toList()
         );
     }

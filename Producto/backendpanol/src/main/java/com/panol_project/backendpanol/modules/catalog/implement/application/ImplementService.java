@@ -10,6 +10,7 @@ import com.panol_project.backendpanol.modules.catalog.implement.domain.StockStat
 import com.panol_project.backendpanol.modules.catalog.location.application.contract.LocationValidationContract;
 import com.panol_project.backendpanol.shared.error.BadRequestException;
 import com.panol_project.backendpanol.shared.error.NotFoundException;
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
@@ -46,7 +47,9 @@ public class ImplementService implements ImplementLookupContract {
             Integer minStock,
             String barcode,
             String imgUrl,
-            String observations
+            String observations,
+            String costCenter,
+            BigDecimal netValue
     ) {
         categoryValidationContract.validarCategoriaActivaParaImplemento(categoriaUuid);
         String normalizedName = normalizeNombre(nombre);
@@ -54,6 +57,7 @@ public class ImplementService implements ImplementLookupContract {
         String normalizedBarcode = normalizeBarcode(barcode);
         String normalizedImgUrl = normalizeOptional(imgUrl);
         String normalizedObservations = normalizeObservations(observations);
+        String normalizedCostCenter = normalizeCostCenter(costCenter);
         ImplementItemType normalizedItemType = parseItemType(itemType);
         locationValidationContract.validarLocationExistente(locationUuid);
         validateUniqueActiveNameForCreate(normalizedName, categoriaUuid);
@@ -67,7 +71,9 @@ public class ImplementService implements ImplementLookupContract {
                     normalizedItemType,
                     normalizedBarcode,
                     normalizedImgUrl,
-                    normalizedObservations
+                    normalizedObservations,
+                    normalizedCostCenter,
+                    netValue
             );
             repository.updateMinStockByImplementUuid(created.uuid(), minStock);
             return created;
@@ -90,7 +96,9 @@ public class ImplementService implements ImplementLookupContract {
             Integer minStock,
             String barcode,
             String imgUrl,
-            String observations
+            String observations,
+            String costCenter,
+            BigDecimal netValue
     ) {
         Implemento existing = requireImplement(uuid);
         if (!Boolean.TRUE.equals(existing.activo())) {
@@ -101,6 +109,7 @@ public class ImplementService implements ImplementLookupContract {
         String normalizedBarcode = normalizeBarcode(barcode);
         String normalizedImgUrl = normalizeOptional(imgUrl);
         String normalizedObservations = normalizeObservations(observations);
+        String normalizedCostCenter = normalizeCostCenter(costCenter);
         ImplementItemType normalizedItemType = parseItemType(itemType);
         validateImmutableCategory(existing, categoriaUuid);
         validateImmutableItemType(existing, normalizedItemType);
@@ -117,7 +126,9 @@ public class ImplementService implements ImplementLookupContract {
                     normalizedItemType,
                     normalizedBarcode,
                     normalizedImgUrl,
-                    normalizedObservations
+                    normalizedObservations,
+                    normalizedCostCenter,
+                    netValue
             );
             repository.updateMinStockByImplementUuid(updated.uuid(), minStock);
             return updated;
@@ -220,6 +231,10 @@ public class ImplementService implements ImplementLookupContract {
 
     private String normalizeObservations(String observations) {
         return normalizeOptional(observations);
+    }
+
+    private String normalizeCostCenter(String costCenter) {
+        return normalizeOptional(costCenter);
     }
 
     private String normalizeBarcode(String barcode) {
