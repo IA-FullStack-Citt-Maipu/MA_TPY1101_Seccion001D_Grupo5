@@ -154,6 +154,11 @@ Notas:
 - El frontend no debe persistirlo en `localStorage` ni `sessionStorage`.
 - El token incluye `aud = bot-panol` y no reemplaza al access token web basado
   en cookies.
+- El token puente es exclusivo del flujo `AI-Agent`: no debe reutilizarse como
+  token general del backend.
+- Cuando `token_use = bot-panol`, el backend solo lo acepta con
+  `X-Client-Origin: AI-Agent`, `X-Client-Secret` valido y metodos de solo lectura
+  (`GET`, `HEAD`, `OPTIONS`).
 
 ## 8) Cambio de correo del usuario actual
 
@@ -244,6 +249,8 @@ Error funcional esperado:
 - `src/services/botService.ts` solicita `POST /api/v2/auth/me/bot-token` usando
   la sesion por cookies y luego llama `POST /api/v1/chat` con
   `Authorization: Bearer <token-puente>`.
+- `POST /api/v1/chat` puede responder `ui_blocks` opcional para que el frontend
+  renderice listas y metricas enriquecidas sin depender solo de Markdown.
 - `src/services/apiClient.ts` trabaja con `withCredentials: true` y hace
   refresh silencioso contra `POST /api/v2/auth/refresh` cuando recibe `401`.
 - `src/services/profileService.ts` consume `GET /api/v2/auth/me`,

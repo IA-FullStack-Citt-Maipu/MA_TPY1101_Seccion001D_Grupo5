@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from time import perf_counter
 from typing import Any
 
@@ -5,13 +7,7 @@ from langchain_core.tools import tool
 
 from app.client.backend import backend_client
 from app.observability.metrics import record_tool_call
-
-
-def _safe_int(value: Any) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return 0
+from app.tools.common import build_entity_list_block, build_tool_output, safe_int
 
 
 @tool
@@ -31,6 +27,9 @@ def listar_implementos_bajo_stock_minimo() -> dict[str, Any]:
         payload = []
 
     items: list[dict[str, Any]] = []
+    technical_items: list[dict[str, Any]] = []
+    entities: list[dict[str, Any]] = []
+
     for item in payload:
         if not isinstance(item, dict):
             continue
@@ -40,41 +39,45 @@ def listar_implementos_bajo_stock_minimo() -> dict[str, Any]:
             stock = {}
 
         active = bool(item.get("active"))
-        min_stock = _safe_int(stock.get("min_stock"))
-        available = _safe_int(stock.get("available"))
-
-        if not active:
-            continue
-        if min_stock <= 0:
-            continue
-        if available >= min_stock:
+        min_stock = safe_int(stock.get("min_stock"))
+        available = safe_int(stock.get("available"))
+        if not active or min_stock <= 0 or available >= min_stock:
             continue
 
-        items.append(
+        stock_gap = min_stock - available
+        safe_item = {
+            "nombre": item.get("name"),
+            "activo": active,
+            "stock": {
+                "total_stock": stock.get("total_stock"),
+                "min_stock": stock.get("min_stock"),
+                "available": stock.get("available"),
+                "reserved": stock.get("reserved"),
+                "loaned": stock.get("loaned"),
+                "damaged": stock.get("damaged"),
+            },
+            "stock_gap": stock_gap,
+        }
+        items.append(safe_item)
+        technical_items.append({"nombre": item.get("name"), "uuid": item.get("uuid")})
+        entities.append(
             {
-                "uuid": item.get("uuid"),
-                "nombre": item.get("name"),
-                "activo": active,
-                "disponible": item.get("available"),
-                "stock": {
-                    "total_stock": stock.get("total_stock"),
-                    "min_stock": stock.get("min_stock"),
-                    "available": stock.get("available"),
-                    "reserved": stock.get("reserved"),
-                    "loaned": stock.get("loaned"),
-                    "damaged": stock.get("damaged"),
-                },
-                "stock_gap": min_stock - available,
+                "title": item.get("name"),
+                "subtitle": "Bajo stock minimo",
+                "meta": [
+                    f"Disponible: {available}",
+                    f"Minimo: {min_stock}",
+                    f"Brecha: {stock_gap}",
+                ],
+                "badges": ["Alerta operativa"],
             }
         )
 
-    output = {
-        "ok": True,
-        "source": "backend",
-        "data": {
-            "count": len(items),
-            "items": items,
-        },
-    }
+    output = build_tool_output(
+        data={"count": len(items), "items": items},
+        summary=f"Hay {len(items)} implementos bajo stock minimo.",
+        ui_blocks=[build_entity_list_block("Alertas de stock minimo", entities)] if entities else [],
+        technical={"items": technical_items},
+    )
     record_tool_call("listar_implementos_bajo_stock_minimo", "success", 200, perf_counter() - started_at)
     return output

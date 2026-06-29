@@ -1,5 +1,5 @@
 import { startTransition, useEffect, useRef, useState } from "react";
-import type { ChatHistoryMessage, ChatMessage, ChatRole } from "../components/chat/chat.types";
+import type { ChatHistoryMessage, ChatMessage, ChatRole, ChatUiBlock } from "../components/chat/chat.types";
 import { botService, isBotUnauthorizedError } from "../services/botService";
 
 interface BotAccessTokenCacheEntry {
@@ -14,12 +14,13 @@ function createTimestamp(date = new Date()): string {
   }).format(date);
 }
 
-function createMessage(role: ChatRole, content: string): ChatMessage {
+function createMessage(role: ChatRole, content: string, uiBlocks?: ChatUiBlock[]): ChatMessage {
   return {
     id: crypto.randomUUID(),
     role,
     content,
     timestamp: createTimestamp(),
+    uiBlocks,
   };
 }
 
@@ -30,8 +31,11 @@ function toHistoryEntry(message: ChatMessage): ChatHistoryMessage {
   };
 }
 
-function resolveAssistantText(responseText: string): string {
+function resolveAssistantText(responseText: string, uiBlocks?: readonly ChatUiBlock[]): string {
   const normalizedText = responseText.trim();
+  if (normalizedText.length === 0 && uiBlocks && uiBlocks.length > 0) {
+    return "";
+  }
   return normalizedText.length > 0
     ? normalizedText
     : "El asistente no devolvio contenido util. Intenta reformular tu consulta.";
@@ -133,7 +137,11 @@ export function useChatAssistant() {
         }, authToken);
       }
 
-      const assistantMessage = createMessage("assistant", resolveAssistantText(response.response));
+      const assistantMessage = createMessage(
+        "assistant",
+        resolveAssistantText(response.response, response.ui_blocks),
+        response.ui_blocks,
+      );
       historyRef.current = [
         ...priorHistory,
         toHistoryEntry(userMessage),
