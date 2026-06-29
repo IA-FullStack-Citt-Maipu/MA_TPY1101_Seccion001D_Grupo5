@@ -385,7 +385,7 @@ class SolicitarPrestamoPersistenceTest {
         SecurityContextHolder.clearContext();
 
         assertEquals("LOAN_DUPLICATE_REQUEST", ex.getCode());
-        assertEquals("Ya tienes una solicitud pendiente con uno o más de estos implementos", ex.getMessage());
+        assertEquals("Ya tienes una solicitud activa con uno o mas de estos implementos en la misma ventana horaria", ex.getMessage());
     }
 
     @Test
