@@ -93,7 +93,7 @@ class SolicitarPrestamoUseCaseTest {
     }
 
     @Test
-    void solicitarDebeCrearPrestamoPendienteYRetornarResumenEnriquecido() {
+    void solicitarDebeCrearPrestamoAutoReservadoYRetornarResumenEnriquecido() {
         UUID requesterUuid = UUID.randomUUID();
         UUID roomUuid = UUID.randomUUID();
         UUID subjectUuid = UUID.randomUUID();
@@ -116,23 +116,23 @@ class SolicitarPrestamoUseCaseTest {
                 requesterUuid,
                 roomUuid,
                 subjectUuid,
-                LoanStatus.PENDING,
+                LoanStatus.APPROVED,
                 scheduledAt,
                 null,
                 OffsetDateTime.parse("2026-05-21T21:00:00-04:00"),
-                List.of(new LoanDetailItem(implementUuid, 2, 0, 0))
+                List.of(new LoanDetailItem(implementUuid, 2, 2, 0))
         );
         LoanSummaryView expectedSummary = new LoanSummaryView(
                 loanUuid,
                 requesterUuid,
-                LoanStatus.PENDING,
+                LoanStatus.APPROVED,
                 scheduledAt,
                 null,
                 OffsetDateTime.parse("2026-05-21T21:00:00-04:00"),
                 null,
                 new LoanSummaryView.RoomView(roomUuid, "Sala 301"),
                 new LoanSummaryView.SubjectView(subjectUuid, "Anatomia"),
-                List.of(new LoanSummaryView.ItemView(implementUuid, "Fonendoscopio", 2, 0, 0))
+                List.of(new LoanSummaryView.ItemView(implementUuid, "Fonendoscopio", 2, 2, 0))
         );
 
         when(loanRepositoryPort.existsActiveRequesterByUuid(requesterUuid)).thenReturn(true);
@@ -158,6 +158,7 @@ class SolicitarPrestamoUseCaseTest {
 
         LoanCreateCommand persisted = createCommandCaptor.getValue();
         assertEquals(requesterUuid, persisted.requesterUuid());
+        assertEquals(UUID.fromString("99999999-9999-9999-9999-999999999999"), persisted.actorUuid());
         assertEquals(roomUuid, persisted.roomUuid());
         assertEquals(subjectUuid, persisted.subjectUuid());
         assertEquals(scheduledAt, persisted.scheduledAt());
@@ -364,7 +365,7 @@ class SolicitarPrestamoUseCaseTest {
 
         assertEquals("LOAN_DUPLICATE_REQUEST", ex.getCode());
         assertEquals(org.springframework.http.HttpStatus.CONFLICT, ex.getStatus());
-        assertEquals("Ya tienes una solicitud pendiente con uno o m\u00e1s de estos implementos", ex.getMessage());
+        assertEquals("Ya tienes una solicitud activa con uno o mas de estos implementos en la misma ventana horaria", ex.getMessage());
         verify(loanRepositoryPort).existsActiveRequesterByUuid(requesterUuid);
         verify(loanRepositoryPort).existsActiveRoomByUuid(roomUuid);
         verify(loanRepositoryPort).findImplementAvailabilityByUuid(implementUuid);
@@ -475,7 +476,7 @@ class SolicitarPrestamoUseCaseTest {
 
         assertEquals("LOAN_STOCK_CONFLICT", ex.getCode());
         assertEquals(
-                "Solo puedes solicitar dentro del stock disponible. Arcillas de dientes tiene 5 unidad(es) disponibles para la fecha y hora seleccionadas.",
+                "Solo puedes solicitar dentro del stock disponible. Arcillas de dientes tiene 5 unidad(es) disponibles para esta solicitud.",
                 ex.getMessage()
         );
         verify(loanRepositoryPort).existsActiveRequesterByUuid(requesterUuid);
@@ -510,7 +511,7 @@ class SolicitarPrestamoUseCaseTest {
     }
 
     @Test
-    void modificarDebeRechazarPrestamoNoPendienteAntesDeValidarHorario() {
+    void modificarDebeRechazarPrestamoNoAprobadoAntesDeValidarHorario() {
         UUID loanUuid = UUID.randomUUID();
         UUID requesterUuid = UUID.randomUUID();
         UUID roomUuid = UUID.randomUUID();
@@ -529,7 +530,7 @@ class SolicitarPrestamoUseCaseTest {
         LoanSummaryView existingLoan = new LoanSummaryView(
                 loanUuid,
                 requesterUuid,
-                LoanStatus.APPROVED,
+                LoanStatus.PREPARED,
                 OffsetDateTime.parse("2026-06-19T12:00:00-04:00"),
                 OffsetDateTime.parse("2026-06-19T14:00:00-04:00"),
                 OffsetDateTime.parse("2026-06-09T10:00:00-04:00"),

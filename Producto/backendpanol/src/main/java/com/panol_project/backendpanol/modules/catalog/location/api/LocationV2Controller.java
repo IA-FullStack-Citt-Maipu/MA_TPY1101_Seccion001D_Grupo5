@@ -1,12 +1,14 @@
 package com.panol_project.backendpanol.modules.catalog.location.api;
 
 import com.panol_project.backendpanol.modules.catalog.location.api.dto.CreateLocationRequest;
+import com.panol_project.backendpanol.modules.catalog.location.api.dto.LocationAssociationV2Response;
 import com.panol_project.backendpanol.modules.catalog.location.api.dto.LocationSelectorV2Response;
 import com.panol_project.backendpanol.modules.catalog.location.api.dto.UpdateLocationRequest;
 import com.panol_project.backendpanol.modules.catalog.location.application.LocationService;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -44,6 +46,19 @@ public class LocationV2Controller {
         return locations.stream().map(location -> new LocationSelectorV2Response(location.uuid(), location.name(), location.description(), location.active())).toList();
     }
 
+    @GetMapping("/{locationUuid}/associations")
+    @PreAuthorize("hasRole('COORDINADOR')")
+    public LocationAssociationV2Response associations(@PathVariable UUID locationUuid) {
+        var summary = locationService.obtenerResumenAsociaciones(locationUuid);
+        return new LocationAssociationV2Response(
+                summary.locationUuid(),
+                summary.totalAssociations(),
+                summary.implementAssociations(),
+                summary.individualAssociations(),
+                summary.totalAssociations() == 0
+        );
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasRole('COORDINADOR')")
@@ -64,5 +79,12 @@ public class LocationV2Controller {
     public LocationSelectorV2Response setActive(@PathVariable UUID locationUuid, @RequestParam boolean active) {
         var updated = locationService.setActive(locationUuid, active);
         return new LocationSelectorV2Response(updated.uuid(), updated.name(), updated.description(), updated.active());
+    }
+
+    @DeleteMapping("/{locationUuid}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasRole('COORDINADOR')")
+    public void delete(@PathVariable UUID locationUuid) {
+        locationService.eliminar(locationUuid);
     }
 }

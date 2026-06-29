@@ -112,7 +112,7 @@ export function InventoryImplementCreatePage({
 
   const pageTitle = isEditMode ? "Edicion de implemento" : "Agregar Nuevo Implemento";
   const pageDescription = isEditMode
-    ? "Actualiza los detalles tecnicos, operativos y visuales del implemento."
+    ? "Actualiza la ubicacion, el stock minimo y los datos descriptivos del implemento."
     : "Completa los detalles tecnicos del nuevo equipo o insumo medico.";
   const cancelHash = isEditMode && implementUuid ? `#/inventory/implementos/${implementUuid}` : "#/inventory/implementos";
 
@@ -235,21 +235,13 @@ export function InventoryImplementCreatePage({
     [loadingLocations, locationUuidRaw, locations.length],
   );
 
-  const currentCategoryInactive = Boolean(implement?.category && !implement.category.active);
   const inactiveCategoryOption =
-    currentCategoryInactive && implement?.category
+    implement?.category && !implement.category.active
       ? {
           uuid: implement.category.uuid,
           name: implement.category.name,
         }
       : null;
-
-  const isUsingInactiveCategory = useMemo(() => {
-    if (!inactiveCategoryOption) {
-      return false;
-    }
-    return categoryUuidRaw.trim() === inactiveCategoryOption.uuid;
-  }, [categoryUuidRaw, inactiveCategoryOption]);
 
   function validateClientSide(): FieldErrors {
     const errors: FieldErrors = {};
@@ -266,9 +258,6 @@ export function InventoryImplementCreatePage({
     }
     if (!categoryUuid) {
       errors.categoryUuid = "La categoria es obligatoria.";
-    }
-    if (currentCategoryInactive && isUsingInactiveCategory) {
-      errors.categoryUuid = "Debes seleccionar una categoria activa para guardar.";
     }
     if (itemTypeRaw.trim().length === 0) {
       errors.itemType = "El tipo de implemento es obligatorio.";
@@ -409,7 +398,10 @@ export function InventoryImplementCreatePage({
               </div>
 
               <div className="implement-create-form__field">
-                <label htmlFor="implement-create-category">Categoria *</label>
+                <label htmlFor="implement-create-category">
+                  <span>Categoria *</span>
+                  {isEditMode ? <span className="implement-create-form__label-note">Bloqueada en edicion</span> : null}
+                </label>
                 <select
                   id="implement-create-category"
                   value={categoryUuidRaw}
@@ -417,7 +409,7 @@ export function InventoryImplementCreatePage({
                     setCategoryUuidRaw(event.target.value);
                     setFieldErrors((current) => ({ ...current, categoryUuid: undefined }));
                   }}
-                  disabled={isCategoryDisabled || saving || loadingImplement}
+                  disabled={isEditMode || isCategoryDisabled || saving || loadingImplement}
                 >
                   {inactiveCategoryOption ? (
                     <option value={inactiveCategoryOption.uuid} disabled>
@@ -458,7 +450,10 @@ export function InventoryImplementCreatePage({
               </div>
 
               <div className="implement-create-form__field">
-                <label htmlFor="implement-create-item-type">Tipo de item *</label>
+                <label htmlFor="implement-create-item-type">
+                  <span>Tipo de item *</span>
+                  {isEditMode ? <span className="implement-create-form__label-note">Bloqueado en edicion</span> : null}
+                </label>
                 <select
                   id="implement-create-item-type"
                   value={itemTypeRaw}
@@ -466,7 +461,7 @@ export function InventoryImplementCreatePage({
                     setItemTypeRaw(event.target.value as ItemType | "");
                     setFieldErrors((current) => ({ ...current, itemType: undefined }));
                   }}
-                  disabled={saving || loadingImplement}
+                  disabled={isEditMode || saving || loadingImplement}
                 >
                   <option value="">Seleccionar...</option>
                   {ITEM_TYPE_OPTIONS.map((option) => (
@@ -569,7 +564,7 @@ export function InventoryImplementCreatePage({
 
             <p className="field-hint">
               {isEditMode
-                ? "Revisa categoria, ubicacion, stock minimo y datos descriptivos antes de guardar."
+                ? "En edicion, categoria y tipo quedan fijos para no romper historial ni stock del implemento."
                 : "Los implementos nuevos quedan con stock inicial 0 hasta registrar su primer ingreso en movimientos."}
             </p>
 
@@ -594,8 +589,7 @@ export function InventoryImplementCreatePage({
                   categoryUuidRaw.trim().length === 0 ||
                   itemTypeRaw.trim().length === 0 ||
                   locationUuidRaw.trim().length === 0 ||
-                  minStockRaw.trim().length === 0 ||
-                  (currentCategoryInactive && isUsingInactiveCategory)
+                  minStockRaw.trim().length === 0
                 }
               >
                 <Save size={16} />
@@ -631,7 +625,7 @@ export function InventoryImplementCreatePage({
             </header>
             <p>
               {isEditMode
-                ? "Si cambias categoria o ubicacion, valida que sigan alineadas con la operacion real del panol."
+                ? "Categoria y tipo ya no se pueden cambiar desde esta vista para evitar inconsistencias entre stock logico y unidades individuales."
                 : "Todos los implementos nuevos se registran con estado sin stock hasta que se ingrese la primera entrada de almacen."}
             </p>
           </article>

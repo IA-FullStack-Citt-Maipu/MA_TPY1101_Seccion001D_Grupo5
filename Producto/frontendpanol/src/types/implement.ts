@@ -37,10 +37,13 @@ export interface ImplementSummary {
   name: string;
   description?: string | null;
   barcode?: string | null;
+  individualAssetCodes?: string[] | null;
+  individual_asset_codes?: string[] | null;
   imgUrl?: string | null;
   img_url?: string | null;
   active?: boolean;
   available?: boolean;
+  item_type?: "consumable" | "reusable" | "individual" | null;
   category: {
     uuid: string;
     name: string;

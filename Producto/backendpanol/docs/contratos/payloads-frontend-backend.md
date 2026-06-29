@@ -1,10 +1,10 @@
 - Estado del documento: vigente
-- Ultima verificacion: 2026-06-10
+- Ultima verificacion: 2026-06-28
 - Fuente de verdad: ver matriz canonica vigente y codigo fuente actual
 
 # Payloads Frontend / Backend
 
-- Ultima actualizacion: 2026-06-26
+- Ultima actualizacion: 2026-06-28
 - Alcance: contratos JSON usados por frontend y backend
 
 ## 1) Payload de error publico (backend -> frontend)
@@ -257,3 +257,182 @@ Error funcional esperado:
   `GET /api/v2/auth/me/sessions`, `DELETE /api/v2/auth/me/sessions/{sessionId}`,
   `PATCH /api/v2/auth/me/email` y `PATCH /api/v2/auth/me/password`.
 - Cualquier otro detalle tecnico debe permanecer en logs internos del backend.
+
+## 12) Prestamos v2
+
+### Flujo vigente
+
+- `POST /api/v2/loans` crea la solicitud y auto-reserva el detalle completo en la misma transaccion.
+- Los prestamos nuevos nacen en `approved` como estado tecnico de reserva, pero en UI deben leerse como "Reservado".
+- La auto-reserva no descuenta stock fisico al crear o editar.
+- Para `reusable` e `individual`, la disponibilidad sigue evaluandose por traslape del rango solicitado.
+- Para `consumable`, la disponibilidad reservada queda bloqueada globalmente mientras el prestamo siga en `approved` o `prepared`.
+- El docente solo recibe notificacion cuando el prestamo pasa a `prepared`, no cuando entra en `approved`.
+- `PATCH /api/v2/loans/{loanUuid}` reutiliza el payload de creacion y solo se permite mientras el prestamo siga en `approved`.
+- `PATCH /api/v2/loans/{loanUuid}/cancel` mantiene cancelacion operativa para reservas/preparaciones activas.
+- `POST /api/v2/loans/{loanUuid}/prepare` separa fisicamente implementos y hoy solo valida estado `approved`.
+- `POST /api/v2/loans/{loanUuid}/delivery` solo acepta prestamos `prepared`.
+- La entrega sigue siendo el punto flexible para variar cantidades, reseleccionar `asset_codes` y agregar implementos extra.
+- Los items `consumable` se cierran en la entrega. Si el prestamo entregado no deja retornables pendientes, se auto-finaliza en `completed`.
+- `GET /api/v2/loans/{loanUuid}/return-context` expone los items pendientes de devolucion y, para `individual`, las unidades entregadas aun abiertas.
+- `POST /api/v2/loans/{loanUuid}/return` procesa devolucion con variaciones.
+- `POST /api/v2/loans/{loanUuid}/complete` cierra todos los retornables pendientes como retorno correcto.
+
+### Query de listado (`GET /api/v2/loans`)
+
+- `page` y `size` mantienen la paginacion actual.
+- `mine=true|false` mantiene el filtro por visibilidad del solicitante segun rol.
+- `from` y `to` son opcionales, pero deben enviarse juntos si se usan.
+- `from` es inclusivo y `to` es exclusivo sobre `scheduled_at`.
+- Cuando `from`/`to` no se envian, el endpoint conserva el comportamiento historico del listado general.
+- La agenda mensual consume este filtro por rango visible para evitar traer todo el universo de prestamos.
+
+### Response resumen/detalle (`GET /api/v2/loans`, `GET /api/v2/loans/{loanUuid}`, `POST /api/v2/loans`)
+
+```json
+{
+  "uuid": "2f0f2a7d-9d89-4d75-b2c1-b9d88b8b4f4f",
+  "requester_uuid": "e16c39c1-94f4-461f-9c35-9488f4061f78",
+  "status": "approved",
+  "scheduled_at": "2026-06-26T15:00:00-04:00",
+  "expected_return_at": "2026-06-26T17:00:00-04:00",
+  "created_at": "2026-06-26T10:00:00-04:00",
+  "completed_at": null,
+  "room": {
+    "uuid": "88ce8ad0-6575-45eb-965a-06b223fc5cf4",
+    "name": "Sala 301"
+  },
+  "subject": null,
+  "items": [
+    {
+      "implement_uuid": "0de53ed2-6ce7-4376-88ec-b743d5e683b9",
+      "implement_name": "Fonendoscopio",
+      "item_type": "individual",
+      "requested_quantity": 2,
+      "reserved_quantity": 2,
+      "delivered_quantity": 0,
+      "returned_quantity": 0
+    }
+  ]
+}
+```
+
+Notas:
+
+- `item_type` usa literales de backend: `consumable`, `reusable`, `individual`.
+- `requested_quantity` sigue siendo la referencia original del docente.
+- `reserved_quantity` refleja la reserva logica del prestamo.
+- `delivered_quantity` refleja lo efectivamente entregado.
+- `returned_quantity` refleja solo retorno util/bueno.
+- En prestamos activos, `reserved_quantity` representa reserva operativa vigente.
+- En prestamos `cancelled` o `expired` sin entrega, `reserved_quantity` puede mantenerse con valor historico aunque la reserva ya se haya liberado.
+- Cierres por dano, perdida, descarte o consumo parcial se registran en el detalle interno del prestamo, pero no se exponen en este payload resumen.
+
+### Request de preparacion (`POST /api/v2/loans/{loanUuid}/prepare`)
+
+```json
+{
+  "notes": "Preparado en panol principal"
+}
+```
+
+### Request de entrega (`POST /api/v2/loans/{loanUuid}/delivery`)
+
+- Mantiene la flexibilidad vigente para:
+  - entrega parcial
+  - cambio de cantidades
+  - seleccion/reseleccion de `asset_codes`
+  - implementos adicionales
+
+Payload base:
+
+```json
+{
+  "items": [
+    {
+      "implement_uuid": "0de53ed2-6ce7-4376-88ec-b743d5e683b9",
+      "quantity": 2,
+      "asset_codes": ["IND-0001", "IND-0002"]
+    }
+  ],
+  "notes": "Entrega realizada en sala"
+}
+```
+
+### Response de contexto de devolucion (`GET /api/v2/loans/{loanUuid}/return-context`)
+
+```json
+{
+  "loan_uuid": "2f0f2a7d-9d89-4d75-b2c1-b9d88b8b4f4f",
+  "items": [
+    {
+      "implement_uuid": "0de53ed2-6ce7-4376-88ec-b743d5e683b9",
+      "implement_name": "Fonendoscopio",
+      "item_type": "individual",
+      "delivered_quantity": 2,
+      "pending_return_quantity": 2,
+      "individuals": [
+        {
+          "individual_uuid": "5e829c37-48f0-4cc0-9bc2-652e240a1a64",
+          "asset_code": "IND-0001"
+        },
+        {
+          "individual_uuid": "bcbc7f6b-9da1-4630-bb81-4ebbb0ccf08f",
+          "asset_code": "IND-0002"
+        }
+      ]
+    }
+  ]
+}
+```
+
+Notas:
+
+- `pending_return_quantity` se calcula sobre lo entregado menos lo ya cerrado.
+- El arreglo `individuals` solo se llena para items `individual`.
+- Los `consumable` ya cerrados en entrega no aparecen como pendientes de devolucion.
+
+### Request de devolucion con variacion (`POST /api/v2/loans/{loanUuid}/return`)
+
+```json
+{
+  "returned_individuals": [
+    {
+      "individual_uuid": "5e829c37-48f0-4cc0-9bc2-652e240a1a64",
+      "return_condition": "good"
+    },
+    {
+      "individual_uuid": "bcbc7f6b-9da1-4630-bb81-4ebbb0ccf08f",
+      "return_condition": "damaged"
+    }
+  ],
+  "consumable_returns": [
+    {
+      "implement_uuid": "0fb49c0a-04fd-4d83-9c71-fd3e66385b60",
+      "quantity": 3
+    }
+  ],
+  "notes": "Se devolvieron 3 unidades reutilizables y 1 activo quedo danado"
+}
+```
+
+Notas:
+
+- `returned_individuals` aplica a items `individual`.
+- `return_condition` acepta `good`, `damaged`, `lost` o `discarded`.
+- `consumable_returns` es un nombre historico del contrato, pero hoy aplica a items `reusable`.
+- Para `reusable`, `quantity` indica cuanto vuelve en buen estado; la diferencia contra lo pendiente se cierra como consumo.
+- Si no se manda ningun retorno y el prestamo todavia tiene retornables pendientes, el backend responde error.
+
+### Request de cierre directo (`POST /api/v2/loans/{loanUuid}/complete`)
+
+```json
+{
+  "notes": "Todo retornado correctamente"
+}
+```
+
+Notas:
+
+- `complete` asume retorno correcto para todos los items retornables pendientes.
+- `return` debe usarse cuando hace falta clasificar unidades `individual` o informar retorno parcial de `reusable`.

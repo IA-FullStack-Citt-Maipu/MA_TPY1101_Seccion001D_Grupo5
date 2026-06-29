@@ -70,6 +70,33 @@ const directorMenu: MenuItem[] = [
   { label: "Usuarios", icon: Users, href: "#/director/users/create", activeSections: ["director-users"] },
 ];
 
+function getTopbarSuggestionMeta(row: ImplementSummary, query: string): string | null {
+  const normalizedQuery = query.trim().toLowerCase();
+  const barcode = row.barcode?.trim() ?? "";
+  const individualAssetCodes = (row.individualAssetCodes ?? row.individual_asset_codes ?? [])
+    .map((value) => value?.trim() ?? "")
+    .filter((value) => value.length > 0);
+
+  if (barcode && (normalizedQuery.length === 0 || barcode.toLowerCase().includes(normalizedQuery))) {
+    return `Codigo: ${barcode}`;
+  }
+
+  const matchingAssetCode = individualAssetCodes.find((value) => normalizedQuery.length === 0 || value.toLowerCase().includes(normalizedQuery));
+  if (matchingAssetCode) {
+    return `Unidad: ${matchingAssetCode}`;
+  }
+
+  if (barcode) {
+    return `Codigo: ${barcode}`;
+  }
+
+  if (individualAssetCodes.length > 0) {
+    return `Unidad: ${individualAssetCodes[0]}`;
+  }
+
+  return null;
+}
+
 export type InventorySection =
   | "dashboard"
   | "items"
@@ -461,12 +488,18 @@ export function TopBar({
           <input type="search" placeholder={searchPlaceholder} value={search} onChange={(event) => { setSearch(event.target.value); setSuggestionsOpen(true); setHoverIndex(-1); }} onFocus={() => setSuggestionsOpen(true)} onKeyDown={handleSearchKeyDown} />
           {shouldShowSuggestions ? (
             <div className="topbar-search-suggest">
-              {loadingSuggestions ? <div className="topbar-search-suggest__hint">Buscando implementos...</div> : suggestions.length === 0 ? <div className="topbar-search-suggest__hint">Sin coincidencias</div> : suggestions.map((row, index) => (
-                <button key={row.uuid} type="button" className={`topbar-search-item ${index === hoverIndex ? "is-hover" : ""}`} onMouseEnter={() => setHoverIndex(index)} onClick={() => goToImplement(row)}>
-                  <img src={row.imgUrl ?? "https://placehold.co/48x48/e9edf5/4d6284?text=Sin+img"} alt={row.name} className="topbar-search-item__thumb" />
-                  <span className="topbar-search-item__name">{row.name}</span>
-                </button>
-              ))}
+              {loadingSuggestions ? <div className="topbar-search-suggest__hint">Buscando implementos...</div> : suggestions.length === 0 ? <div className="topbar-search-suggest__hint">Sin coincidencias</div> : suggestions.map((row, index) => {
+                const suggestionMeta = getTopbarSuggestionMeta(row, search);
+                return (
+                  <button key={row.uuid} type="button" className={`topbar-search-item ${index === hoverIndex ? "is-hover" : ""}`} onMouseEnter={() => setHoverIndex(index)} onClick={() => goToImplement(row)}>
+                    <img src={row.imgUrl ?? "https://placehold.co/48x48/e9edf5/4d6284?text=Sin+img"} alt={row.name} className="topbar-search-item__thumb" />
+                    <span className="topbar-search-item__copy">
+                      <span className="topbar-search-item__name">{row.name}</span>
+                      {suggestionMeta ? <span className="topbar-search-item__meta">{suggestionMeta}</span> : null}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           ) : null}
         </div>

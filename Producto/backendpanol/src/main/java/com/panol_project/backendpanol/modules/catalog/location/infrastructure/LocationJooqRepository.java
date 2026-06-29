@@ -1,5 +1,7 @@
 package com.panol_project.backendpanol.modules.catalog.location.infrastructure;
 
+import static com.panol_project.backendpanol.jooq.tables.Implement.IMPLEMENT;
+import static com.panol_project.backendpanol.jooq.tables.Individual.INDIVIDUAL;
 import static com.panol_project.backendpanol.jooq.tables.Location.LOCATION;
 
 import com.panol_project.backendpanol.modules.catalog.location.domain.LocationOption;
@@ -118,9 +120,26 @@ public class LocationJooqRepository implements LocationRepository {
     }
 
     @Override
-    public int softDelete(UUID uuid) {
-        return dsl.update(LOCATION)
-                .set(LOCATION.ACTIVE, false)
+    public int countImplementAssociationsByLocationUuid(UUID uuid) {
+        return dsl.selectCount()
+                .from(IMPLEMENT)
+                .join(LOCATION).on(LOCATION.ID.eq(IMPLEMENT.LOCATION_ID))
+                .where(LOCATION.UUID.eq(uuid))
+                .fetchOne(0, int.class);
+    }
+
+    @Override
+    public int countIndividualAssociationsByLocationUuid(UUID uuid) {
+        return dsl.selectCount()
+                .from(INDIVIDUAL)
+                .join(LOCATION).on(LOCATION.ID.eq(INDIVIDUAL.CURRENT_LOCATION_ID))
+                .where(LOCATION.UUID.eq(uuid))
+                .fetchOne(0, int.class);
+    }
+
+    @Override
+    public int deleteByUuid(UUID uuid) {
+        return dsl.deleteFrom(LOCATION)
                 .where(LOCATION.UUID.eq(uuid))
                 .execute();
     }

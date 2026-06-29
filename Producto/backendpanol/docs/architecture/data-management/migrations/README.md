@@ -1,7 +1,7 @@
 # Registro de Migraciones Vigentes
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-06-07
+- Ultima verificacion: 2026-06-28
 - Fuente de verdad: `Producto/databasepanol/migrations/v25/`
 
 ## Cadena aplicada en el repositorio (baseline + refinamientos)
@@ -16,6 +16,18 @@
 8. `V33__auth_login_user_summary.sql`
 9. `V34__auth_find_user_by_rut_support_normalized_input.sql`
 10. `V35__drop_legacy_varchar_auth_lookup_function.sql`
+11. `V36__ensure_loan_lifecycle_system_user.sql`
+12. `V37__allow_partial_loan_delivery.sql`
+13. `V38__token_revocation_cleanup_index.sql`
+14. `V39__notification_inbox_v1.sql`
+15. `V40__notification_role_routing_and_stock_alerts.sql`
+16. `V41__email_outbox_resend_pipeline.sql`
+17. `V42__fix_loan_request_notification_title.sql`
+18. `V43__auto_reserved_loan_flow_notifications.sql`
+19. `V44__loan_reserved_flow_consumable_closure.sql`
+20. `V45__consumable_global_reservation_availability.sql`
+21. `V46__loan_prepare_reserved_stock_reconciliation.sql`
+22. `V47__loan_history_and_stock_reconciliation.sql`
 
 ## Nota de versionado
 
@@ -29,6 +41,6 @@
 
 ## Convencion
 
-- Nuevas migraciones se agregan en `Producto/databasepanol/migrations/v25` con version mayor a `35`.
+- Nuevas migraciones se agregan en `Producto/databasepanol/migrations/v25` con version mayor a `47`.
 - No se editan migraciones ya aplicadas en ambientes compartidos.
 - No se reintroduce cadena legacy previa al baseline V25.

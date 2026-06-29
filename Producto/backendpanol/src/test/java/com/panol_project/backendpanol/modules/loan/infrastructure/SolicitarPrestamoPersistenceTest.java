@@ -109,7 +109,7 @@ class SolicitarPrestamoPersistenceTest {
         UUID subjectUuid = insertSubject();
         UUID implementUuid = insertImplement(10);
 
-        int expectedNotificationRecipients = countActiveHumanCoordinators();
+        int expectedNotificationRecipients = countActiveHumanOperationalRecipients();
         String expectedMessage = notificationMessage("Docente Persistencia");
         String expectedTitle = notificationTitle();
         int notificationsBefore = notificationCount(expectedTitle, expectedMessage);
@@ -138,7 +138,6 @@ class SolicitarPrestamoPersistenceTest {
                 .fetchOne(LOAN.ID);
         assertNotNull(loanId);
 
-        Long requesterId = findUserId(requesterUuid);
         Long coordinatorId = findUserId(coordinatorUuid);
         Long implementId = findImplementId(implementUuid);
 
@@ -156,10 +155,10 @@ class SolicitarPrestamoPersistenceTest {
                 .fetchOne();
 
         assertNotNull(history);
-        assertEquals(requesterId, history.get(LOAN_STATUS_HISTORY.ACTOR_USER_ID));
+        assertEquals(systemOutboxUserId, history.get(LOAN_STATUS_HISTORY.ACTOR_USER_ID));
         assertNull(history.get(LOAN_STATUS_HISTORY.FROM_STATUS));
-        assertEquals(LoanStatusEnum.pending, history.get(LOAN_STATUS_HISTORY.TO_STATUS));
-        assertEquals("Solicitud creada", history.get(LOAN_STATUS_HISTORY.NOTES));
+        assertEquals(LoanStatusEnum.approved, history.get(LOAN_STATUS_HISTORY.TO_STATUS));
+        assertEquals("Reserva automatica al crear solicitud", history.get(LOAN_STATUS_HISTORY.NOTES));
 
         assertEquals(expectedNotificationRecipients, notificationCount(expectedTitle, expectedMessage) - notificationsBefore);
 
@@ -240,7 +239,7 @@ class SolicitarPrestamoPersistenceTest {
 
     @Test
     void solicitarDebeSeguirSiendoExitosaCuandoNoExistenCoordinadoresHumanosActivos() {
-        assumeTrue(countActiveHumanCoordinators() == 0, "El entorno ya tiene coordinadores humanos activos");
+        assumeTrue(countActiveHumanOperationalRecipients() == 0, "El entorno ya tiene coordinadores o directores humanos activos");
 
         UUID requesterUuid = insertUser("docente", "Docente Sin Coordinadores");
         UUID roomUuid = insertRoom();
@@ -309,6 +308,49 @@ class SolicitarPrestamoPersistenceTest {
     }
 
     @Test
+    void solicitarDebeBloquearConsumibleAunqueLosHorariosNoSeSolapenSiYaEstaReservado() {
+        UUID requesterUuid = insertUser("docente", "Docente Consumible Global");
+        UUID roomUuid = insertRoom();
+        UUID subjectUuid = insertSubject();
+        UUID implementUuid = insertImplement(10, ItemTypeEnum.consumable);
+        setAuthenticatedUser(requesterUuid, "DOCENTE");
+        OffsetDateTime firstScheduledAt = nextBusinessDateTime(1, 10, 0);
+        OffsetDateTime firstExpectedReturnAt = sameDateAt(firstScheduledAt, 12, 0);
+        OffsetDateTime secondScheduledAt = sameDateAt(firstScheduledAt.plusDays(1), 15, 0);
+        OffsetDateTime secondExpectedReturnAt = sameDateAt(secondScheduledAt, 17, 0);
+
+        LoanSummaryView firstLoan = solicitarPrestamoUseCase.solicitar(new SolicitarPrestamoCommand(
+                requesterUuid,
+                roomUuid,
+                subjectUuid,
+                firstScheduledAt,
+                firstExpectedReturnAt,
+                null,
+                List.of(new SolicitarPrestamoItemCommand(implementUuid, 6))
+        ));
+        loanUuidsToCleanup.add(firstLoan.uuid());
+
+        ApiException ex = assertThrows(ApiException.class, () -> solicitarPrestamoUseCase.solicitar(new SolicitarPrestamoCommand(
+                requesterUuid,
+                roomUuid,
+                subjectUuid,
+                secondScheduledAt,
+                secondExpectedReturnAt,
+                null,
+                List.of(new SolicitarPrestamoItemCommand(implementUuid, 5))
+        )));
+        SecurityContextHolder.clearContext();
+
+        assertEquals("LOAN_STOCK_CONFLICT", ex.getCode());
+        assertEquals(
+                "Solo puedes solicitar dentro del stock disponible. Implemento IT "
+                        + implementUuid.toString().substring(0, 8)
+                        + " tiene 4 unidad(es) disponibles para esta solicitud.",
+                ex.getMessage()
+        );
+    }
+
+    @Test
     void solicitarDebeBloquearMismoImplementoCuandoLosHorariosSeSolapan() {
         UUID requesterUuid = insertUser("docente", "Docente Horarios Solapados");
         UUID roomUuid = insertRoom();
@@ -343,7 +385,7 @@ class SolicitarPrestamoPersistenceTest {
         SecurityContextHolder.clearContext();
 
         assertEquals("LOAN_DUPLICATE_REQUEST", ex.getCode());
-        assertEquals("Ya tienes una solicitud pendiente con uno o más de estos implementos", ex.getMessage());
+        assertEquals("Ya tienes una solicitud activa con uno o mas de estos implementos en la misma ventana horaria", ex.getMessage());
     }
 
     @Test
@@ -429,13 +471,17 @@ class SolicitarPrestamoPersistenceTest {
     }
 
     private UUID insertImplement(int availableQuantity) {
+        return insertImplement(availableQuantity, ItemTypeEnum.reusable);
+    }
+
+    private UUID insertImplement(int availableQuantity, ItemTypeEnum itemType) {
         UUID implementUuid = UUID.randomUUID();
         String suffix = implementUuid.toString().substring(0, 8);
         dsl.insertInto(IMPLEMENT)
                 .set(IMPLEMENT.UUID, implementUuid)
                 .set(IMPLEMENT.NAME, "Implemento IT " + suffix)
                 .set(IMPLEMENT.DESCRIPTION, "Implemento de prueba")
-                .set(IMPLEMENT.ITEM_TYPE, ItemTypeEnum.consumable)
+                .set(IMPLEMENT.ITEM_TYPE, itemType)
                 .set(IMPLEMENT.ACTIVE, true)
                 .execute();
         Long implementId = findImplementId(implementUuid);
@@ -452,12 +498,12 @@ class SolicitarPrestamoPersistenceTest {
         return implementUuid;
     }
 
-    private int countActiveHumanCoordinators() {
+    private int countActiveHumanOperationalRecipients() {
         return dsl.selectCount()
                 .from(USER)
                 .join(ROLE).on(ROLE.ID.eq(USER.ROLE_ID))
                 .where(
-                        ROLE.NAME.eq("coordinador")
+                        ROLE.NAME.in("coordinador", "director")
                                 .and(USER.ACTIVE.isTrue())
                                 .and(USER.UUID.ne(SYSTEM_OUTBOX_USER_UUID))
                 )
@@ -506,11 +552,11 @@ class SolicitarPrestamoPersistenceTest {
     }
 
     private String notificationTitle() {
-        return "Nueva solicitud de pr\u00e9stamo";
+        return "Nueva solicitud reservada";
     }
 
     private String notificationMessage(String requesterName) {
-        return "El docente " + requesterName + " ha enviado una nueva solicitud";
+        return "El docente " + requesterName + " genero una nueva solicitud con reserva automatica.";
     }
 
     private void cleanupLoans() {

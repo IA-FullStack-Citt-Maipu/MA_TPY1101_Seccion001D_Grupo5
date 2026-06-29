@@ -123,9 +123,11 @@ public class ImplementV2Controller {
                 row.name(),
                 row.description(),
                 row.barcode(),
+                row.individualAssetCodes(),
                 row.imgUrl(),
                 row.active(),
                 row.stock() != null && row.stock().hasAvailability(),
+                row.itemType() == null ? null : row.itemType().literal(),
                 row.category() == null ? null : new ImplementCategorySummaryV2Response(
                         row.category().uuid(), row.category().name(), row.category().active()),
                 row.location() == null ? null : new ImplementLocationSummaryV2Response(

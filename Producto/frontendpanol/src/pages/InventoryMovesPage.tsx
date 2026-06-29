@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, Plus, Search, X } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Plus, Search, X } from "lucide-react";
 import { InventoryLayout } from "../components/layout/InventoryLayout";
 import { PresencePollingModal } from "../components/ui/PresencePollingModal";
 import { useInactivityPollingGate } from "../hooks/useInactivityPollingGate";
@@ -42,8 +42,33 @@ const MANUAL_MOVEMENT_ACTION_OPTIONS: Array<{ value: ManualMovementType; label: 
   { value: "loss", label: "Perdida" },
 ];
 
+const PAGE_SIZE = 10;
+
+function readInitialImplementRouteFilter(): { implementUuid: string; implementName: string } {
+  if (typeof window === "undefined") {
+    return { implementUuid: "", implementName: "" };
+  }
+
+  const [, queryString = ""] = window.location.hash.split("?");
+  const params = new URLSearchParams(queryString);
+  return {
+    implementUuid: params.get("implementUuid")?.trim() ?? "",
+    implementName: params.get("implementName")?.trim() ?? "",
+  };
+}
+
+function clearMovesRouteFilter() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const { pathname, search } = window.location;
+  window.history.replaceState(null, "", `${pathname}${search}#/inventory/moves`);
+}
+
 function getImplementSearchText(item: ImplementSummary): string {
-  return [item.name, item.barcode ?? ""].join(" ").trim().toLowerCase();
+  const individualAssetCodes = item.individualAssetCodes ?? item.individual_asset_codes ?? [];
+  return [item.name, item.barcode ?? "", ...individualAssetCodes].join(" ").trim().toLowerCase();
 }
 
 function getImplementMeta(item: ImplementSummary): string {
@@ -66,6 +91,7 @@ function toDateEnd(value: string): Date | null {
 }
 
 export function InventoryMovesPage({ embedded = false }: { embedded?: boolean }) {
+  const initialRouteFilter = useMemo(() => readInitialImplementRouteFilter(), []);
   const [implementsList, setImplementsList] = useState<ImplementSummary[]>([]);
   const [movements, setMovements] = useState<InventoryMovementDetail[]>([]);
   const [loadingList, setLoadingList] = useState(false);
@@ -74,11 +100,13 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
   const [pageError, setPageError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const [implementNameFilter, setImplementNameFilter] = useState("");
+  const [implementNameFilter, setImplementNameFilter] = useState(initialRouteFilter.implementName);
+  const [routeImplementUuidFilter, setRouteImplementUuidFilter] = useState(initialRouteFilter.implementUuid);
   const [categoryFilter, setCategoryFilter] = useState("");
   const [userFilter, setUserFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [page, setPage] = useState(1);
 
   const [manualImplementUuid, setManualImplementUuid] = useState<string>("");
   const [action, setAction] = useState<ManualMovementType>("stock_in");
@@ -256,11 +284,12 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
 
     return movements.filter((movement) => {
       const implementInfo = movement.implement_uuid ? implementByUuid.get(movement.implement_uuid) : undefined;
-      const implementName = implementInfo?.name ?? "";
+      const implementSearchText = implementInfo ? getImplementSearchText(implementInfo) : "";
       const categoryUuid = implementInfo?.category?.uuid ?? null;
       const movementDate = new Date(movement.timestamp);
 
-      if (implementQuery && !implementName.toLowerCase().includes(implementQuery)) return false;
+      if (routeImplementUuidFilter && movement.implement_uuid !== routeImplementUuidFilter) return false;
+      if (implementQuery && !implementSearchText.includes(implementQuery)) return false;
       if (categoryFilter && String(categoryUuid ?? "") !== categoryFilter) return false;
       const performedBy = (movement.performed_by ?? "").toLowerCase();
       if (userQuery && !performedBy.includes(userQuery)) return false;
@@ -269,7 +298,7 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
 
       return true;
     });
-  }, [movements, implementByUuid, implementNameFilter, categoryFilter, userFilter, dateFrom, dateTo]);
+  }, [movements, implementByUuid, implementNameFilter, routeImplementUuidFilter, categoryFilter, userFilter, dateFrom, dateTo]);
 
   const moveStats = useMemo(() => {
     return {
@@ -280,12 +309,37 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
     };
   }, [filteredMovements]);
 
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(filteredMovements.length / PAGE_SIZE)), [filteredMovements.length]);
+  const safePage = useMemo(() => {
+    if (page < 1) {
+      return 1;
+    }
+    if (page > totalPages) {
+      return totalPages;
+    }
+    return page;
+  }, [page, totalPages]);
+  const pageStart = (safePage - 1) * PAGE_SIZE;
+  const pagedMovements = filteredMovements.slice(pageStart, pageStart + PAGE_SIZE);
+  const rangeStart = filteredMovements.length === 0 ? 0 : pageStart + 1;
+  const rangeEnd = filteredMovements.length === 0 ? 0 : Math.min(pageStart + pagedMovements.length, filteredMovements.length);
+  const pageNumbers = useMemo(() => {
+    const windowSize = 5;
+    let start = Math.max(1, safePage - 2);
+    const end = Math.min(totalPages, start + windowSize - 1);
+    start = Math.max(1, end - windowSize + 1);
+    return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+  }, [safePage, totalPages]);
+
   function clearFilters() {
     setImplementNameFilter("");
+    setRouteImplementUuidFilter("");
     setCategoryFilter("");
     setUserFilter("");
     setDateFrom("");
     setDateTo("");
+    setPage(1);
+    clearMovesRouteFilter();
   }
 
   function openManualMovementModal() {
@@ -334,6 +388,7 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
         notes: notes.trim() ? notes.trim() : null,
       });
       await reloadMovements();
+      setPage(1);
       setSuccess("Movimiento registrado correctamente.");
       setIsManualMovementModalOpen(false);
       resetManualMovementForm();
@@ -388,16 +443,30 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
 
         <div className="catalog-filters catalog-filters--moves">
           <div className="catalog-filters__item catalog-filters__item--search">
-            <label>Nombre implemento</label>
+            <label>Implemento / codigo</label>
             <Input
               value={implementNameFilter}
-              onChange={(event) => setImplementNameFilter(event.target.value)}
-              placeholder="Buscar por nombre"
+              onChange={(event) => {
+                setImplementNameFilter(event.target.value);
+                if (routeImplementUuidFilter) {
+                  setRouteImplementUuidFilter("");
+                  clearMovesRouteFilter();
+                }
+                setPage(1);
+              }}
+              placeholder="Buscar por nombre o codigo de barras"
             />
           </div>
           <div className="catalog-filters__item">
             <label>Categoria</label>
-            <Select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} disabled={loadingList}>
+            <Select
+              value={categoryFilter}
+              onChange={(event) => {
+                setCategoryFilter(event.target.value);
+                setPage(1);
+              }}
+              disabled={loadingList}
+            >
               <option value="">Todas</option>
               {categoryOptions.map((category) => (
                 <option key={category.uuid} value={category.uuid}>
@@ -408,15 +477,36 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
           </div>
           <div className="catalog-filters__item catalog-filters__item--search">
             <label>Usuario</label>
-            <Input value={userFilter} onChange={(event) => setUserFilter(event.target.value)} placeholder="Ej: Ana Perez" />
+            <Input
+              value={userFilter}
+              onChange={(event) => {
+                setUserFilter(event.target.value);
+                setPage(1);
+              }}
+              placeholder="Ej: Ana Perez"
+            />
           </div>
           <div className="catalog-filters__item">
             <label>Desde</label>
-            <Input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
+            <Input
+              type="date"
+              value={dateFrom}
+              onChange={(event) => {
+                setDateFrom(event.target.value);
+                setPage(1);
+              }}
+            />
           </div>
           <div className="catalog-filters__item">
             <label>Hasta</label>
-            <Input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
+            <Input
+              type="date"
+              value={dateTo}
+              onChange={(event) => {
+                setDateTo(event.target.value);
+                setPage(1);
+              }}
+            />
           </div>
         </div>
 
@@ -449,7 +539,7 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
                 <td colSpan={7} className="table-hint">No hay movimientos para mostrar.</td>
               </tr>
             ) : (
-              filteredMovements.map((movement) => {
+              pagedMovements.map((movement) => {
                 const implementInfo = movement.implement_uuid ? implementByUuid.get(movement.implement_uuid) : undefined;
                 return (
                   <tr key={movement.uuid} className="table-row-hover">
@@ -470,6 +560,42 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
             )}
           </tbody>
         </Table>
+
+        {!loadingMovements ? (
+          <div className="inventory-table-footer">
+            <p>
+              Mostrando {rangeStart} a {rangeEnd} de {filteredMovements.length} movimientos
+            </p>
+            <div className="inventory-pagination">
+              <button
+                type="button"
+                className="inventory-pagination__btn"
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                disabled={safePage <= 1}
+              >
+                <ChevronLeft size={16} />
+              </button>
+              {pageNumbers.map((pageNumber) => (
+                <button
+                  key={pageNumber}
+                  type="button"
+                  className={pageNumber === safePage ? "inventory-pagination__btn inventory-pagination__btn--active" : "inventory-pagination__btn"}
+                  onClick={() => setPage(pageNumber)}
+                >
+                  {pageNumber}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="inventory-pagination__btn"
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                disabled={safePage >= totalPages}
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       {isManualMovementModalOpen ? (

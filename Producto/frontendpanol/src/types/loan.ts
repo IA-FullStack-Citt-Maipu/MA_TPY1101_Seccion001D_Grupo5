@@ -1,9 +1,13 @@
+export type LoanItemType = "consumable" | "reusable" | "individual";
+
 export interface LoanItem {
   implement_uuid: string;
   implement_name: string;
+  item_type: LoanItemType | null;
   requested_quantity: number;
   reserved_quantity: number;
   delivered_quantity: number;
+  returned_quantity: number;
 }
 
 export interface LoanRoomSummary {
@@ -64,6 +68,10 @@ export interface DeliverLoanPayload {
   notes?: string | null;
 }
 
+export interface PrepareLoanPayload {
+  notes?: string | null;
+}
+
 export interface CompleteLoanPayload {
   notes?: string | null;
 }
@@ -82,6 +90,25 @@ export interface ReturnLoanPayload {
   returned_individuals?: ReturnLoanIndividualPayload[];
   consumable_returns?: ReturnLoanConsumablePayload[];
   notes?: string | null;
+}
+
+export interface LoanReturnContextIndividual {
+  individual_uuid: string;
+  asset_code: string;
+}
+
+export interface LoanReturnContextItem {
+  implement_uuid: string;
+  implement_name: string;
+  item_type: LoanItemType | null;
+  delivered_quantity: number;
+  pending_return_quantity: number;
+  individuals: LoanReturnContextIndividual[];
+}
+
+export interface LoanReturnContext {
+  loan_uuid: string;
+  items: LoanReturnContextItem[];
 }
 
 export type LoanStatus =

@@ -288,13 +288,20 @@ textarea {
   transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease;
 }
 
-.button:hover {
+.button:hover:not(:disabled) {
   transform: translateY(-1px);
   filter: saturate(1.05);
 }
 
 .button:active {
   transform: translateY(0);
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: saturate(0.82);
+  box-shadow: none;
 }
 
 .button--ghost {
@@ -591,6 +598,117 @@ textarea {
   margin: 10px 0 4px;
 }
 
+.loan-return-choice-group {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0 4px;
+}
+
+.loan-return-choice-group__label {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.94rem;
+  font-weight: 700;
+}
+
+.loan-return-choice-list {
+  display: grid;
+  gap: 10px;
+}
+
+.loan-return-choice {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #f8faff;
+  padding: 14px 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease,
+    transform 160ms ease;
+}
+
+.loan-return-choice:hover {
+  border-color: rgba(15, 91, 214, 0.3);
+  background: #f3f8ff;
+}
+
+.loan-return-choice:focus-visible {
+  outline: none;
+  border-color: #0f5bd6;
+  box-shadow: 0 0 0 2px rgba(15, 91, 214, 0.16);
+}
+
+.loan-return-choice.is-selected {
+  border-color: #0f5bd6;
+  box-shadow: 0 0 0 1px rgba(15, 91, 214, 0.18);
+  background: rgba(15, 91, 214, 0.06);
+}
+
+.loan-return-choice__copy {
+  display: grid;
+  gap: 5px;
+}
+
+.loan-return-choice__copy strong {
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.loan-return-choice__copy small {
+  color: var(--text-soft);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.loan-return-choice__state {
+  min-width: 110px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  padding: 8px 12px;
+  color: var(--text-soft);
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.loan-return-choice.is-selected .loan-return-choice__state {
+  border-color: rgba(15, 91, 214, 0.22);
+  background: rgba(15, 91, 214, 0.12);
+  color: #0f5bd6;
+}
+
+.loan-return-choice__hint {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
+
+.loan-return-choice__hint.is-selected {
+  color: var(--text);
+  font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  .loan-return-choice {
+    grid-template-columns: 1fr;
+  }
+
+  .loan-return-choice__state {
+    min-width: 0;
+    justify-self: start;
+  }
+}
+
 .loan-return-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -600,6 +718,15 @@ textarea {
   border-radius: 12px;
   padding: 12px;
   background: #f8faff;
+}
+
+.loan-return-row.is-selected {
+  border-color: #0f5bd6;
+  box-shadow: 0 0 0 1px rgba(15, 91, 214, 0.18);
+}
+
+.loan-return-row--stacked {
+  grid-template-columns: 1fr;
 }
 
 .loan-return-row strong {
@@ -614,6 +741,41 @@ textarea {
   font-size: 0.9rem;
 }
 
+.loan-return-section__header {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+.loan-return-section__header strong {
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.loan-return-section__header p {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.loan-return-individuals {
+  display: grid;
+  gap: 10px;
+}
+
+.loan-return-individual {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 220px);
+  gap: 12px;
+  align-items: center;
+}
+
+.loan-return-individual span {
+  color: var(--text);
+  font-weight: 600;
+}
+
 .loan-return-warning {
   border: 1px solid rgba(216, 143, 30, 0.35);
   border-radius: 12px;
@@ -626,6 +788,10 @@ textarea {
 
 @media (max-width: 560px) {
   .loan-return-row {
+    grid-template-columns: 1fr;
+  }
+
+  .loan-return-individual {
     grid-template-columns: 1fr;
   }
 }
@@ -1128,6 +1294,52 @@ textarea {
   border-radius: 12px;
   border: 1px solid var(--line);
   background: #fff;
+}
+
+.implement-hero__preview-btn:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.image-preview-modal {
+  width: min(100%, 980px);
+}
+
+.image-preview-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.image-preview-modal__actions {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.image-preview-modal__frame {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #f5f8fd;
+}
+
+.image-preview-modal__img {
+  display: block;
+  width: 100%;
+  max-height: 72vh;
+  object-fit: contain;
+  border-radius: 12px;
+  background: #fff;
+}
+
+@media (max-width: 720px) {
+  .image-preview-modal__header {
+    flex-direction: column;
+  }
 }
 
 
@@ -2348,12 +2560,29 @@ body.modal-open .app-shell__main {
 }
 
 .topbar-search-item__name {
+  display: block;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: #1d3f74;
   font-weight: 700;
+}
+
+.topbar-search-item__copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.topbar-search-item__meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #5d7296;
+  font-size: 0.8rem;
 }
 
 .implement-thumb {
@@ -3240,6 +3469,36 @@ body.modal-open .app-shell__main {
   align-items: center;
   justify-content: center;
   min-width: 0;
+}
+
+.loan-stepper__input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  border-left: 1px solid #d4dced;
+  border-right: 1px solid #d4dced;
+  background: transparent;
+  text-align: center;
+  color: #1b315b;
+  font-weight: 700;
+  font-size: 0.86rem;
+  padding: 0 6px;
+  outline: none;
+  font-family: inherit;
+  appearance: textfield;
+  -moz-appearance: textfield;
+  caret-color: currentColor;
+}
+
+.loan-stepper__input::-webkit-outer-spin-button,
+.loan-stepper__input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.loan-stepper__input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .loan-stepper--compact {
@@ -4459,6 +4718,8 @@ a:focus-visible {
   border: 0;
   min-height: 42px;
   padding: 0;
+  background: transparent;
+  caret-color: currentColor;
 }
 
 .inventory-search-input-wrap input:focus,
@@ -4641,23 +4902,37 @@ a:focus-visible {
   color: #6c7282;
   font-size: 12px;
   line-height: 1.35;
+  display: block;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .inventory-implement-picker__menu {
+  width: 100%;
+  max-width: none;
+  max-height: min(360px, calc(100vh - 220px));
+  overflow: hidden;
   padding: 10px;
   display: grid;
   gap: 10px;
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .inventory-implement-picker__search {
   margin-bottom: 0;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #ffffff;
+  padding-bottom: 2px;
 }
 
 .inventory-implement-picker__options {
   display: grid;
   gap: 6px;
-  max-height: 280px;
+  max-height: min(280px, calc(100vh - 320px));
   overflow: auto;
+  padding-right: 4px;
 }
 
 .inventory-implement-picker__option {
@@ -4686,6 +4961,9 @@ a:focus-visible {
   color: #6c7282;
   font-size: 12px;
   line-height: 1.35;
+  display: block;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .inventory-implement-picker__option svg {
@@ -4774,7 +5052,7 @@ a:focus-visible {
 .inventory-items-table td {
   padding: 12px 14px;
   min-height: 56px;
-  vertical-align: middle;
+  vertical-align: top;
 }
 
 .inventory-items-table tbody tr {
@@ -4790,11 +5068,13 @@ a:focus-visible {
   grid-template-columns: 52px minmax(0, 1fr);
   gap: 12px;
   align-items: center;
+  min-width: 0;
 }
 
 .inventory-item-cell__copy {
   display: grid;
   gap: 4px;
+  min-width: 0;
 }
 
 .inventory-item-cell__copy strong {
@@ -4803,6 +5083,7 @@ a:focus-visible {
   font-size: 18px;
   font-weight: 600;
   line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 
 .inventory-item-cell__id {
@@ -4810,6 +5091,7 @@ a:focus-visible {
   font-family: "Inter", sans-serif;
   font-size: 13px;
   line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .implement-thumb {
@@ -4921,6 +5203,10 @@ a:focus-visible {
   font-family: "Inter", sans-serif;
   font-size: 12px;
   font-weight: 600;
+  max-width: 100%;
+  line-height: 1.3;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .inventory-chip--tone-1 { background: #e8ecff; color: #2b4393; }
@@ -5062,6 +5348,19 @@ a:focus-visible {
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.implement-create-form__label-note {
+  color: var(--text-soft);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  white-space: nowrap;
 }
 
 .implement-create-form__field input,
@@ -5386,6 +5685,7 @@ a:focus-visible {
   top: 0;
   width: 4px;
   height: 100%;
+  border-radius: 16px 0 0 16px;
 }
 
 .teacher-loans-kpi__icon {
@@ -6217,6 +6517,174 @@ a:focus-visible {
   margin: 0;
 }
 
+.loan-preparation-layout {
+  display: grid;
+  gap: 18px;
+}
+
+.loan-preparation-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+  gap: 18px;
+  align-items: start;
+}
+
+.loan-preparation-hero {
+  padding: 22px;
+  display: grid;
+  gap: 18px;
+  border: 1px solid #c4c6d2;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+}
+
+.loan-preparation-hero__eyebrow {
+  color: #5f6779;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.loan-preparation-hero__header {
+  display: grid;
+  gap: 12px;
+}
+
+.loan-preparation-hero__header h1 {
+  margin: 10px 0 0;
+  color: #001b50;
+  font-family: "Poppins", sans-serif;
+  font-size: 34px;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.loan-preparation-hero__header p {
+  margin: 0;
+  max-width: 70ch;
+  color: #465873;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.loan-preparation-hero__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.loan-preparation-hero__metric {
+  border: 1px solid #dde5f2;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 14px 15px;
+  display: grid;
+  gap: 8px;
+}
+
+.loan-preparation-hero__metric span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #5f6779;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.loan-preparation-hero__metric strong {
+  color: #102744;
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.loan-preparation-panel {
+  overflow: hidden;
+  border: 1px solid #c4c6d2;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.loan-preparation-panel__header {
+  padding: 14px 16px;
+  border-bottom: 1px solid #e2e5ee;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #0c2f75;
+}
+
+.loan-preparation-panel__header h2 {
+  margin: 0;
+  font-size: 22px;
+  font-family: "Poppins", sans-serif;
+}
+
+.loan-preparation-panel__body {
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+}
+
+.loan-preparation-panel__status {
+  display: grid;
+  gap: 5px;
+}
+
+.loan-preparation-panel__status span {
+  color: #5f6779;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.loan-preparation-panel__status strong {
+  color: #1e2738;
+  font-size: 16px;
+}
+
+.loan-preparation-panel__notes {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+  color: #506179;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.loan-preparation-panel__actions {
+  padding: 0 16px 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.loan-preparation-panel__notes li {
+  margin: 0;
+}
+
+.loan-preparation-items {
+  overflow: hidden;
+}
+
+.loan-preparation-type {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 110px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(12, 47, 117, 0.08);
+  color: #0c2f75;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
 .teacher-loan-timeline-panel {
   display: block;
 }
@@ -6575,6 +7043,7 @@ a:focus-visible {
   grid-template-columns: auto 1fr;
   align-items: center;
   gap: 10px;
+  overflow: hidden;
 }
 
 .coordinator-loans-kpi__strip {
@@ -6583,6 +7052,7 @@ a:focus-visible {
   top: 0;
   width: 4px;
   height: 100%;
+  border-radius: 14px 0 0 14px;
 }
 
 .coordinator-loans-kpi p {
@@ -6980,8 +7450,10 @@ a:focus-visible {
 .loan-delivery-main {
   border: 1px solid #c4c6d2;
   border-radius: 14px;
-  overflow: hidden;
+  overflow: visible;
   background: #ffffff;
+  position: relative;
+  z-index: 1;
 }
 
 .loan-delivery-main__meta {
@@ -6992,6 +7464,8 @@ a:focus-visible {
   justify-content: space-between;
   gap: 12px;
   align-items: flex-start;
+  border-top-left-radius: 14px;
+  border-top-right-radius: 14px;
 }
 
 .loan-delivery-main__meta p {
@@ -7030,6 +7504,22 @@ a:focus-visible {
   gap: 12px;
 }
 
+.loan-delivery-items__toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.loan-delivery-items__toolbar p {
+  margin: 0;
+  color: #4f5f78;
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 72ch;
+}
+
 .loan-delivery-item-card {
   border: 1px solid #d3d8e4;
   border-radius: 12px;
@@ -7041,7 +7531,7 @@ a:focus-visible {
 
 .loan-delivery-item-card__top {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto 1fr auto;
   gap: 10px;
   align-items: start;
 }
@@ -7057,6 +7547,29 @@ a:focus-visible {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+}
+
+.loan-delivery-discard-btn {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #d9deea;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #8b3142;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.loan-delivery-discard-btn:hover:not(:disabled) {
+  background: #fff3f5;
+  border-color: #efb8c0;
+  color: #a3384b;
 }
 
 .loan-delivery-item-card__copy strong {
@@ -7185,6 +7698,8 @@ a:focus-visible {
   padding: 12px;
   display: grid;
   gap: 10px;
+  position: relative;
+  z-index: 2;
 }
 
 .loan-delivery-additional__header strong {
@@ -7220,17 +7735,15 @@ a:focus-visible {
 
 .loan-delivery-additional__controls {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
+  grid-template-columns: 1fr;
 }
 
-.loan-delivery-additional__controls select {
-  min-height: 42px;
-  border: 1px solid #ccd5e6;
-  border-radius: 10px;
-  background: #ffffff;
-  color: #1f2f4a;
-  padding: 0 10px;
+.loan-delivery-additional__picker {
+  min-width: 0;
+}
+
+.loan-delivery-additional__picker .inventory-implement-picker__trigger {
+  min-height: 54px;
 }
 
 .loan-delivery-side {
@@ -7287,6 +7800,10 @@ a:focus-visible {
 }
 
 @media (max-width: 1160px) {
+  .loan-preparation-top {
+    grid-template-columns: 1fr;
+  }
+
   .loan-delivery-layout {
     grid-template-columns: 1fr;
   }
@@ -7297,12 +7814,33 @@ a:focus-visible {
 }
 
 @media (max-width: 720px) {
+  .loan-preparation-hero {
+    padding: 18px;
+  }
+
+  .loan-preparation-hero__header h1 {
+    font-size: 28px;
+  }
+
+  .loan-preparation-hero__grid {
+    grid-template-columns: 1fr;
+  }
+
   .loan-delivery-header h1 {
     font-size: 34px;
   }
 
   .loan-delivery-main__meta {
     flex-direction: column;
+  }
+
+  .loan-delivery-item-card__top {
+    grid-template-columns: auto 1fr;
+  }
+
+  .loan-delivery-discard-btn {
+    grid-column: 1 / -1;
+    justify-self: end;
   }
 
   .loan-delivery-additional__controls {
@@ -7384,6 +7922,13 @@ a:focus-visible {
   align-items: start;
 }
 
+.loan-calendar-layout--loading,
+.loan-calendar-card--loading,
+.loan-calendar-drawer--loading,
+.loan-calendar-summary--loading {
+  pointer-events: none;
+}
+
 .loan-calendar-card {
   border: 1px solid #d9e1ef;
   border-radius: 18px;
@@ -7415,6 +7960,10 @@ a:focus-visible {
   align-items: center;
   gap: 10px;
   width: min(100%, 420px);
+}
+
+.loan-calendar-nav--loading {
+  width: 100%;
 }
 
 .loan-calendar-nav__pill {
@@ -7507,8 +8056,16 @@ a:focus-visible {
   transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
+.loan-calendar-day--loading {
+  cursor: default;
+}
+
 .loan-calendar-day:hover {
   background: #f8fbff;
+}
+
+.loan-calendar-day--loading:hover {
+  background: #ffffff;
 }
 
 .loan-calendar-day:nth-child(7n) {
@@ -7616,6 +8173,100 @@ a:focus-visible {
   padding: 10px 14px;
   color: #59627a;
   font-size: 13px;
+}
+
+.loan-calendar-skeleton__icon-btn {
+  width: 40px;
+  height: 32px;
+  border-radius: 12px;
+}
+
+.loan-calendar-skeleton__month-pill {
+  width: 100%;
+  max-width: 260px;
+  height: 32px;
+  border-radius: 14px;
+}
+
+.loan-calendar-skeleton__counter-pill {
+  width: 132px;
+  height: 32px;
+  border-radius: 999px;
+}
+
+.loan-calendar-skeleton__day-number {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+}
+
+.loan-calendar-skeleton__day-badge {
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 999px;
+}
+
+.loan-calendar-skeleton__chip {
+  display: block;
+  width: 100%;
+  height: 18px;
+  border-radius: 10px;
+}
+
+.loan-calendar-skeleton__chip--alt {
+  width: 88%;
+}
+
+.loan-calendar-skeleton__chip--sm {
+  width: 64%;
+}
+
+.loan-calendar-skeleton__drawer-copy {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+
+.loan-calendar-skeleton__drawer-title {
+  width: 128px;
+  height: 18px;
+  border-radius: 8px;
+}
+
+.loan-calendar-skeleton__drawer-subtitle {
+  width: 188px;
+  height: 14px;
+  border-radius: 7px;
+}
+
+.loan-calendar-skeleton__status {
+  width: 92px;
+  height: 22px;
+  border-radius: 999px;
+}
+
+.loan-calendar-skeleton__time {
+  width: 72px;
+  height: 14px;
+  border-radius: 7px;
+}
+
+.loan-calendar-skeleton__line {
+  height: 14px;
+  border-radius: 7px;
+}
+
+.loan-calendar-skeleton__line--lg {
+  width: 100%;
+}
+
+.loan-calendar-skeleton__line--md {
+  width: 72%;
+}
+
+.loan-calendar-skeleton__line--sm {
+  width: 52%;
 }
 
 .loan-calendar-drawer {
@@ -7968,6 +8619,11 @@ a:focus-visible {
   gap: 10px;
 }
 
+.loan-calendar-summary__copy {
+  display: grid;
+  gap: 8px;
+}
+
 .loan-calendar-summary__dot {
   width: 10px;
   height: 10px;
@@ -8012,6 +8668,18 @@ a:focus-visible {
 .loan-calendar-summary__total {
   min-width: 136px;
   text-align: center;
+}
+
+.loan-calendar-skeleton__metric-value {
+  width: 52px;
+  height: 22px;
+  border-radius: 9px;
+}
+
+.loan-calendar-skeleton__metric-label {
+  width: 92px;
+  height: 12px;
+  border-radius: 7px;
 }
 
 .outbox-monitoring-page {
@@ -10464,6 +11132,8 @@ a:focus-visible {
 :root[data-theme="dark"] .inventory-catalog-filters select,
 :root[data-theme="dark"] .inventory-multiselect__trigger {
   color: #edf4ff;
+  background: transparent;
+  -webkit-text-fill-color: #edf4ff;
 }
 
 :root[data-theme="dark"] .modal,
@@ -10529,6 +11199,10 @@ a:focus-visible {
 :root[data-theme="dark"] .inventory-implement-picker__option-copy small,
 :root[data-theme="dark"] .inventory-movement-modal__header p {
   color: #9bb0ce;
+}
+
+:root[data-theme="dark"] .inventory-implement-picker__search {
+  background: #0f1a2d;
 }
 
 :root[data-theme="dark"] .inventory-implement-picker__option svg {
@@ -11315,6 +11989,10 @@ a:focus-visible {
   color: #edf4ff;
 }
 
+:root[data-theme="dark"] .topbar-search-item__meta {
+  color: #9db2d0;
+}
+
 :root[data-theme="dark"] .skeleton {
   background: linear-gradient(180deg, rgba(26, 39, 64, 0.96) 0%, rgba(18, 29, 48, 0.98) 100%);
 }
@@ -11628,6 +12306,14 @@ a:focus-visible {
   color: #f4f8ff;
 }
 
+:root[data-theme="dark"] .loan-stepper__input {
+  border-left-color: rgba(143, 184, 255, 0.12);
+  border-right-color: rgba(143, 184, 255, 0.12);
+  color: #f4f8ff;
+  background: transparent;
+  -webkit-text-fill-color: #f4f8ff;
+}
+
 :root[data-theme="dark"] .loan-add-item-btn {
   border-color: #2b57b6;
   background: #163c86;
@@ -11800,6 +12486,10 @@ a:focus-visible {
   color: #b7c9e1;
 }
 
+:root[data-theme="dark"] .loan-delivery-items__toolbar p {
+  color: #9bb0ce;
+}
+
 :root[data-theme="dark"] .loan-delivery-window {
   border-color: rgba(143, 184, 255, 0.14);
 }
@@ -11817,6 +12507,18 @@ a:focus-visible {
 :root[data-theme="dark"] .loan-delivery-item-card {
   background: rgba(255, 255, 255, 0.035);
   border-color: rgba(143, 184, 255, 0.12);
+}
+
+:root[data-theme="dark"] .loan-delivery-discard-btn {
+  background: #121d30;
+  border-color: rgba(255, 129, 150, 0.16);
+  color: #ff9daf;
+}
+
+:root[data-theme="dark"] .loan-delivery-discard-btn:hover:not(:disabled) {
+  background: rgba(194, 56, 74, 0.16);
+  border-color: rgba(255, 129, 150, 0.24);
+  color: #ffd2db;
 }
 
 :root[data-theme="dark"] .loan-delivery-check-btn,
@@ -11845,6 +12547,14 @@ a:focus-visible {
   color: #92e3b7;
 }
 
+:root[data-theme="dark"] .loan-delivery-individuals__option--available .loan-delivery-individuals__option-copy strong {
+  color: #dff8ea;
+}
+
+:root[data-theme="dark"] .loan-delivery-individuals__option--available .loan-delivery-individuals__option-copy small {
+  color: #92e3b7;
+}
+
 :root[data-theme="dark"] .loan-delivery-individuals__option--reserved {
   background: rgba(212, 134, 8, 0.16);
   border-color: rgba(255, 205, 96, 0.24);
@@ -11859,6 +12569,90 @@ a:focus-visible {
 
 :root[data-theme="dark"] .loan-delivery-individuals__option.is-selected {
   box-shadow: inset 0 0 0 1px rgba(61, 143, 255, 0.45);
+}
+
+:root[data-theme="dark"] .loan-preparation-hero {
+  border-color: rgba(143, 184, 255, 0.16);
+  background: linear-gradient(180deg, rgba(23, 35, 55, 0.98) 0%, rgba(14, 23, 38, 0.99) 100%);
+}
+
+:root[data-theme="dark"] .loan-preparation-hero__eyebrow,
+:root[data-theme="dark"] .loan-preparation-hero__metric span,
+:root[data-theme="dark"] .loan-preparation-panel__status span,
+:root[data-theme="dark"] .loan-preparation-panel__notes {
+  color: #9bb0ce;
+}
+
+:root[data-theme="dark"] .loan-preparation-hero__header h1,
+:root[data-theme="dark"] .loan-preparation-hero__metric strong,
+:root[data-theme="dark"] .loan-preparation-panel__header,
+:root[data-theme="dark"] .loan-preparation-panel__header h2,
+:root[data-theme="dark"] .loan-preparation-panel__status strong {
+  color: #edf4ff;
+}
+
+:root[data-theme="dark"] .loan-preparation-hero__header p {
+  color: #c0d0e7;
+}
+
+:root[data-theme="dark"] .loan-preparation-hero__metric {
+  border-color: rgba(143, 184, 255, 0.14);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+:root[data-theme="dark"] .loan-preparation-panel {
+  border-color: rgba(143, 184, 255, 0.14);
+  background: rgba(17, 28, 45, 0.98);
+}
+
+:root[data-theme="dark"] .loan-preparation-panel__header {
+  border-bottom-color: rgba(143, 184, 255, 0.12);
+}
+
+:root[data-theme="dark"] .loan-preparation-type {
+  background: rgba(80, 139, 255, 0.18);
+  color: #dce8ff;
+}
+
+:root[data-theme="dark"] .loan-return-choice {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(143, 184, 255, 0.12);
+}
+
+:root[data-theme="dark"] .loan-return-choice:hover {
+  background: rgba(56, 109, 226, 0.12);
+  border-color: rgba(143, 184, 255, 0.24);
+}
+
+:root[data-theme="dark"] .loan-return-choice.is-selected {
+  background: rgba(56, 109, 226, 0.16);
+  border-color: rgba(89, 149, 255, 0.34);
+}
+
+:root[data-theme="dark"] .loan-return-choice__copy strong,
+:root[data-theme="dark"] .loan-return-section__header strong {
+  color: #edf4ff;
+}
+
+:root[data-theme="dark"] .loan-return-choice__copy small,
+:root[data-theme="dark"] .loan-return-choice__hint,
+:root[data-theme="dark"] .loan-return-section__header p {
+  color: #9bb0ce;
+}
+
+:root[data-theme="dark"] .loan-return-choice__state {
+  border-color: rgba(143, 184, 255, 0.14);
+  color: #c0d0e7;
+}
+
+:root[data-theme="dark"] .loan-return-choice.is-selected .loan-return-choice__state {
+  border-color: rgba(89, 149, 255, 0.28);
+  background: rgba(61, 143, 255, 0.16);
+  color: #edf4ff;
+}
+
+:root[data-theme="dark"] .loan-return-choice__hint.is-selected {
+  color: #edf4ff;
 }
 
 :root[data-theme="dark"] .loan-delivery-additional {

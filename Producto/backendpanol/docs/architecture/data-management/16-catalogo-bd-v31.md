@@ -1,9 +1,17 @@
 ﻿# Catalogo Completo de Base de Datos (Supabase)
 
-- Estado del documento: vigente
-- Ultima verificacion: 2026-05-31
+- Estado del documento: historico
+- Ultima verificacion: 2026-06-28
 - Fuente de verdad: esquema public introspectado historicamente en Supabase + Flyway hasta V31
 - Rama de referencia: feature/db-loan-flow-refinement
+
+## Aviso de vigencia
+
+- Este documento queda congelado como referencia historica hasta `V31`.
+- No cubre los cambios introducidos en `V32` a `V47`.
+- Para el comportamiento operativo actual, usar primero:
+  - [03-postgresql-guia-tecnica.md](./03-postgresql-guia-tecnica.md)
+  - [migrations/README.md](./migrations/README.md)
 
 ## 1. Resumen Ejecutivo
 

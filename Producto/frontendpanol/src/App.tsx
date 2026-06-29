@@ -19,6 +19,7 @@ import { LoanCreatePage } from "./pages/LoanCreatePage";
 import { LoanCoordinatorPage } from "./pages/LoanCoordinatorPage";
 import { LoanDeliveryPage } from "./pages/LoanDeliveryPage";
 import { LoanHistoryPage } from "./pages/LoanHistoryPage";
+import { LoanPreparationPage } from "./pages/LoanPreparationPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { NotificationsPage } from "./pages/NotificationsPage";
@@ -31,6 +32,7 @@ import {
   clearSession,
   getDefaultHashByRole,
   getRoleDisplayLabel,
+  isSessionUserCacheFresh,
   getSessionUser,
   replaceSessionUser,
   type SessionUserSummary,
@@ -51,6 +53,21 @@ interface RouteView {
 }
 
 type AuthStatus = "bootstrapping" | "authenticated" | "unauthenticated";
+
+function getInitialAuthState(): { sessionUser: SessionUserSummary | null; authStatus: AuthStatus } {
+  const sessionUser = getSessionUser();
+  if (!sessionUser) {
+    return {
+      sessionUser: null,
+      authStatus: "unauthenticated",
+    };
+  }
+
+  return {
+    sessionUser,
+    authStatus: isSessionUserCacheFresh() ? "authenticated" : "bootstrapping",
+  };
+}
 
 function isTeacher(role: UserRole): boolean {
   return role === "DOCENTE";
@@ -74,10 +91,11 @@ function renderAccessDenied(message: string) {
 }
 
 function App() {
+  const initialAuthState = useMemo(getInitialAuthState, []);
   const [hash, setHash] = useState(() => window.location.hash || "#/login");
   const [routeTransitionKey, setRouteTransitionKey] = useState(0);
-  const [sessionUser, setSessionUser] = useState<SessionUserSummary | null>(() => getSessionUser());
-  const [authStatus, setAuthStatus] = useState<AuthStatus>("bootstrapping");
+  const [sessionUser, setSessionUser] = useState<SessionUserSummary | null>(initialAuthState.sessionUser);
+  const [authStatus, setAuthStatus] = useState<AuthStatus>(initialAuthState.authStatus);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => getStoredThemeMode());
   const currentHashPathRef = useRef(getHashPath(window.location.hash || "#/login"));
 
@@ -113,6 +131,19 @@ function App() {
     let cancelled = false;
 
     async function bootstrapSession() {
+      const cachedUser = getSessionUser();
+      if (!cachedUser) {
+        setSessionUser(null);
+        setAuthStatus("unauthenticated");
+        return;
+      }
+
+      setSessionUser(cachedUser);
+      if (isSessionUserCacheFresh()) {
+        setAuthStatus("authenticated");
+        return;
+      }
+
       setAuthStatus("bootstrapping");
       try {
         const currentUser = await fetchCurrentUserProfile();
@@ -369,9 +400,27 @@ function App() {
     const loanDeliveryMatch = currentHashPath.match(
       /^#\/inventory\/prestamos\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})\/entrega$/,
     );
+    const loanPreparationMatch = currentHashPath.match(
+      /^#\/inventory\/prestamos\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})\/preparacion$/,
+    );
     const loanEditMatch = currentHashPath.match(
       /^#\/inventory\/prestamos\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})\/editar$/,
     );
+
+    if (loanPreparationMatch) {
+      if (!coordinatorRole) {
+        return inventoryDenied("coordinator-loans", "Prestamos", "Solo el rol Coordinador puede preparar solicitudes.");
+      }
+
+      const loanUuid = loanPreparationMatch[1];
+      return {
+        key: `loan-preparation-${loanUuid}`,
+        navigationMode: "inventory",
+        activeSection: "coordinator-loans",
+        breadcrumbs: [{ label: "Inventario", href: "#/inventory/dashboard" }, { label: "Prestamos", href: "#/inventory/prestamos" }, { label: "Preparar implementos" }],
+        content: <LoanPreparationPage loanUuid={loanUuid} embedded />,
+      };
+    }
 
     if (loanDeliveryMatch) {
       if (!coordinatorRole) {

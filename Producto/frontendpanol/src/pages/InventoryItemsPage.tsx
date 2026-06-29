@@ -9,9 +9,11 @@ import type { ImplementSummary } from "../types/implement";
 import { getSessionUserRole, type UserRole } from "../utils/auth";
 
 type StockHealth = "healthy" | "low" | "critical" | "unknown";
-type FilterTagKey = "name" | "categoryUuid" | "stockStatus";
+type FilterTagKey = "name" | "categoryUuid" | "itemType" | "stockStatus";
 type StockFilterOption = Exclude<StockHealth, "unknown">;
+type ImplementItemTypeFilter = "consumable" | "reusable" | "individual";
 
+const PAGE_SIZE = 20;
 const STOCK_FILTER_OPTIONS: StockFilterOption[] = ["healthy", "low", "critical"];
 const STOCK_FILTER_LABELS: Record<StockFilterOption, string> = {
   healthy: "Disponible",
@@ -25,6 +27,18 @@ const STOCK_HEALTH_LABELS: Record<StockHealth, string> = {
   critical: "Critico",
   unknown: "Sin datos",
 };
+
+const ITEM_TYPE_FILTER_OPTIONS: ImplementItemTypeFilter[] = ["consumable", "reusable", "individual"];
+const ITEM_TYPE_FILTER_LABELS: Record<ImplementItemTypeFilter, string> = {
+  consumable: "Consumible",
+  reusable: "Reutilizable",
+  individual: "Activo",
+};
+
+function getImplementSearchText(row: ImplementSummary): string {
+  const individualAssetCodes = row.individualAssetCodes ?? row.individual_asset_codes ?? [];
+  return [row.name, row.barcode ?? "", ...individualAssetCodes].join(" ").trim().toLowerCase();
+}
 
 function getStockHealth(row: ImplementSummary): StockHealth {
   const available = row.stock?.available;
@@ -75,11 +89,15 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
   const userRole: UserRole = getSessionUserRole();
   const [searchFilter, setSearchFilter] = useState("");
   const [selectedCategoryUuids, setSelectedCategoryUuids] = useState<string[]>([]);
+  const [selectedItemTypes, setSelectedItemTypes] = useState<ImplementItemTypeFilter[]>([]);
   const [selectedStockStatuses, setSelectedStockStatuses] = useState<StockFilterOption[]>([]);
   const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
+  const [isTypeMenuOpen, setIsTypeMenuOpen] = useState(false);
   const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
   const [debouncedNameFilter, setDebouncedNameFilter] = useState(searchFilter);
+  const [page, setPage] = useState(1);
   const categoryMenuRef = useRef<HTMLDivElement | null>(null);
+  const typeMenuRef = useRef<HTMLDivElement | null>(null);
   const statusMenuRef = useRef<HTMLDivElement | null>(null);
 
   const refreshImplements = useCallback(async () => {
@@ -100,12 +118,15 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
   const hasActiveFilters =
     searchFilter.trim().length > 0 ||
     selectedCategoryUuids.length > 0 ||
+    selectedItemTypes.length > 0 ||
     selectedStockStatuses.length > 0;
 
   function clearFilters() {
     setSearchFilter("");
     setSelectedCategoryUuids([]);
+    setSelectedItemTypes([]);
     setSelectedStockStatuses([]);
+    setPage(1);
   }
 
   useEffect(() => {
@@ -139,6 +160,9 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
       const target = event.target as Node;
       if (categoryMenuRef.current && !categoryMenuRef.current.contains(target)) {
         setIsCategoryMenuOpen(false);
+      }
+      if (typeMenuRef.current && !typeMenuRef.current.contains(target)) {
+        setIsTypeMenuOpen(false);
       }
       if (statusMenuRef.current && !statusMenuRef.current.contains(target)) {
         setIsStatusMenuOpen(false);
@@ -188,53 +212,86 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
         tags.push({ key: "categoryUuid", label: `Categoria: ${category?.name ?? "Seleccionada"}` });
       });
     }
+    if (selectedItemTypes.length > 0) {
+      selectedItemTypes.forEach((itemType) => {
+        tags.push({ key: "itemType", label: `Tipo: ${ITEM_TYPE_FILTER_LABELS[itemType]}` });
+      });
+    }
     if (selectedStockStatuses.length > 0) {
       selectedStockStatuses.forEach((status) => {
         tags.push({ key: "stockStatus", label: `Estado: ${STOCK_FILTER_LABELS[status]}` });
       });
     }
     return tags;
-  }, [categoryOptions, searchFilter, selectedCategoryUuids, selectedStockStatuses]);
+  }, [categoryOptions, searchFilter, selectedCategoryUuids, selectedItemTypes, selectedStockStatuses]);
 
   const implementos = useMemo(() => {
     const query = debouncedNameFilter.trim().toLowerCase();
 
     return allImplements.filter((row) => {
-      const nameMatch = row.name?.toLowerCase().includes(query);
-      const barcodeMatch = row.barcode?.toLowerCase().includes(query) ?? false;
-      const queryMatch = query.length === 0 || nameMatch || barcodeMatch;
+      const queryMatch = query.length === 0 || getImplementSearchText(row).includes(query);
 
       const categoryMatch =
         selectedCategoryUuids.length === 0 || (row.category?.uuid != null && selectedCategoryUuids.includes(row.category.uuid));
+
+      const itemTypeMatch =
+        selectedItemTypes.length === 0 ||
+        (row.item_type != null && selectedItemTypes.includes(row.item_type));
 
       const health = getStockHealth(row);
       const statusMatch =
         selectedStockStatuses.length === 0 ||
         (health !== "unknown" && selectedStockStatuses.includes(health));
 
-      return queryMatch && categoryMatch && statusMatch;
+      return queryMatch && categoryMatch && itemTypeMatch && statusMatch;
     });
-  }, [allImplements, debouncedNameFilter, selectedCategoryUuids, selectedStockStatuses]);
+  }, [allImplements, debouncedNameFilter, selectedCategoryUuids, selectedItemTypes, selectedStockStatuses]);
 
   const totalPages = useMemo(() => {
-    const pageSize = 20;
-    return Math.max(1, Math.ceil(totalImplements / pageSize));
-  }, [totalImplements]);
+    return Math.max(1, Math.ceil(implementos.length / PAGE_SIZE));
+  }, [implementos.length]);
+
+  const safePage = useMemo(() => {
+    if (page < 1) {
+      return 1;
+    }
+    if (page > totalPages) {
+      return totalPages;
+    }
+    return page;
+  }, [page, totalPages]);
+
+  const pageStart = (safePage - 1) * PAGE_SIZE;
+  const pagedImplements = implementos.slice(pageStart, pageStart + PAGE_SIZE);
+  const rangeStart = implementos.length === 0 ? 0 : pageStart + 1;
+  const rangeEnd = implementos.length === 0 ? 0 : Math.min(pageStart + pagedImplements.length, implementos.length);
 
   const paginationButtons = useMemo(() => {
-    return Array.from({ length: Math.min(3, totalPages) }, (_, index) => index + 1);
-  }, [totalPages]);
+    const windowSize = 5;
+    let start = Math.max(1, safePage - 2);
+    const end = Math.min(totalPages, start + windowSize - 1);
+    start = Math.max(1, end - windowSize + 1);
+    return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+  }, [safePage, totalPages]);
 
   function clearFilterTag(key: FilterTagKey) {
     if (key === "name") {
       setSearchFilter("");
+      setPage(1);
       return;
     }
     if (key === "categoryUuid") {
       setSelectedCategoryUuids([]);
+      setPage(1);
+      return;
+    }
+    if (key === "itemType") {
+      setSelectedItemTypes([]);
+      setPage(1);
       return;
     }
     setSelectedStockStatuses([]);
+    setPage(1);
   }
 
   function toggleCategorySelection(categoryUuid: string) {
@@ -243,6 +300,7 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
         ? current.filter((uuid) => uuid !== categoryUuid)
         : [...current, categoryUuid],
     );
+    setPage(1);
   }
 
   function toggleStockStatusSelection(status: StockFilterOption) {
@@ -251,6 +309,16 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
         ? current.filter((entry) => entry !== status)
         : [...current, status],
     );
+    setPage(1);
+  }
+
+  function toggleItemTypeSelection(itemType: ImplementItemTypeFilter) {
+    setSelectedItemTypes((current) =>
+      current.includes(itemType)
+        ? current.filter((entry) => entry !== itemType)
+        : [...current, itemType],
+    );
+    setPage(1);
   }
 
   const selectedCategoryLabel = useMemo(() => {
@@ -273,6 +341,16 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
     }
     return `${selectedStockStatuses.length} estados`;
   }, [selectedStockStatuses]);
+
+  const selectedItemTypeLabel = useMemo(() => {
+    if (selectedItemTypes.length === 0) {
+      return "Todos";
+    }
+    if (selectedItemTypes.length === 1) {
+      return ITEM_TYPE_FILTER_LABELS[selectedItemTypes[0]];
+    }
+    return `${selectedItemTypes.length} tipos`;
+  }, [selectedItemTypes]);
 
   const content = (
     <div className="inventory-items-page">
@@ -342,7 +420,10 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
                   type="search"
                   placeholder="Filtrar por nombre o codigo de barras..."
                   value={searchFilter}
-                  onChange={(event) => setSearchFilter(event.target.value)}
+                  onChange={(event) => {
+                    setSearchFilter(event.target.value);
+                    setPage(1);
+                  }}
                 />
               </div>
             </div>
@@ -379,6 +460,43 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
                           />
                         </span>
                         <span className="inventory-multiselect__option-label">{category.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+
+            <div
+              ref={typeMenuRef}
+              className={selectedItemTypes.length > 0 ? "catalog-filters__item catalog-filters__item--active inventory-multiselect" : "catalog-filters__item inventory-multiselect"}
+            >
+              <label htmlFor="catalog-filter-item-type">Tipo</label>
+              <button
+                id="catalog-filter-item-type"
+                type="button"
+                className="inventory-multiselect__trigger"
+                onClick={() => setIsTypeMenuOpen((current) => !current)}
+                aria-expanded={isTypeMenuOpen}
+                aria-haspopup="listbox"
+              >
+                <span>Tipo: {selectedItemTypeLabel}</span>
+                <ChevronDown size={16} />
+              </button>
+              {isTypeMenuOpen ? (
+                <div className="inventory-multiselect__menu" role="listbox" aria-multiselectable="true">
+                  {ITEM_TYPE_FILTER_OPTIONS.map((itemType) => {
+                    const checked = selectedItemTypes.includes(itemType);
+                    return (
+                      <label key={itemType} className={checked ? "inventory-multiselect__option is-selected" : "inventory-multiselect__option"}>
+                        <span className="inventory-multiselect__option-control">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleItemTypeSelection(itemType)}
+                          />
+                        </span>
+                        <span className="inventory-multiselect__option-label">{ITEM_TYPE_FILTER_LABELS[itemType]}</span>
                       </label>
                     );
                   })}
@@ -520,7 +638,7 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
                   ))
                 : null}
               {!loading
-                ? implementos.map((row) => {
+                ? pagedImplements.map((row) => {
                     const health = getStockHealth(row);
                     const progress = getStockProgressPercent(row);
                     return (
@@ -615,22 +733,33 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
 
         <div className="inventory-table-footer">
           <p>
-            Mostrando {implementos.length === 0 ? 0 : 1} a {implementos.length} de {totalImplements} implementos
+            Mostrando {rangeStart} a {rangeEnd} de {implementos.length} implementos
           </p>
           <div className="inventory-pagination">
-            <button type="button" className="inventory-pagination__btn" disabled>
+            <button
+              type="button"
+              className="inventory-pagination__btn"
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              disabled={safePage <= 1}
+            >
               <ChevronLeft size={16} />
             </button>
             {paginationButtons.map((page) => (
               <button
                 key={page}
                 type="button"
-                className={page === 1 ? "inventory-pagination__btn inventory-pagination__btn--active" : "inventory-pagination__btn"}
+                className={page === safePage ? "inventory-pagination__btn inventory-pagination__btn--active" : "inventory-pagination__btn"}
+                onClick={() => setPage(page)}
               >
                 {page}
               </button>
             ))}
-            <button type="button" className="inventory-pagination__btn" disabled={totalPages <= 1}>
+            <button
+              type="button"
+              className="inventory-pagination__btn"
+              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              disabled={safePage >= totalPages}
+            >
               <ChevronRight size={16} />
             </button>
           </div>

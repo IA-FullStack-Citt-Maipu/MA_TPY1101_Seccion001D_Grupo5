@@ -183,6 +183,7 @@ export function InventoryItemDetailPage({
   const [stockError, setStockError] = useState<string | null>(null);
   const [isStockAdjustModalOpen, setIsStockAdjustModalOpen] = useState(false);
   const [isMovementModalOpen, setIsMovementModalOpen] = useState(false);
+  const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false);
 
   const userRole: UserRole = getSessionUserRole();
   const isDocente = userRole === "DOCENTE";
@@ -224,6 +225,8 @@ export function InventoryItemDetailPage({
   const [labelPreviewUrl, setLabelPreviewUrl] = useState<string | null>(null);
   const [labelBusy, setLabelBusy] = useState(false);
   const locationNameByUuid = new Map(locations.map((location) => [location.uuid, location.name] as const));
+  const implementImageUrl = implement?.img_url?.trim() || null;
+  const implementImagePreviewSrc = implementImageUrl ?? "https://placehold.co/420x260/e9edf5/4d6284?text=Sin+imagen";
 
   function resolveLabelDisplayCode(scope: LabelScope, individualUuid: string | null): string | null {
     if (scope === "INDIVIDUAL") {
@@ -246,6 +249,7 @@ export function InventoryItemDetailPage({
   useEffect(() => {
     const hasModalOpen =
       editingIndividual != null ||
+      isImagePreviewOpen ||
       isLabelModalOpen ||
       isStockAdjustModalOpen ||
       isMovementModalOpen;
@@ -256,7 +260,7 @@ export function InventoryItemDetailPage({
     return () => {
       document.body.classList.remove("modal-open");
     };
-  }, [editingIndividual, isLabelModalOpen, isStockAdjustModalOpen, isMovementModalOpen]);
+  }, [editingIndividual, isImagePreviewOpen, isLabelModalOpen, isStockAdjustModalOpen, isMovementModalOpen]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -537,19 +541,6 @@ export function InventoryItemDetailPage({
     );
   }
 
-  async function handleMarkIndividualAvailable(individual: IndividualItem) {
-    setStockBusy(true);
-    try {
-      setStockDetail(await updateIndividualState(implementUuid, individual.uuid, { status: "available", condition: "good" }));
-      await refreshRecentMovements();
-      setSuccess(`Individual ${individual.asset_code} actualizado.`);
-    } catch (requestError) {
-      setStockError(getErrorMessage(requestError, "No se pudo actualizar el individual."));
-    } finally {
-      setStockBusy(false);
-    }
-  }
-
   function openIndividualEditor(individual: IndividualItem) {
     setEditingIndividual(individual);
     setIndividualStatus(individual.status);
@@ -631,7 +622,21 @@ export function InventoryItemDetailPage({
     window.setTimeout(() => popup.print(), 450);
   }
 
+  function openImagePreviewModal() {
+    if (!implementImageUrl) {
+      return;
+    }
+    setIsImagePreviewOpen(true);
+  }
+
+  function closeImagePreviewModal() {
+    setIsImagePreviewOpen(false);
+  }
+
   const latestMovementRows = latestMovements ?? implement?.recent_movements ?? [];
+  const allMovementsHref = implement
+    ? `#/inventory/moves?implementUuid=${encodeURIComponent(implement.uuid)}&implementName=${encodeURIComponent(implement.name)}`
+    : "#/inventory/moves";
 
   const content = (
     <>
@@ -708,8 +713,16 @@ export function InventoryItemDetailPage({
               <article className="detail-card detail-card--hero">
                 <div className="implement-hero-detail">
                   <div className="implement-hero">
-                    <img src={implement.img_url ?? "https://placehold.co/420x260/e9edf5/4d6284?text=Sin+imagen"} alt={implement.name} className="implement-hero__img" />
-                    <button type="button" className="button button--ghost button--sm" disabled><ImageIcon size={14} />Ver imagen</button>
+                    <img src={implementImagePreviewSrc} alt={implement.name} className="implement-hero__img" />
+                    <button
+                      type="button"
+                      className="button button--ghost button--sm implement-hero__preview-btn"
+                      onClick={openImagePreviewModal}
+                      disabled={!implementImageUrl}
+                    >
+                      <ImageIcon size={14} />
+                      Ver imagen
+                    </button>
                   </div>
                   <div>
                     <h2>{implement.name}</h2>
@@ -786,7 +799,6 @@ export function InventoryItemDetailPage({
                             <td>{resolveLocationName(individual.current_location_uuid)}</td>
                             <td className="table-actions">
                               <button type="button" className="button button--table button--ghost" disabled={stockBusy} onClick={() => openIndividualEditor(individual)}><Edit3 size={14} />Editar</button>
-                              <button type="button" className="button button--table button--ghost" disabled={stockBusy || individual.status === "available"} onClick={() => handleMarkIndividualAvailable(individual)}><CircleCheck size={14} />Marcar disponible</button>
                               <button type="button" className="button button--table button--ghost" disabled={stockBusy} onClick={() => openLabelsModal("INDIVIDUAL", individual.uuid)}><Barcode size={14} />Código de barras</button>
                             </td>
                           </tr>
@@ -839,13 +851,51 @@ export function InventoryItemDetailPage({
                       </tbody>
                     </table>
                   </div>
-                  <a className="side-link" href="#/inventory/moves">Ver todos los movimientos</a>
+                  <a className="side-link" href={allMovementsHref}>Ver todos los movimientos</a>
                 </article>
               )}
             </aside>
           </div>
         ) : null}
       </section>
+
+      {isImagePreviewOpen && implement ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-label={`Imagen de ${implement.name}`}>
+          <div className="modal image-preview-modal">
+            <div className="image-preview-modal__header">
+              <div>
+                <h3>{implement.name}</h3>
+                <p>Vista ampliada del implemento seleccionado.</p>
+              </div>
+              <div className="image-preview-modal__actions">
+                <a
+                  className="button button--ghost button--sm"
+                  href={implementImageUrl ?? "#"}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Abrir original
+                </a>
+                <button
+                  type="button"
+                  className="button button--ghost button--sm"
+                  onClick={closeImagePreviewModal}
+                >
+                  <X size={14} />
+                  Cerrar
+                </button>
+              </div>
+            </div>
+            <div className="image-preview-modal__frame">
+              <img
+                src={implementImagePreviewSrc}
+                alt={`Vista ampliada de ${implement.name}`}
+                className="image-preview-modal__img"
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isStockAdjustModalOpen && implement ? (
         <div className="modal-overlay" role="dialog" aria-modal="true">
