@@ -17,6 +17,8 @@ interface FieldErrors {
   itemType?: string;
   locationUuid?: string;
   minStock?: string;
+  costCenter?: string;
+  netValue?: string;
   description?: string;
   barcode?: string;
   imgUrl?: string;
@@ -27,8 +29,22 @@ interface FieldErrors {
 const ITEM_TYPE_OPTIONS: Array<{ value: ItemType; label: string }> = [
   { value: "consumable", label: "Consumible" },
   { value: "reusable", label: "Reutilizable" },
-  { value: "individual", label: "Individual" },
+  { value: "individual", label: "Activo" },
 ];
+
+function keepOnlyDigits(value: string, maxLength: number): string {
+  return value.replace(/\D/g, "").slice(0, maxLength);
+}
+
+function formatCurrencyInput(value: string): string {
+  if (value.trim().length === 0) {
+    return "";
+  }
+
+  return `$ ${new Intl.NumberFormat("es-CL", {
+    maximumFractionDigits: 0,
+  }).format(Number(value))}`;
+}
 
 function mapApiErrorToFields(message: string): FieldErrors {
   const normalized = message.toLowerCase();
@@ -52,6 +68,14 @@ function mapApiErrorToFields(message: string): FieldErrors {
   }
   if (normalized.includes("stock minimo")) {
     errors.minStock = message;
+    return errors;
+  }
+  if (normalized.includes("centro de costo") || normalized.includes("cost_center")) {
+    errors.costCenter = message;
+    return errors;
+  }
+  if (normalized.includes("valor neto") || normalized.includes("net_value")) {
+    errors.netValue = message;
     return errors;
   }
   if (normalized.includes("descripcion")) {
@@ -94,6 +118,8 @@ export function InventoryImplementCreatePage({
   const [barcode, setBarcode] = useState("");
   const [imgUrl, setImgUrl] = useState("");
   const [minStockRaw, setMinStockRaw] = useState("");
+  const [costCenter, setCostCenter] = useState("");
+  const [netValueRaw, setNetValueRaw] = useState("");
   const [observations, setObservations] = useState("");
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [saving, setSaving] = useState(false);
@@ -126,6 +152,8 @@ export function InventoryImplementCreatePage({
     setBarcode("");
     setImgUrl("");
     setMinStockRaw("");
+    setCostCenter("");
+    setNetValueRaw("");
     setObservations("");
     setFieldErrors({});
     setPreviewFailed(false);
@@ -141,6 +169,8 @@ export function InventoryImplementCreatePage({
     setBarcode(detail.barcode ?? "");
     setImgUrl(detail.img_url ?? "");
     setMinStockRaw(detail.min_stock == null ? "" : String(detail.min_stock));
+    setCostCenter(detail.cost_center ?? "");
+    setNetValueRaw(detail.net_value == null ? "" : String(Math.trunc(Number(detail.net_value))));
     setObservations(detail.observations ?? "");
   }
 
@@ -249,6 +279,8 @@ export function InventoryImplementCreatePage({
     const locationUuid = locationUuidRaw.trim();
     const minStock = minStockRaw.trim() ? Number(minStockRaw) : NaN;
     const imgUrlValue = imgUrl.trim();
+    const costCenterValue = costCenter.trim();
+    const netValueValue = netValueRaw.trim();
 
     if (name.trim().length === 0) {
       errors.name = "El nombre es obligatorio.";
@@ -267,6 +299,12 @@ export function InventoryImplementCreatePage({
     }
     if (!Number.isFinite(minStock) || minStock <= 0 || !Number.isInteger(minStock)) {
       errors.minStock = "El stock minimo debe ser un entero positivo.";
+    }
+    if (costCenterValue.length > 0 && !/^\d{1,10}$/.test(costCenterValue)) {
+      errors.costCenter = "El Ce.coste debe contener solo digitos y un maximo de 10 caracteres.";
+    }
+    if (netValueValue.length > 0 && !/^\d{1,9}$/.test(netValueValue)) {
+      errors.netValue = "El valor neto debe ser un monto entero de hasta 9 digitos.";
     }
     if (description.trim().length > 2000) {
       errors.description = "La descripcion no puede superar 2000 caracteres.";
@@ -309,6 +347,8 @@ export function InventoryImplementCreatePage({
           barcode: barcode.trim() ? barcode.trim() : null,
           img_url: normalizedImgUrl ? normalizedImgUrl : null,
           min_stock: Number(minStockRaw),
+          cost_center: costCenter.trim() ? costCenter.trim() : null,
+          net_value: netValueRaw.trim() ? Number(netValueRaw) : null,
           observations: observations.trim() ? observations.trim() : null,
         });
         window.location.hash = `#/inventory/implementos/${updated.uuid}`;
@@ -324,6 +364,8 @@ export function InventoryImplementCreatePage({
         barcode: barcode.trim() ? barcode.trim() : null,
         img_url: normalizedImgUrl ? normalizedImgUrl : null,
         min_stock: Number(minStockRaw),
+        cost_center: costCenter.trim() ? costCenter.trim() : null,
+        net_value: netValueRaw.trim() ? Number(netValueRaw) : null,
         observations: observations.trim() ? observations.trim() : null,
       });
 
@@ -492,8 +534,44 @@ export function InventoryImplementCreatePage({
                 {fieldErrors.minStock ? <p className="field-error">{fieldErrors.minStock}</p> : null}
               </div>
 
+              <div className="implement-create-form__field">
+                <label htmlFor="implement-create-cost-center">Ce.coste</label>
+                <input
+                  id="implement-create-cost-center"
+                  value={costCenter}
+                  onChange={(event) => {
+                    setCostCenter(keepOnlyDigits(event.target.value, 10));
+                    setFieldErrors((current) => ({ ...current, costCenter: undefined }));
+                  }}
+                  placeholder="Ej. 1617103021"
+                  inputMode="numeric"
+                  maxLength={10}
+                  disabled={saving || loadingImplement}
+                />
+                {fieldErrors.costCenter ? <p className="field-error">{fieldErrors.costCenter}</p> : null}
+              </div>
+
+              <div className="implement-create-form__field">
+                <label htmlFor="implement-create-net-value">Valor neto</label>
+                <input
+                  id="implement-create-net-value"
+                  value={formatCurrencyInput(netValueRaw)}
+                  onChange={(event) => {
+                    setNetValueRaw(keepOnlyDigits(event.target.value, 9));
+                    setFieldErrors((current) => ({ ...current, netValue: undefined }));
+                  }}
+                  placeholder="Ej. $ 116.734"
+                  inputMode="numeric"
+                  disabled={saving || loadingImplement}
+                />
+                {fieldErrors.netValue ? <p className="field-error">{fieldErrors.netValue}</p> : null}
+              </div>
+
               <div className="implement-create-form__field implement-create-form__field--full">
-                <label htmlFor="implement-create-barcode">ID / Codigo de barras</label>
+                <label htmlFor="implement-create-barcode">
+                  <span>ID / Codigo de barras</span>
+                  <span className="implement-create-form__label-note">General para el implemento</span>
+                </label>
                 <input
                   id="implement-create-barcode"
                   value={barcode}
@@ -506,6 +584,12 @@ export function InventoryImplementCreatePage({
                   disabled={saving || loadingImplement}
                 />
                 {fieldErrors.barcode ? <p className="field-error">{fieldErrors.barcode}</p> : null}
+                {itemTypeRaw === "individual" ? (
+                  <p className="field-hint">
+                    Al agregar stock se debera agregar los codigos de barras por cada activo correspondiente a este
+                    implemento. Este codigo de barras es para el implemento en general y puedes dejarlo vacio.
+                  </p>
+                ) : null}
               </div>
 
               <div className="implement-create-form__field implement-create-form__field--full">

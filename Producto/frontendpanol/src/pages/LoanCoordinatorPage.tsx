@@ -68,7 +68,7 @@ function formatSchedule(value: string): string {
 
 function normalizeStatusLabel(status: string): string {
   const labels: Record<string, string> = {
-    pending: "Pendiente",
+    pending: "Reservado",
     approved: "Reservado",
     prepared: "Preparado",
     delivered: "En uso",
@@ -82,9 +82,9 @@ function normalizeStatusLabel(status: string): string {
 }
 
 function statusClassName(status: string): string {
-  if (status === "pending") return "teacher-loans-status teacher-loans-status--pending";
-  if (status === "approved") return "teacher-loans-status teacher-loans-status--approved";
-  if (status === "prepared") return "teacher-loans-status teacher-loans-status--approved";
+  if (status === "pending" || status === "approved" || status === "prepared") {
+    return "teacher-loans-status teacher-loans-status--approved";
+  }
   if (status === "delivered") return "teacher-loans-status teacher-loans-status--delivered";
   if (status === "overdue") return "teacher-loans-status teacher-loans-status--danger";
   if (status === "cancelled" || status === "rejected" || status === "expired")

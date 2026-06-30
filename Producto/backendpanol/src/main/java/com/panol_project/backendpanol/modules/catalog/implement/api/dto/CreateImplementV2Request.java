@@ -1,10 +1,12 @@
 package com.panol_project.backendpanol.modules.catalog.implement.api.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.util.UUID;
 
 public record CreateImplementV2Request(
@@ -19,6 +21,12 @@ public record CreateImplementV2Request(
         @NotNull @JsonProperty("min_stock") Integer minStock,
         String barcode,
         @JsonProperty("img_url") String imgUrl,
-        String observations
+        String observations,
+        @JsonProperty("cost_center")
+        @Pattern(regexp = "^\\d{1,10}$", message = "El Ce.coste debe contener solo digitos y un maximo de 10 caracteres")
+        String costCenter,
+        @JsonProperty("net_value")
+        @Digits(integer = 9, fraction = 0, message = "El valor neto debe ser un monto entero de hasta 9 digitos")
+        BigDecimal netValue
 ) {
 }

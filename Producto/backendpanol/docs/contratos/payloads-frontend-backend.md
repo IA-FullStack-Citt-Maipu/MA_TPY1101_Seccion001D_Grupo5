@@ -544,3 +544,104 @@ Notas:
 
 - `complete` asume retorno correcto para todos los items retornables pendientes.
 - `return` debe usarse cuando hace falta clasificar unidades `individual` o informar retorno parcial de `reusable`.
+
+## 13) Catalogo de implementos y stock individual
+
+### Request (`POST /api/v2/implements`)
+
+```json
+{
+  "name": "Ultrasonido NSK",
+  "description": "Equipo para laboratorio clinico",
+  "categoryUuid": "c8cf95bb-f696-47b4-bc7d-9cb7445fdd67",
+  "locationUuid": "595b5469-f8c3-4d70-ac11-cd1b6df2a121",
+  "item_type": "individual",
+  "min_stock": 1,
+  "barcode": "528004110",
+  "img_url": "https://...",
+  "observations": "Uso docente",
+  "cost_center": "1617103021",
+  "net_value": 116734
+}
+```
+
+### Request (`PUT /api/v2/implements/{implementUuid}`)
+
+Mismo contrato de creacion.
+
+### Response (`GET /api/v2/implements/{implementUuid}`)
+
+```json
+{
+  "uuid": "3de835f5-d97b-4bd4-b3b0-41414e79d346",
+  "name": "Ultrasonido NSK",
+  "description": "Equipo para laboratorio clinico",
+  "item_type": "individual",
+  "category_uuid": "c8cf95bb-f696-47b4-bc7d-9cb7445fdd67",
+  "location_uuid": "595b5469-f8c3-4d70-ac11-cd1b6df2a121",
+  "min_stock": 1,
+  "barcode": "528004110",
+  "img_url": "https://...",
+  "observations": "Uso docente",
+  "cost_center": "1617103021",
+  "net_value": 116734,
+  "active": true
+}
+```
+
+Notas:
+
+- `cost_center` es opcional para cualquier tipo de implemento y se persiste como texto.
+- `cost_center`, cuando se informa, debe contener solo digitos y un maximo de 10 caracteres.
+- `net_value` es opcional para cualquier tipo de implemento y hoy se persiste como monto entero de hasta 9 digitos.
+- En esta pasada ambos campos son solo informativos; no alteran stock, prestamos ni disponibilidad.
+
+### Response (`GET /api/v2/implements/{implementUuid}/stock`)
+
+```json
+{
+  "implement_uuid": "3de835f5-d97b-4bd4-b3b0-41414e79d346",
+  "item_type": "individual",
+  "stock": {
+    "total_stock": 2,
+    "min_stock": 1,
+    "available": 2,
+    "reserved": 0,
+    "loaned": 0,
+    "damaged": 0
+  },
+  "individuals": [
+    {
+      "uuid": "6998f8dd-9926-49d2-b3d0-9300f5dd4e50",
+      "asset_code": "IND-0001",
+      "status": "available",
+      "condition": "good",
+      "notes": null,
+      "current_location_uuid": "595b5469-f8c3-4d70-ac11-cd1b6df2a121",
+      "active": true,
+      "remaining_life": 38,
+      "asset_code_reprint_required": false
+    }
+  ]
+}
+```
+
+### Request (`PUT /api/v2/implements/{implementUuid}/stock/individuals/{individualUuid}`)
+
+```json
+{
+  "status": "available",
+  "condition": "good",
+  "notes": "Activo revisado",
+  "current_location_uuid": "595b5469-f8c3-4d70-ac11-cd1b6df2a121",
+  "active": true,
+  "remaining_life": -13,
+  "asset_code_reprint_required": true
+}
+```
+
+Notas:
+
+- `remaining_life` es exclusivo de unidades `individual` y puede venir `null` o incluso negativo.
+- `asset_code_reprint_required` es exclusivo de unidades `individual`, siempre sale en response y en base de datos nace con `false`.
+- Los clientes antiguos pueden omitir `asset_code_reprint_required` al editar una unidad; si no se envia, no se modifica su valor actual.

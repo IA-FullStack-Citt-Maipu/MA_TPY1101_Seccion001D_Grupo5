@@ -1,7 +1,9 @@
 package com.panol_project.backendpanol.modules.catalog.stock.application;
 
 import com.panol_project.backendpanol.modules.catalog.stock.application.contract.StockMovementContract;
+import com.panol_project.backendpanol.modules.catalog.stock.domain.IndividualEntryDraft;
 import com.panol_project.backendpanol.modules.catalog.stock.domain.IndividualItem;
+import com.panol_project.backendpanol.modules.catalog.stock.domain.IndividualStatusSummary;
 import com.panol_project.backendpanol.modules.catalog.stock.domain.InventoryMovement;
 import com.panol_project.backendpanol.modules.catalog.stock.domain.InventoryMovementRepository;
 import com.panol_project.backendpanol.modules.catalog.stock.domain.MovementAction;
@@ -70,8 +72,24 @@ public class StockService implements StockMovementContract {
         return new StockDetail(implementUuid, context.itemType(), counters, individuals);
     }
 
+    @Transactional(readOnly = true)
+    public IndividualStatusSummary getActiveIndividualSummary() {
+        return repository.summarizeActiveIndividuals();
+    }
+
     @Transactional
-    public StockDetail addEntry(UUID implementUuid, Integer quantity, List<String> assetCodes) {
+    public StockDetail addEntry(
+            UUID implementUuid,
+            Integer quantity,
+            List<String> assetCodes,
+            String statusRaw,
+            String conditionRaw,
+            String notesRaw,
+            UUID currentLocationUuid,
+            Integer remainingLife,
+            Boolean assetCodeReprintRequired,
+            List<IndividualEntryDraft> individualEntries
+    ) {
         var context = requireContext(implementUuid);
         int qty = requirePositiveQuantity(quantity);
 
@@ -79,11 +97,20 @@ public class StockService implements StockMovementContract {
 
         boolean shouldCreateIndividuals = context.itemType() == StockItemType.INDIVIDUAL
                 || (assetCodes != null && !assetCodes.isEmpty());
-
         if (shouldCreateIndividuals) {
-            List<String> normalizedCodes = normalizeAssetCodes(assetCodes, qty);
+            List<IndividualEntryDraft> normalizedEntries = normalizeIndividualEntries(
+                    qty,
+                    assetCodes,
+                    statusRaw,
+                    conditionRaw,
+                    currentLocationUuid,
+                    remainingLife,
+                    assetCodeReprintRequired,
+                    individualEntries,
+                    context.locationUuid()
+            );
             try {
-                repository.createIndividuals(implementUuid, context.locationUuid(), normalizedCodes);
+                repository.createIndividuals(implementUuid, normalizedEntries);
             } catch (DataIntegrityViolationException ex) {
                 throw new ConflictException("INDIVIDUAL_ASSET_CODE_DUPLICATE", "Uno o mas codigos de activo ya existen");
             } catch (DataAccessException ex) {
@@ -98,8 +125,12 @@ public class StockService implements StockMovementContract {
         }
 
         repository.updateStock(implementUuid, qty, qty, 0, 0, 0);
-        recordInventoryMovement(implementUuid, MovementAction.STOCK_IN, qty, "Stock entry");
+        String notes = normalizeOptionalText(notesRaw);
+        recordInventoryMovement(implementUuid, MovementAction.STOCK_IN, qty, notes == null ? "Stock entry" : notes);
         outboxService.enqueue("implement", implementUuid, "StockEntryAdded", null, java.util.Map.of("quantity", qty));
+        if (context.itemType() == StockItemType.INDIVIDUAL) {
+            syncStockRowForIndividuals(implementUuid);
+        }
 
         return getStockDetail(implementUuid);
     }
@@ -162,7 +193,10 @@ public class StockService implements StockMovementContract {
             String conditionRaw,
             String notesRaw,
             UUID locationUuid,
-            Boolean active
+            Boolean active,
+            Integer remainingLife,
+            boolean remainingLifePresent,
+            Boolean assetCodeReprintRequired
     ) {
         var context = requireContext(implementUuid);
         if (context.itemType() != StockItemType.INDIVIDUAL) {
@@ -178,7 +212,17 @@ public class StockService implements StockMovementContract {
             throw new NotFoundException("INDIVIDUAL_NOT_FOUND", "Individual no encontrado para el implemento");
         }
 
-        repository.updateIndividualsState(List.of(individualUuid), status, condition, notes, locationUuid, active);
+        repository.updateIndividualsState(
+                List.of(individualUuid),
+                status,
+                condition,
+                notes,
+                locationUuid,
+                active,
+                remainingLife,
+                remainingLifePresent,
+                assetCodeReprintRequired
+        );
         syncStockRowForIndividuals(implementUuid);
         recordInventoryMovement(implementUuid, MovementAction.MANUAL_ADJUSTMENT, 1, "Individual updated");
         outboxService.enqueue("implement", implementUuid, "StockIndividualUpdated", null, java.util.Map.of("individual_uuid", individualUuid.toString()));
@@ -220,31 +264,31 @@ public class StockService implements StockMovementContract {
             case STOCK_IN -> throw new BadRequestException("INDIVIDUAL_MOVEMENT_INVALID", "Para sumar stock individual usa /entries con asset_codes");
             case STOCK_OUT -> {
                 applyMovementDelta(context.implementUuid(), movementType, qty);
-                repository.updateIndividualsState(uuids, "retired", condition == null ? "irreparable" : condition, null, null, false);
+                repository.updateIndividualsState(uuids, "retired", condition == null ? "irreparable" : condition, null, null, false, null, false, null);
             }
             case LOAN_DELIVERY -> {
                 applyMovementDelta(context.implementUuid(), movementType, qty);
-                repository.updateIndividualsState(uuids, "loaned", condition, null, null, null);
+                repository.updateIndividualsState(uuids, "loaned", condition, null, null, null, null, false, null);
             }
             case LOAN_RETURN -> {
                 applyMovementDelta(context.implementUuid(), movementType, qty);
-                repository.updateIndividualsState(uuids, "available", condition == null ? "good" : condition, null, context.locationUuid(), null);
+                repository.updateIndividualsState(uuids, "available", condition == null ? "good" : condition, null, context.locationUuid(), null, null, false, null);
             }
             case DAMAGE_REPORT -> {
                 applyMovementDelta(context.implementUuid(), movementType, qty);
-                repository.updateIndividualsState(uuids, "damaged", condition == null ? "damaged_no_diagnosis" : condition, null, null, null);
+                repository.updateIndividualsState(uuids, "damaged", condition == null ? "damaged_no_diagnosis" : condition, null, null, null, null, false, null);
             }
             case MANUAL_ADJUSTMENT ->
-                    repository.updateIndividualsState(uuids, "available", condition == null ? "good" : condition, null, null, null);
+                    repository.updateIndividualsState(uuids, "available", condition == null ? "good" : condition, null, null, null, null, false, null);
             case CONSUMPTION ->
                     throw new BadRequestException("INDIVIDUAL_MOVEMENT_INVALID", "consumption solo aplica para implementos no individuales");
             case DISCARD -> {
                 applyMovementDelta(context.implementUuid(), movementType, qty);
-                repository.updateIndividualsState(uuids, "retired", condition == null ? "irreparable" : condition, null, null, false);
+                repository.updateIndividualsState(uuids, "retired", condition == null ? "irreparable" : condition, null, null, false, null, false, null);
             }
             case LOSS -> {
                 applyMovementDelta(context.implementUuid(), movementType, qty);
-                repository.updateIndividualsState(uuids, "retired", condition == null ? "irreparable" : condition, null, null, false);
+                repository.updateIndividualsState(uuids, "retired", condition == null ? "irreparable" : condition, null, null, false, null, false, null);
             }
         }
 
@@ -398,6 +442,77 @@ public class StockService implements StockMovementContract {
         return quantity;
     }
 
+    private List<IndividualEntryDraft> normalizeIndividualEntries(
+            int quantity,
+            List<String> assetCodes,
+            String statusRaw,
+            String conditionRaw,
+            UUID currentLocationUuid,
+            Integer remainingLife,
+            Boolean assetCodeReprintRequired,
+            List<IndividualEntryDraft> individualEntries,
+            UUID defaultLocationUuid
+    ) {
+        UUID fallbackLocationUuid = currentLocationUuid != null ? currentLocationUuid : defaultLocationUuid;
+        if (individualEntries != null && !individualEntries.isEmpty()) {
+            if (individualEntries.size() != quantity) {
+                throw new BadRequestException(
+                        "INDIVIDUAL_ENTRIES_INVALID",
+                        "individual_entries debe tener la misma cantidad que quantity"
+                );
+            }
+
+            List<IndividualEntryDraft> normalized = new ArrayList<>();
+            Set<String> seen = new HashSet<>();
+            for (IndividualEntryDraft entry : individualEntries) {
+                String assetCode = normalizeRequiredAssetCode(entry == null ? null : entry.assetCode(), seen);
+                String status = normalizeOptionalLiteral(
+                        entry == null || entry.status() == null ? statusRaw : entry.status(),
+                        VALID_INDIVIDUAL_STATUS,
+                        "INDIVIDUAL_STATUS_INVALID",
+                        "status invalido"
+                );
+                String condition = normalizeOptionalLiteral(
+                        entry == null || entry.condition() == null ? conditionRaw : entry.condition(),
+                        VALID_INDIVIDUAL_CONDITION,
+                        "INDIVIDUAL_CONDITION_INVALID",
+                        "condition invalido"
+                );
+                UUID locationUuid = entry != null && entry.currentLocationUuid() != null
+                        ? entry.currentLocationUuid()
+                        : fallbackLocationUuid;
+                Integer effectiveRemainingLife = entry != null && entry.remainingLife() != null
+                        ? entry.remainingLife()
+                        : remainingLife;
+                Boolean reprintRequired = entry != null && entry.assetCodeReprintRequired() != null
+                        ? entry.assetCodeReprintRequired()
+                        : assetCodeReprintRequired;
+                normalized.add(new IndividualEntryDraft(
+                        assetCode,
+                        status,
+                        condition,
+                        locationUuid,
+                        effectiveRemainingLife,
+                        reprintRequired
+                ));
+            }
+            return normalized;
+        }
+
+        String status = normalizeOptionalLiteral(statusRaw, VALID_INDIVIDUAL_STATUS, "INDIVIDUAL_STATUS_INVALID", "status invalido");
+        String condition = normalizeOptionalLiteral(conditionRaw, VALID_INDIVIDUAL_CONDITION, "INDIVIDUAL_CONDITION_INVALID", "condition invalido");
+        return normalizeAssetCodes(assetCodes, quantity).stream()
+                .map(assetCode -> new IndividualEntryDraft(
+                        assetCode,
+                        status,
+                        condition,
+                        fallbackLocationUuid,
+                        remainingLife,
+                        assetCodeReprintRequired
+                ))
+                .toList();
+    }
+
     private List<String> normalizeAssetCodes(List<String> assetCodes, int quantity) {
         if (assetCodes == null || assetCodes.size() != quantity) {
             throw new BadRequestException("INDIVIDUAL_ASSET_CODES_INVALID", "asset_codes debe tener la misma cantidad que quantity");
@@ -418,6 +533,17 @@ public class StockService implements StockMovementContract {
         }
 
         return normalized;
+    }
+
+    private String normalizeRequiredAssetCode(String raw, Set<String> seen) {
+        String candidate = raw == null ? "" : raw.trim();
+        if (candidate.isEmpty()) {
+            throw new BadRequestException("INDIVIDUAL_ASSET_CODE_EMPTY", "asset_codes no puede incluir vacios");
+        }
+        if (!seen.add(candidate.toLowerCase())) {
+            throw new BadRequestException("INDIVIDUAL_ASSET_CODE_DUPLICATE_IN_REQUEST", "asset_codes no puede incluir duplicados");
+        }
+        return candidate;
     }
 
     private List<UUID> normalizeIndividualUuids(List<UUID> individualUuids) {

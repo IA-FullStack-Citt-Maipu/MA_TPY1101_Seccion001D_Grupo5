@@ -1,6 +1,7 @@
 package com.panol_project.backendpanol.modules.catalog.implement.api.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -25,6 +26,10 @@ public record ImplementV2Response(
         @JsonProperty("img_url")
         String imgUrl,
         String observations,
+        @JsonProperty("cost_center")
+        String costCenter,
+        @JsonProperty("net_value")
+        BigDecimal netValue,
         Boolean active,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt,

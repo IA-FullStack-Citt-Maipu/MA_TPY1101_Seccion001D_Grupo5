@@ -4,6 +4,7 @@ import { InventoryLayout } from "../components/layout/InventoryLayout";
 import { fetchImplements } from "../services/implementService";
 import { fetchActiveCategories } from "../services/activeCategoryService";
 import { getErrorMessage } from "../services/apiClient";
+import { HelpTooltip } from "../components/ui/HelpTooltip";
 import type { ActiveCategoryOption } from "../types/categoryActive";
 import type { ImplementSummary } from "../types/implement";
 import { getSessionUserRole, type UserRole } from "../utils/auth";
@@ -35,10 +36,17 @@ const ITEM_TYPE_FILTER_LABELS: Record<ImplementItemTypeFilter, string> = {
   individual: "Activo",
 };
 
-function getImplementSearchText(row: ImplementSummary): string {
-  const individualAssetCodes = row.individualAssetCodes ?? row.individual_asset_codes ?? [];
-  return [row.name, row.barcode ?? "", ...individualAssetCodes].join(" ").trim().toLowerCase();
-}
+const ITEM_TYPE_FILTER_HELP: Record<ImplementItemTypeFilter, string> = {
+  consumable: "Consumible: stock de uso unico que se gasta o desaparece operativamente en la entrega.",
+  reusable: "Reutilizable: se presta por cantidad y luego puede volver al stock.",
+  individual: "Activo: cada unidad tiene codigo propio y trazabilidad por activo.",
+};
+
+const STOCK_FILTER_HELP: Record<StockFilterOption, string> = {
+  healthy: "Disponible: el implemento tiene stock sano y por encima de su umbral minimo.",
+  low: "Bajo stock: aun hay unidades, pero esta cerca del minimo configurado.",
+  critical: "Critico: no hay disponibilidad operativa o el nivel es muy bajo.",
+};
 
 function getStockHealth(row: ImplementSummary): StockHealth {
   const available = row.stock?.available;
@@ -100,12 +108,12 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
   const typeMenuRef = useRef<HTMLDivElement | null>(null);
   const statusMenuRef = useRef<HTMLDivElement | null>(null);
 
-  const refreshImplements = useCallback(async () => {
+  const refreshImplements = useCallback(async (nameFilter?: string) => {
     setLoading(true);
     setError(null);
 
     try {
-      const rows = await fetchImplements();
+      const rows = await fetchImplements(nameFilter ? { name: nameFilter } : undefined);
       setAllImplements(rows);
       setTotalImplements(rows.length);
     } catch (requestError) {
@@ -131,8 +139,8 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    refreshImplements();
-  }, [refreshImplements]);
+    void refreshImplements(debouncedNameFilter.trim() || undefined);
+  }, [debouncedNameFilter, refreshImplements]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setDebouncedNameFilter(searchFilter), 300);
@@ -226,11 +234,7 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
   }, [categoryOptions, searchFilter, selectedCategoryUuids, selectedItemTypes, selectedStockStatuses]);
 
   const implementos = useMemo(() => {
-    const query = debouncedNameFilter.trim().toLowerCase();
-
     return allImplements.filter((row) => {
-      const queryMatch = query.length === 0 || getImplementSearchText(row).includes(query);
-
       const categoryMatch =
         selectedCategoryUuids.length === 0 || (row.category?.uuid != null && selectedCategoryUuids.includes(row.category.uuid));
 
@@ -243,9 +247,9 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
         selectedStockStatuses.length === 0 ||
         (health !== "unknown" && selectedStockStatuses.includes(health));
 
-      return queryMatch && categoryMatch && itemTypeMatch && statusMatch;
+      return categoryMatch && itemTypeMatch && statusMatch;
     });
-  }, [allImplements, debouncedNameFilter, selectedCategoryUuids, selectedItemTypes, selectedStockStatuses]);
+  }, [allImplements, selectedCategoryUuids, selectedItemTypes, selectedStockStatuses]);
 
   const totalPages = useMemo(() => {
     return Math.max(1, Math.ceil(implementos.length / PAGE_SIZE));
@@ -412,7 +416,13 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
         <div className="inventory-filter-shell">
           <div className="catalog-filters inventory-catalog-filters">
             <div className="catalog-filters__item catalog-filters__item--search inventory-search-field">
-              <label htmlFor="catalog-filter-name">Filtrar</label>
+              <div className="field-label-with-help">
+                <label htmlFor="catalog-filter-name">Filtrar</label>
+                <HelpTooltip
+                  text="Busca por nombre del implemento o por su codigo de barras general e individuales."
+                  ariaLabel="Ayuda sobre el filtro de busqueda"
+                />
+              </div>
               <div className="inventory-search-input-wrap">
                 <Search size={18} />
                 <input
@@ -432,7 +442,13 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
               ref={categoryMenuRef}
               className={selectedCategoryUuids.length > 0 ? "catalog-filters__item catalog-filters__item--active inventory-multiselect" : "catalog-filters__item inventory-multiselect"}
             >
-              <label htmlFor="catalog-filter-category">Categoria</label>
+              <div className="field-label-with-help">
+                <label htmlFor="catalog-filter-category">Categoria</label>
+                <HelpTooltip
+                  text="Filtra por categorias activas del catalogo. Las opciones dependen de las categorias registradas."
+                  ariaLabel="Ayuda sobre el filtro de categoria"
+                />
+              </div>
               <button
                 id="catalog-filter-category"
                 type="button"
@@ -471,7 +487,13 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
               ref={typeMenuRef}
               className={selectedItemTypes.length > 0 ? "catalog-filters__item catalog-filters__item--active inventory-multiselect" : "catalog-filters__item inventory-multiselect"}
             >
-              <label htmlFor="catalog-filter-item-type">Tipo</label>
+              <div className="field-label-with-help">
+                <label htmlFor="catalog-filter-item-type">Tipo</label>
+                <HelpTooltip
+                  text="Filtra por el tipo operativo del implemento."
+                  ariaLabel="Ayuda sobre el filtro de tipo"
+                />
+              </div>
               <button
                 id="catalog-filter-item-type"
                 type="button"
@@ -484,7 +506,7 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
                 <ChevronDown size={16} />
               </button>
               {isTypeMenuOpen ? (
-                <div className="inventory-multiselect__menu" role="listbox" aria-multiselectable="true">
+                <div className="inventory-multiselect__menu inventory-multiselect__menu--with-tooltips" role="listbox" aria-multiselectable="true">
                   {ITEM_TYPE_FILTER_OPTIONS.map((itemType) => {
                     const checked = selectedItemTypes.includes(itemType);
                     return (
@@ -496,7 +518,15 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
                             onChange={() => toggleItemTypeSelection(itemType)}
                           />
                         </span>
-                        <span className="inventory-multiselect__option-label">{ITEM_TYPE_FILTER_LABELS[itemType]}</span>
+                        <span className="inventory-multiselect__option-label inventory-multiselect__option-label--with-help">
+                          <span>{ITEM_TYPE_FILTER_LABELS[itemType]}</span>
+                          <HelpTooltip
+                            text={ITEM_TYPE_FILTER_HELP[itemType]}
+                            ariaLabel={`Ayuda sobre ${ITEM_TYPE_FILTER_LABELS[itemType]}`}
+                            align="end"
+                            variant="inline"
+                          />
+                        </span>
                       </label>
                     );
                   })}
@@ -508,7 +538,13 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
               ref={statusMenuRef}
               className={selectedStockStatuses.length > 0 ? "catalog-filters__item catalog-filters__item--active inventory-multiselect" : "catalog-filters__item inventory-multiselect"}
             >
-              <label htmlFor="catalog-filter-status">Estado</label>
+              <div className="field-label-with-help">
+                <label htmlFor="catalog-filter-status">Estado</label>
+                <HelpTooltip
+                  text="Filtra por la salud actual del stock disponible."
+                  ariaLabel="Ayuda sobre el filtro de estado"
+                />
+              </div>
               <button
                 id="catalog-filter-status"
                 type="button"
@@ -521,7 +557,7 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
                 <ChevronDown size={16} />
               </button>
               {isStatusMenuOpen ? (
-                <div className="inventory-multiselect__menu" role="listbox" aria-multiselectable="true">
+                <div className="inventory-multiselect__menu inventory-multiselect__menu--with-tooltips" role="listbox" aria-multiselectable="true">
                   {STOCK_FILTER_OPTIONS.map((status) => {
                     const checked = selectedStockStatuses.includes(status);
                     return (
@@ -533,7 +569,15 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
                             onChange={() => toggleStockStatusSelection(status)}
                           />
                         </span>
-                        <span className="inventory-multiselect__option-label">{STOCK_FILTER_LABELS[status]}</span>
+                        <span className="inventory-multiselect__option-label inventory-multiselect__option-label--with-help">
+                          <span>{STOCK_FILTER_LABELS[status]}</span>
+                          <HelpTooltip
+                            text={STOCK_FILTER_HELP[status]}
+                            ariaLabel={`Ayuda sobre ${STOCK_FILTER_LABELS[status]}`}
+                            align="end"
+                            variant="inline"
+                          />
+                        </span>
                       </label>
                     );
                   })}

@@ -99,6 +99,18 @@ Base publica: `/api/v2/**`
 - `PUT /api/v2/implements/{implementUuid}/stock/individuals/{individualUuid}`
 - `GET /api/v2/implements/{implementUuid}/labels/pdf`
 
+`POST /api/v2/implements/{implementUuid}/stock/entries` acepta dos modalidades para activos (`item_type=individual`):
+- modo compartido:
+  - `asset_codes[]`
+  - `status`
+  - `condition`
+  - `current_location_uuid`
+  - `remaining_life`
+  - `asset_code_reprint_required`
+- modo por activo:
+  - `individual_entries[]`
+  - cada item puede traer `asset_code`, `status`, `condition`, `current_location_uuid`, `remaining_life` y `asset_code_reprint_required`
+
 Reglas de acceso vigentes:
 
 - `GET /api/v2/implements/movements`, `GET /api/v2/implements/movements/history` y `GET /api/v2/implements/movements/summary` permiten lectura a `COORDINADOR` y `DIRECTOR`.

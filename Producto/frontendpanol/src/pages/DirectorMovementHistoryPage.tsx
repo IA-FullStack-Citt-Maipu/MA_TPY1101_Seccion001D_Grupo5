@@ -37,7 +37,6 @@ function formatRole(role: string | null): string {
   if (role === "DOCENTE") return "Docente";
   return role;
 }
-
 function formatItemType(itemType: InventoryMovementHistoryItem["item_type"]): string {
   if (itemType === "consumable") return "Consumible";
   if (itemType === "reusable") return "Reutilizable";
@@ -450,4 +449,3 @@ export function DirectorMovementHistoryPage({ embedded = false }: { embedded?: b
 
   return embedded ? content : content;
 }
-

@@ -86,7 +86,7 @@ function formatDateTime(value: string): string {
 
 function normalizeStatusLabel(status: string): string {
   const labels: Record<string, string> = {
-    pending: "Pendiente",
+    pending: "Reservado",
     approved: "Reservado",
     prepared: "Preparado",
     delivered: "En uso",
@@ -100,10 +100,7 @@ function normalizeStatusLabel(status: string): string {
 }
 
 function statusClassName(status: string): string {
-  if (status === "pending") {
-    return "teacher-loans-status teacher-loans-status--pending";
-  }
-  if (status === "approved") {
+  if (status === "pending" || status === "approved") {
     return "teacher-loans-status teacher-loans-status--approved";
   }
   if (status === "prepared") {
@@ -148,8 +145,9 @@ function timelineStatusChipClass(
   if (status == null) {
     return "teacher-loan-timeline-chip teacher-loan-timeline-chip--new";
   }
-  if (status === "pending") return "teacher-loan-timeline-chip teacher-loan-timeline-chip--pending";
-  if (status === "approved" || status === "prepared") return "teacher-loan-timeline-chip teacher-loan-timeline-chip--approved";
+  if (status === "pending" || status === "approved" || status === "prepared") {
+    return "teacher-loan-timeline-chip teacher-loan-timeline-chip--approved";
+  }
   if (status === "delivered") return "teacher-loan-timeline-chip teacher-loan-timeline-chip--delivered";
   if (status === "completed") return "teacher-loan-timeline-chip teacher-loan-timeline-chip--completed";
   if (status === "rejected" || status === "cancelled" || status === "expired" || status === "overdue") {

@@ -27,7 +27,6 @@ const DELETE_CONFIRM_TEXT = "eliminar";
 
 type LoanStatusFilter =
   | "all"
-  | "pending"
   | "approved"
   | "prepared"
   | "delivered"
@@ -93,7 +92,7 @@ function formatKpiDate(value: string | null): string {
 
 function normalizeStatusLabel(status: string): string {
   const labels: Record<string, string> = {
-    pending: "Pendiente",
+    pending: "Reservado",
     approved: "Reservado",
     prepared: "Preparado",
     delivered: "En uso",
@@ -107,10 +106,7 @@ function normalizeStatusLabel(status: string): string {
 }
 
 function statusClassName(status: string): string {
-  if (status === "pending") {
-    return "teacher-loans-status teacher-loans-status--pending";
-  }
-  if (status === "approved") {
+  if (status === "pending" || status === "approved") {
     return "teacher-loans-status teacher-loans-status--approved";
   }
   if (status === "prepared") {
@@ -133,7 +129,6 @@ function statusClassName(status: string): string {
 
 function isActiveLoanStatus(status: string): boolean {
   return (
-    status === "pending" ||
     status === "approved" ||
     status === "prepared" ||
     status === "delivered" ||
@@ -459,7 +454,6 @@ export function LoanHistoryPage({
                 }}
               >
                 <option value="all">Todos</option>
-                <option value="pending">Pendiente</option>
                 <option value="approved">Reservado</option>
                 <option value="prepared">Preparado</option>
                 <option value="delivered">En uso</option>

@@ -46,6 +46,8 @@ export interface ImplementCreatePayload {
   img_url: string | null;
   min_stock: number;
   observations: string | null;
+  cost_center: string | null;
+  net_value: number | null;
 }
 
 export interface ImplementUpdatePayload {
@@ -58,6 +60,8 @@ export interface ImplementUpdatePayload {
   img_url: string | null;
   min_stock: number;
   observations: string | null;
+  cost_center: string | null;
+  net_value: number | null;
 }
 
 export interface ImplementSummary {
@@ -139,6 +143,8 @@ export interface ImplementDetail {
   barcode: string | null;
   img_url: string | null;
   observations: string | null;
+  cost_center: string | null;
+  net_value: number | null;
   active: boolean;
   createdAt: string;
   updatedAt: string;

@@ -711,7 +711,7 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
           suggestedAssetCodes: selectedAssetCodes,
           individualOptions: buildIndividualOptions(stock.individuals ?? [], selectedAssetCodes),
           selectedAssetCodes,
-          stockError: availableAssetCodes.length > 0 ? null : "No hay unidades individuales disponibles.",
+          stockError: availableAssetCodes.length > 0 ? null : "No hay activos disponibles.",
           isAdditional: true,
         };
       } else {
@@ -910,14 +910,14 @@ export function LoanDeliveryPage({ loanUuid, embedded = false }: { loanUuid: str
 
                     {item.itemType === "individual" ? (
                       <div className="loan-delivery-individuals">
-                        <p>Selecciona unidades individuales ({item.selectedAssetCodes.length}/{item.requiredQuantity})</p>
+                        <p>Selecciona activos ({item.selectedAssetCodes.length}/{item.requiredQuantity})</p>
                         <div className="loan-delivery-individuals__legend">
                           <span><i className="legend-dot legend-dot--available" />Disponible</span>
                           <span><i className="legend-dot legend-dot--reserved" />Sugerido para esta entrega</span>
                           <span><i className="legend-dot legend-dot--damaged" />No disponible</span>
                         </div>
                         {item.individualOptions.length === 0 ? (
-                          <small className="field-error">No hay unidades individuales disponibles para este implemento.</small>
+                          <small className="field-error">No hay activos disponibles para este implemento.</small>
                         ) : (
                           <div className="loan-delivery-individuals__list">
                             {item.individualOptions.map((option) => {

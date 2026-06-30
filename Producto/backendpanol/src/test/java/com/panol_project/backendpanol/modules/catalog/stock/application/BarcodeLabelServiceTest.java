@@ -84,7 +84,9 @@ class BarcodeLabelServiceTest {
                         "good",
                         null,
                         null,
-                        true
+                        true,
+                        null,
+                        false
                 )));
 
         BarcodeLabelService service = new BarcodeLabelService(implementLookupContract, stockRepository);
