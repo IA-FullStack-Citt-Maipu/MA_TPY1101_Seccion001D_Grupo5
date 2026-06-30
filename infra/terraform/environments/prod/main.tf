@@ -26,6 +26,7 @@ locals {
     APP_AUTH_TOKEN_REVOCATION_CLEANUP_INITIAL_DELAY_MS = tostring(var.app_auth_token_revocation_cleanup_initial_delay_ms)
     APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS         = tostring(var.app_auth_token_revocation_cleanup_delay_ms)
     APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE       = tostring(var.app_auth_token_revocation_cleanup_batch_size)
+    APP_FRONTEND_BASE_URL                              = local.frontend_origin
     JWT_ISSUER_URI                                     = var.jwt_issuer_uri
     FRONTEND_ORIGIN                                    = local.frontend_origin
     CORS_ALLOWED_ORIGINS                               = local.frontend_origin

@@ -63,6 +63,7 @@ Comunes:
 - `APP_EMAIL_RESEND_API_KEY`
 - `APP_EMAIL_FROM_NAME`
 - `APP_EMAIL_FROM_ADDRESS`
+- `APP_FRONTEND_BASE_URL`
 - `APP_EMAIL_WORKER_DELAY_MS`
 - `APP_EMAIL_BATCH_SIZE`
 - `APP_EMAIL_MAX_RETRIES`
@@ -180,11 +181,15 @@ jOOQ (build-time):
 - `APP_EMAIL_READ_TIMEOUT_MS`
   - timeout de lectura de la respuesta del proveedor.
   - Default: `10000` ms.
+- `APP_FRONTEND_BASE_URL`
+  - base publica del frontend usada para construir los CTA de correos.
+  - si no se define, el backend intenta usar `FRONTEND_ORIGIN`.
+  - no debe quedar vacia en entornos desplegados si se esperan links navegables.
 - La recuperacion de contrasena depende de este bloque:
   - `APP_EMAIL_ENABLED=true`
   - `APP_EMAIL_PROVIDER=resend`
   - `APP_EMAIL_RESEND_API_KEY` valido
-  - `frontend-base-url` efectivo para construir el CTA del correo
+  - `APP_FRONTEND_BASE_URL` o `FRONTEND_ORIGIN` efectivo para construir el CTA del correo
 
 ## Compose y entorno
 

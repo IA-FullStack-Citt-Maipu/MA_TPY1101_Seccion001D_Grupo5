@@ -289,6 +289,36 @@ class EmailTemplateRendererTest {
         assertNoTemplateArtifacts(rendered.html());
     }
 
+    @Test
+    void renderPrestamoSinFrontendBaseUrlNoDebeFiltrarLocalhostEnCta() {
+        EmailProperties properties = new EmailProperties();
+        properties.setFrontendBaseUrl("");
+        properties.setFromAddress("notificaciones@panol.cl");
+
+        ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
+        resolver.setPrefix("mail/");
+        resolver.setSuffix(".html");
+        resolver.setTemplateMode(TemplateMode.HTML);
+        resolver.setCharacterEncoding("UTF-8");
+        resolver.setCacheable(false);
+        resolver.setCheckExistence(true);
+
+        SpringTemplateEngine templateEngine = new SpringTemplateEngine();
+        templateEngine.setTemplateResolver(resolver);
+        templateEngine.setEnableSpringELCompiler(true);
+
+        EmailTemplateRenderer rendererWithoutFrontendBaseUrl = new EmailTemplateRenderer(templateEngine, properties);
+
+        RenderedEmail rendered = rendererWithoutFrontendBaseUrl.render(
+                "loan.request_submitted.coordinador",
+                baseLoanTemplateData("Nueva solicitud de prestamo", "El docente Ana Perez ha enviado una nueva solicitud.")
+        );
+
+        assertFalse(rendered.html().contains("localhost:18081"));
+        assertFalse(rendered.html().contains("#/inventory/prestamos/" + LOAN_UUID));
+        assertNoTemplateArtifacts(rendered.html());
+    }
+
     private Map<String, Object> baseLoanTemplateData(String title, String message) {
         Map<String, Object> templateData = new LinkedHashMap<>();
         templateData.put("event_type", "loan.request_registered");
