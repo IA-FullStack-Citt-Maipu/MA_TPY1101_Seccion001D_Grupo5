@@ -10,28 +10,28 @@ export function TopUsersTable({ rows }: { rows: TopUserRow[] }) {
   return (
     <section className="panel director-panel">
       <div className="panel__head"><h2>Usuarios con mas movimientos</h2></div>
-      <div className="table-wrapper">
-        <table className="category-table">
+      <div className="table-wrapper director-table-wrapper">
+        <table className="category-table director-table director-table--users">
           <thead>
             <tr>
-              <th>Usuario</th>
-              <th>Rol</th>
-              <th>Movimientos</th>
-              <th>Atrasos estimados</th>
+              <th scope="col">Usuario</th>
+              <th scope="col">Rol</th>
+              <th scope="col">Movimientos</th>
+              <th scope="col">Atrasos estimados</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <tr key={row.name || "usuario-sin-nombre"}>
-                <td>
+                <td data-label="Usuario">
                   <div className="director-user-cell">
                     <span className="director-avatar" aria-hidden="true">{(row.name || "Usuario").split(" ").map((x) => x?.[0] ?? "").filter(Boolean).slice(0, 2).join("").toUpperCase()}</span>
                     <span>{row.name || "Usuario"}</span>
                   </div>
                 </td>
-                <td><span className="badge badge--inactive">{row.role}</span></td>
-                <td>{row.requests}</td>
-                <td><span className={`director-delay director-delay--${delayTone(row.delays)}`}>{row.delays}</span></td>
+                <td data-label="Rol"><span className="badge badge--inactive">{row.role}</span></td>
+                <td data-label="Movimientos">{row.requests}</td>
+                <td data-label="Atrasos estimados"><span className={`director-delay director-delay--${delayTone(row.delays)}`}>{row.delays}</span></td>
               </tr>
             ))}
           </tbody>

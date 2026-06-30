@@ -8,7 +8,7 @@ import type {
 } from "../components/chat/chat.types";
 
 const defaultApiBaseUrl = "http://localhost:18080";
-const botRequestTimeoutMs = 12000;
+const defaultBotRequestTimeoutMs = 80000;
 
 interface BotAccessTokenResponse {
   token: string;
@@ -50,6 +50,16 @@ function resolveBotChatUrl(): string {
   return new URL("api/v1/chat", normalizedBaseUrl).toString();
 }
 
+function getBotRequestTimeoutMs(): number {
+  const rawValue = import.meta.env.VITE_BOT_REQUEST_TIMEOUT_MS?.toString().trim();
+  if (!rawValue) {
+    return defaultBotRequestTimeoutMs;
+  }
+
+  const parsedValue = Number.parseInt(rawValue, 10);
+  return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : defaultBotRequestTimeoutMs;
+}
+
 function normalizeBotErrorMessage(error: unknown): string {
   const fallbackMessage = "No fue posible contactar al asistente en este momento.";
 
@@ -57,7 +67,19 @@ function normalizeBotErrorMessage(error: unknown): string {
     return fallbackMessage;
   }
 
+  if (error.code === "ECONNABORTED") {
+    return "El asistente está demorando más de lo esperado. Intenta nuevamente en unos segundos.";
+  }
+
   const payload = error.response?.data as BotChatErrorPayload | undefined;
+
+  if (payload?.detail === "LLM_TIMEOUT") {
+    return "El asistente está demorando más de lo esperado. Intenta nuevamente en unos segundos.";
+  }
+
+  if (payload?.detail === "LLM_RATE_LIMITED") {
+    return "El asistente está recibiendo demasiadas solicitudes en este momento. Intenta nuevamente en unos segundos.";
+  }
 
   if (typeof payload?.message === "string" && payload.message.trim().length > 0) {
     return payload.message.trim();
@@ -107,7 +129,7 @@ async function sendChatMessage(params: SendChatAssistantParams, authToken: strin
       resolveBotChatUrl(),
       buildChatRequestBody(params),
       {
-        timeout: botRequestTimeoutMs,
+        timeout: getBotRequestTimeoutMs(),
         headers: {
           Authorization: `Bearer ${authToken}`,
           "Content-Type": "application/json",

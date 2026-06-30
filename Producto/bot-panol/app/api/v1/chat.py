@@ -9,7 +9,12 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from pydantic import BaseModel, Field
 
 from app.agent.graph import get_graph
-from app.agent.nodes import LLMServiceUnavailableError, extract_text_content
+from app.agent.nodes import (
+    LLMRateLimitedError,
+    LLMServiceUnavailableError,
+    LLMTimeoutError,
+    extract_text_content,
+)
 from app.agent.response_sanitizer import sanitize_response_text
 from app.agent.policy import evaluate_message_policy
 from app.agent.prompts import build_system_prompt
@@ -212,9 +217,13 @@ def chat(payload: ChatRequest, authorization: str | None = Header(default=None))
         result_messages: list[BaseMessage] = result["messages"]
         last_message = result_messages[-1]
         allow_identifiers = policy_decision.intent == "identifier_request" and role == "COORDINADOR"
-        text = sanitize_response_text(extract_text_content(last_message.content), allow_identifiers=allow_identifiers)
-        tools_used = _extract_executed_tools(result_messages)
         ui_blocks = _collect_ui_blocks(result_messages)
+        text = sanitize_response_text(
+            extract_text_content(last_message.content),
+            allow_identifiers=allow_identifiers,
+            ui_blocks=ui_blocks,
+        )
+        tools_used = _extract_executed_tools(result_messages)
 
         response = ChatResponse(
             response=text,
@@ -230,7 +239,47 @@ def chat(payload: ChatRequest, authorization: str | None = Header(default=None))
             tools_used=response.tools_used,
         )
         return response
-    except LLMServiceUnavailableError:
+    except LLMTimeoutError as error:
+        log_event(
+            "chat_llm_timeout",
+            level="ERROR",
+            request_id=request_id,
+            conversation_id=conversation_id,
+            user_role=role,
+            error_code="LLM_TIMEOUT",
+            stage=error.stage,
+            provider_error_type=error.provider_error_type,
+            provider_error_message=error.provider_error_message,
+            provider_status_code=error.provider_status_code,
+        )
+        return JSONResponse(
+            status_code=504,
+            content={
+                "detail": "LLM_TIMEOUT",
+                "message": "El asistente esta demorando mas de lo esperado. Intenta nuevamente en unos segundos.",
+            },
+        )
+    except LLMRateLimitedError as error:
+        log_event(
+            "chat_llm_rate_limited",
+            level="ERROR",
+            request_id=request_id,
+            conversation_id=conversation_id,
+            user_role=role,
+            error_code="LLM_RATE_LIMITED",
+            stage=error.stage,
+            provider_error_type=error.provider_error_type,
+            provider_error_message=error.provider_error_message,
+            provider_status_code=error.provider_status_code,
+        )
+        return JSONResponse(
+            status_code=429,
+            content={
+                "detail": "LLM_RATE_LIMITED",
+                "message": "El asistente esta recibiendo demasiadas solicitudes en este momento. Intenta nuevamente en unos segundos.",
+            },
+        )
+    except LLMServiceUnavailableError as error:
         log_event(
             "chat_llm_unavailable",
             level="ERROR",
@@ -238,6 +287,10 @@ def chat(payload: ChatRequest, authorization: str | None = Header(default=None))
             conversation_id=conversation_id,
             user_role=role,
             error_code="LLM_UNAVAILABLE",
+            stage=error.stage,
+            provider_error_type=error.provider_error_type,
+            provider_error_message=error.provider_error_message,
+            provider_status_code=error.provider_status_code,
         )
         return JSONResponse(
             status_code=503,

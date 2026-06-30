@@ -257,6 +257,11 @@ variable "bot_llm_timeout_seconds" {
   default = 20
 }
 
+variable "bot_llm_total_timeout_seconds" {
+  type    = number
+  default = 75
+}
+
 variable "bot_backend_timeout_seconds" {
   type    = number
   default = 10

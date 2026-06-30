@@ -4,7 +4,7 @@ import jwt
 from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from app.agent.nodes import LLMServiceUnavailableError
+from app.agent.nodes import LLMRateLimitedError, LLMServiceUnavailableError, LLMTimeoutError
 from app.config import settings
 from app.main import app
 
@@ -182,6 +182,71 @@ def test_chat_with_allowed_role_returns_tools_used_in_execution_order(monkeypatc
     assert body["tools_used"] == ["buscar_implementos", "consultar_stock", "consultar_stock"]
 
 
+def test_chat_with_ui_blocks_removes_duplicate_structured_text(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    _configure_jwt_settings(monkeypatch)
+    client = TestClient(app)
+    token = _make_signed_jwt(role="DIRECTOR")
+
+    class FakeGraph:
+        def invoke(self, state, config=None):
+            return {
+                "messages": [
+                    HumanMessage(content="muestrame el inventario por categoria"),
+                    ToolMessage(
+                        content={
+                            "presentation": {
+                                "summary": "Se resumieron 1 categorias de inventario.",
+                                "ui_blocks": [
+                                    {
+                                        "type": "entity_list",
+                                        "title": "Inventario por categoria",
+                                        "entities": [
+                                            {
+                                                "title": "Herramientas",
+                                                "subtitle": None,
+                                                "meta": [
+                                                    "Implementos: 3",
+                                                    "Stock disponible: 111",
+                                                    "Alertas: 0",
+                                                ],
+                                                "badges": [],
+                                            }
+                                        ],
+                                    }
+                                ],
+                            }
+                        },
+                        name="resumen_inventario_por_categoria",
+                        tool_call_id="1",
+                    ),
+                    AIMessage(
+                        content=(
+                            "Aqui tienes un resumen del inventario por categoria:\n\n"
+                            "Inventario por categoria\n\n"
+                            "- Herramientas\n"
+                            "  - Implementos: 3\n"
+                            "  - Stock disponible: 111\n"
+                            "  - Alertas: 0"
+                        )
+                    ),
+                ],
+                "conversation_id": state["conversation_id"],
+            }
+
+    monkeypatch.setattr("app.api.v1.chat.get_graph", lambda _role=None: FakeGraph())
+
+    response = client.post(
+        "/api/v1/chat",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"message": "Hola"},
+    )
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["response"] == "Aqui tienes un resumen del inventario por categoria:"
+    assert body["ui_blocks"][0]["title"] == "Inventario por categoria"
+
+
 def test_chat_returns_503_when_llm_is_unavailable(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     _configure_jwt_settings(monkeypatch)
     client = TestClient(app)
@@ -203,6 +268,54 @@ def test_chat_returns_503_when_llm_is_unavailable(monkeypatch) -> None:  # type:
     assert response.json() == {
         "detail": "LLM_UNAVAILABLE",
         "message": "El servicio de IA no esta disponible temporalmente.",
+    }
+
+
+def test_chat_returns_504_when_llm_times_out(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    _configure_jwt_settings(monkeypatch)
+    client = TestClient(app)
+    token = _make_signed_jwt(role="DIRECTOR")
+
+    class FailingGraph:
+        def invoke(self, state, config=None):
+            raise LLMTimeoutError("timed out", stage="agent")
+
+    monkeypatch.setattr("app.api.v1.chat.get_graph", lambda _role=None: FailingGraph())
+
+    response = client.post(
+        "/api/v1/chat",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"message": "Hola"},
+    )
+
+    assert response.status_code == 504
+    assert response.json() == {
+        "detail": "LLM_TIMEOUT",
+        "message": "El asistente esta demorando mas de lo esperado. Intenta nuevamente en unos segundos.",
+    }
+
+
+def test_chat_returns_429_when_llm_is_rate_limited(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    _configure_jwt_settings(monkeypatch)
+    client = TestClient(app)
+    token = _make_signed_jwt(role="COORDINADOR")
+
+    class FailingGraph:
+        def invoke(self, state, config=None):
+            raise LLMRateLimitedError("rate limited", stage="finalizer")
+
+    monkeypatch.setattr("app.api.v1.chat.get_graph", lambda _role=None: FailingGraph())
+
+    response = client.post(
+        "/api/v1/chat",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"message": "Hola"},
+    )
+
+    assert response.status_code == 429
+    assert response.json() == {
+        "detail": "LLM_RATE_LIMITED",
+        "message": "El asistente esta recibiendo demasiadas solicitudes en este momento. Intenta nuevamente en unos segundos.",
     }
 
 

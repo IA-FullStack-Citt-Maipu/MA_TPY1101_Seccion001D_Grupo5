@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     GOOGLE_API_KEY: str = Field(default="")
     GEMINI_MODEL: str = Field(default="gemini-2.5-flash-lite")
     LLM_TIMEOUT_SECONDS: float = Field(default=20.0, gt=0, le=120)
+    LLM_TOTAL_TIMEOUT_SECONDS: float = Field(default=75.0, gt=0, le=180)
     BACKEND_BASE_URL: str = Field(default="http://backend:8080")
     BACKEND_CLIENT_SECRET: str = Field(default="")
     BACKEND_TIMEOUT_SECONDS: float = Field(default=10.0, gt=0, le=120)

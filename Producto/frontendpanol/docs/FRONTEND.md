@@ -36,6 +36,8 @@ Frontend para gestion operativa de inventario consumiendo API v2 del backend.
   `Authorization: Bearer <token>` al bot.
 - La base del bot se configura con `VITE_BOT_API_BASE_URL`.
 - Si `VITE_BOT_API_BASE_URL` no existe, el cliente usa `VITE_API_BASE_URL` como fallback.
+- El timeout del cliente del bot se configura con `VITE_BOT_REQUEST_TIMEOUT_MS`
+  y debe ser mayor que el timeout total efectivo del bot.
 - La respuesta del bot mantiene `response` como texto Markdown y puede incluir
   `ui_blocks` opcional para renderizar listas compactas y metricas del asistente.
 - El frontend no debe mostrar UUIDs por defecto en el chat; si el backend
@@ -154,6 +156,11 @@ El frontend consume payload uniforme:
   - opcional
   - usar cuando `bot-panol` no comparte la misma base publica que `VITE_API_BASE_URL`
   - si se omite, el frontend usa `VITE_API_BASE_URL`
+- `VITE_BOT_REQUEST_TIMEOUT_MS`
+  - opcional
+  - default actual: `80000`
+  - debe ser mayor que el timeout total efectivo del bot para no cortar la
+    respuesta antes que el backend del asistente
 - En local, mantener frontend y backend en el mismo host visible (`localhost`
   o `127.0.0.1`) para no romper envio de cookies.
 

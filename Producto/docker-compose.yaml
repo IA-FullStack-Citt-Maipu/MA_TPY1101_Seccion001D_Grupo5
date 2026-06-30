@@ -51,6 +51,7 @@ services:
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:18080}
         VITE_BOT_API_BASE_URL: ${VITE_BOT_API_BASE_URL:-http://localhost:18082}
+        VITE_BOT_REQUEST_TIMEOUT_MS: ${VITE_BOT_REQUEST_TIMEOUT_MS:-80000}
     container_name: panol-frontend
     restart: unless-stopped
     depends_on:

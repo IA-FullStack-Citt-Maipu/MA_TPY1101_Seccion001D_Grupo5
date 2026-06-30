@@ -33,6 +33,7 @@ No implementa la HU-72 de ranking semestral.
 | `GOOGLE_API_KEY` | Si | API key usada por Gemini para responder consultas. | `your_google_api_key_here` |
 | `GEMINI_MODEL` | No | Modelo Gemini usado por LangChain. | `gemini-2.5-flash-lite` |
 | `LLM_TIMEOUT_SECONDS` | No | Timeout maximo de llamadas al modelo. | `20` |
+| `LLM_TOTAL_TIMEOUT_SECONDS` | No | Timeout total efectivo por llamada del bot al modelo, incluyendo esperas internas del proveedor. | `75` |
 | `BACKEND_BASE_URL` | Si | Base URL del backend principal consumido por las tools del bot. En Docker local apunta al servicio `backend`. | `http://backend:8080` |
 | `BACKEND_CLIENT_SECRET` | Si | Secreto compartido enviado en `X-Client-Secret` para autorizar llamadas internas al backend. | `your_backend_ai_agent_secret_here` |
 | `BACKEND_TIMEOUT_SECONDS` | No | Timeout maximo de llamadas HTTP del bot al backend. | `10` |
@@ -164,6 +165,8 @@ Notas del contrato:
 - `ui_blocks` es aditivo y opcional; permite renderizar listas y metricas
   enriquecidas en frontend.
 - Los bloques no deben incluir UUIDs ni datos sensibles visibles por defecto.
+- Ante demora excesiva del modelo, el bot responde `504` con `detail = LLM_TIMEOUT`.
+- Si el proveedor limita la tasa, el bot responde `429` con `detail = LLM_RATE_LIMITED`.
 
 ### `GET /health`
 
