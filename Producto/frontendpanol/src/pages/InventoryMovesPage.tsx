@@ -20,7 +20,12 @@ import { Input } from "../components/ui/Input";
 import { Badge } from "../components/ui/Badge";
 import { HelpTooltip } from "../components/ui/HelpTooltip";
 import { Table } from "../components/ui/Table";
-import { getMovementActionLabel, getMovementBadgeTone, MOVEMENT_ACTION_OPTIONS } from "../utils/movementPresentation";
+import {
+  getMovementActionLabel,
+  getMovementBadgeTone,
+  MOVEMENT_ACTION_LABELS,
+  MOVEMENT_ACTION_OPTIONS,
+} from "../utils/movementPresentation";
 
 const PAGE_SIZE = 10;
 
@@ -51,7 +56,7 @@ function getItemTypeHelp(itemType?: ImplementSummary["item_type"] | null): strin
 }
 
 function getMovementHelp(action: ManualMovementType, itemType?: ImplementSummary["item_type"] | null): string {
-  const actionLabel = ACTION_LABELS[action] ?? action;
+  const actionLabel = MOVEMENT_ACTION_LABELS[action] ?? action;
   if (action === "loan_return" && itemType === "consumable") {
     return `${actionLabel}: no aplica a consumibles, porque se consumen al entregar y no vuelven a stock.`;
   }
@@ -93,9 +98,9 @@ function getAvailableManualMovementActionOptions(
   itemType?: ImplementSummary["item_type"] | null,
 ): Array<{ value: ManualMovementType; label: string }> {
   if (itemType === "consumable") {
-    return MANUAL_MOVEMENT_ACTION_OPTIONS.filter((option) => option.value !== "loan_return");
+    return MOVEMENT_ACTION_OPTIONS.filter((option) => option.value !== "loan_return");
   }
-  return MANUAL_MOVEMENT_ACTION_OPTIONS;
+  return MOVEMENT_ACTION_OPTIONS;
 }
 
 function readInitialImplementRouteFilter(): { implementUuid: string; implementName: string } {
