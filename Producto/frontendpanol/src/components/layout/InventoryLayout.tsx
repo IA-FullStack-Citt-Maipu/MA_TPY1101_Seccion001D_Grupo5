@@ -55,6 +55,7 @@ const coordinatorMenu: MenuItem[] = [
   { label: "Ubicaciones", icon: MapPin, href: "#/inventory/locations", activeSections: ["locations"] },
   { label: "Movimientos", icon: ClipboardList, href: "#/inventory/moves", activeSections: ["moves"] },
   { label: "Prestamos", icon: Handshake, href: "#/inventory/prestamos", activeSections: ["coordinator-loans"] },
+  { label: "Docentes", icon: Users, href: "#/inventory/prestamos/docentes", activeSections: ["coordinator-requesters"] },
   { label: "Nueva solicitud", icon: ClipboardList, href: "#/inventory/prestamos/nuevo", activeSections: ["loan-create"] },
   { label: "Agenda", icon: History, href: "#/inventory/prestamos/calendario", activeSections: ["agenda"] },
 ];
@@ -68,6 +69,7 @@ const teacherMenu: MenuItem[] = [
 const directorMenu: MenuItem[] = [
   { label: "Panel", icon: LayoutDashboard, href: "#/director/dashboard", activeSections: ["director-dashboard"] },
   { label: "Movimientos", icon: ClipboardList, href: "#/director/movimientos", activeSections: ["director-moves"] },
+  { label: "Docentes", icon: Users, href: "#/director/docentes", activeSections: ["director-requesters"] },
   { label: "Usuarios", icon: Users, href: "#/director/users/create", activeSections: ["director-users"] },
 ];
 
@@ -106,6 +108,7 @@ export type InventorySection =
   | "moves"
   | "teacher-loans"
   | "coordinator-loans"
+  | "coordinator-requesters"
   | "loan-create"
   | "agenda"
   | "reports"
@@ -114,6 +117,7 @@ export type InventorySection =
   | "settings"
   | "director-dashboard"
   | "director-moves"
+  | "director-requesters"
   | "director-users";
 
 export type NavigationMode = "inventory" | "director";
