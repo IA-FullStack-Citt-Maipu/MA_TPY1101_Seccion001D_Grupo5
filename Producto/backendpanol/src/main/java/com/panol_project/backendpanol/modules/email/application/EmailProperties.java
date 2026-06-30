@@ -12,7 +12,7 @@ public class EmailProperties {
     private String resendApiKey;
     private String fromName = "Panol";
     private String fromAddress = "notificaciones@panol.cl";
-    private String frontendBaseUrl = "http://localhost:18081";
+    private String frontendBaseUrl = "";
     private long workerDelayMs = 5000L;
     private int batchSize = 20;
     private int maxRetries = 5;

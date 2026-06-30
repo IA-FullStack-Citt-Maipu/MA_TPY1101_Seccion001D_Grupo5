@@ -42,6 +42,11 @@ public class PasswordRecoveryEmailOutboxAdapter implements PasswordRecoveryNotif
             return;
         }
 
+        String normalizedFrontendBaseUrl = normalizeFrontendBaseUrl();
+        if (!StringUtils.hasText(normalizedFrontendBaseUrl)) {
+            return;
+        }
+
         Map<String, Object> templateData = new LinkedHashMap<>();
         templateData.put("event_type", "auth.password_recovery");
         templateData.put("title", "Codigo de verificacion");
@@ -51,7 +56,7 @@ public class PasswordRecoveryEmailOutboxAdapter implements PasswordRecoveryNotif
         templateData.put("verification_code", verificationCode);
         templateData.put("expires_in_minutes", expiresInMinutes);
         templateData.put("created_at", OffsetDateTime.now());
-        templateData.put("action_url", normalizeFrontendBaseUrl() + "#/recuperar-contrasena/codigo?rut=" + rut);
+        templateData.put("action_url", normalizedFrontendBaseUrl + "#/recuperar-contrasena/codigo?rut=" + rut);
 
         dsl.execute("""
                 insert into public.email_outbox (
@@ -91,8 +96,8 @@ public class PasswordRecoveryEmailOutboxAdapter implements PasswordRecoveryNotif
     private String normalizeFrontendBaseUrl() {
         String baseUrl = emailProperties.getFrontendBaseUrl();
         if (!StringUtils.hasText(baseUrl)) {
-            return "http://localhost:18081/";
+            return null;
         }
-        return baseUrl.endsWith("/") ? baseUrl : baseUrl + "/";
+        return baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
     }
 }

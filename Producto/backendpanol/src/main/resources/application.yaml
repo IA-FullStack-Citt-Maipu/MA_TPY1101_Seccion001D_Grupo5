@@ -47,7 +47,7 @@ app:
     resend-api-key: ${APP_EMAIL_RESEND_API_KEY:}
     from-name: ${APP_EMAIL_FROM_NAME:Panol}
     from-address: ${APP_EMAIL_FROM_ADDRESS:notificaciones@panol.cl}
-    frontend-base-url: ${APP_FRONTEND_BASE_URL:http://localhost:18081}
+    frontend-base-url: ${APP_FRONTEND_BASE_URL:${FRONTEND_ORIGIN:}}
     worker-delay-ms: ${APP_EMAIL_WORKER_DELAY_MS:5000}
     batch-size: ${APP_EMAIL_BATCH_SIZE:20}
     max-retries: ${APP_EMAIL_MAX_RETRIES:5}
