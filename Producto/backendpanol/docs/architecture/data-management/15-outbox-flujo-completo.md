@@ -2,7 +2,7 @@
 
 - Estado del documento: vigente
 - Ultima verificacion: 2026-06-29
-- Fuente de verdad: `OutboxService`, `OutboxWorker`, `OutboxJooqRepository`, `Producto/databasepanol/migrations/v25/V25..V51`, `03-postgresql-guia-tecnica.md`
+- Fuente de verdad: `OutboxService`, `OutboxWorker`, `OutboxJooqRepository`, `Producto/databasepanol/migrations/v25/V25..V52`, `03-postgresql-guia-tecnica.md`
 
 ## Objetivo
 

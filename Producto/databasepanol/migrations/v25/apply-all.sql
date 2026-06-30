@@ -21,7 +21,8 @@
 \ir ./V45__consumable_global_reservation_availability.sql
 \ir ./V46__loan_prepare_reserved_stock_reconciliation.sql
 \ir ./V47__loan_history_and_stock_reconciliation.sql
-\ir ./V48__email_templates_request_note_and_copy_cleanup.sql
-\ir ./V49__loan_status_email_copy_for_approved_and_prepared.sql
-\ir ./V50__auto_reserved_docente_approved_email.sql
-\ir ./V51__director_without_loan_notifications.sql
+\ir ./V48__implement_and_individual_accounting_fields.sql
+\ir ./V49__email_templates_request_note_and_copy_cleanup.sql
+\ir ./V50__loan_status_email_copy_for_approved_and_prepared.sql
+\ir ./V51__auto_reserved_docente_approved_email.sql
+\ir ./V52__director_without_loan_notifications.sql
