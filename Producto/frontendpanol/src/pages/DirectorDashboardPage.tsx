@@ -10,8 +10,7 @@ import { MostRequestedItemsTable } from "../components/director/MostRequestedIte
 import { TopUsersTable } from "../components/director/TopUsersTable";
 import { getErrorMessage } from "../services/apiClient";
 import { fetchImplements } from "../services/implementService";
-import { fetchInventoryMovements } from "../services/movementService";
-import { listUsers } from "../services/userAdminService";
+import { fetchInventoryMovementDashboardSummary } from "../services/movementService";
 import type { AlertItem, InventoryStatusItem, MostRequestedItemRow, TopUserRow } from "../components/director/directorMockData";
 
 const ICONS = [Box, Clock3, AlertTriangle, ClipboardList] as const;
@@ -24,14 +23,16 @@ interface DashboardData {
   topImplements: MostRequestedItemRow[];
 }
 
-function mapRole(roleRaw: string): "Docente" | "Coordinador" {
-  return roleRaw === "COORDINADOR" ? "Coordinador" : "Docente";
+function mapRole(roleRaw: string): "Docente" | "Coordinador" | "Director" {
+  const normalizedRole = roleRaw.toUpperCase();
+  if (normalizedRole.includes("DIRECTOR")) return "Director";
+  if (normalizedRole.includes("COORD")) return "Coordinador";
+  return "Docente";
 }
 
 function buildDashboardData(
   implementsRows: Awaited<ReturnType<typeof fetchImplements>>,
-  movementRows: Awaited<ReturnType<typeof fetchInventoryMovements>>,
-  usersRows: Awaited<ReturnType<typeof listUsers>>,
+  movementSummary: Awaited<ReturnType<typeof fetchInventoryMovementDashboardSummary>>,
 ): DashboardData {
   const inventory = [
     {
@@ -70,61 +71,43 @@ function buildDashboardData(
       severity: "critical" as const,
       text: `${row.name} bajo stock minimo`,
     })),
-    ...(movementRows.length > 0
+    ...(movementSummary.totalMovements > 0
       ? [
           {
             uuid: "movement-count",
             severity: "info" as const,
-            text: `${movementRows.length} movimientos registrados`,
+            text: `${movementSummary.totalMovements} movimientos registrados`,
+            href: "#/director/movimientos",
           },
         ]
       : []),
   ];
 
-  const movementByUser = new Map<string, { requests: number; delays: number }>();
-  for (const row of movementRows) {
-    const performer = row.performed_by?.trim() || "Usuario no identificado";
-    const current = movementByUser.get(performer) ?? { requests: 0, delays: 0 };
-    current.requests += 1;
-    movementByUser.set(performer, current);
-  }
-
-  const topUsers: TopUserRow[] = Array.from(movementByUser.entries())
-    .map(([name, stats]) => {
-      const matching = usersRows.find((u) => u.name.toLowerCase() === name.toLowerCase());
-      return {
-        name,
-        role: mapRole(matching?.role ?? "DOCENTE"),
-        requests: stats.requests,
-        delays: 0,
-      };
-    })
-    .sort((a, b) => b.requests - a.requests)
-    .slice(0, 5);
+  const topUsers: TopUserRow[] = movementSummary.topUsers.map((item) => ({
+    name: item.name,
+    role: mapRole(item.role ?? "DOCENTE"),
+    requests: item.movementCount,
+    delays: 0,
+  }));
 
   const implementNameById = new Map<string, string>(implementsRows.map((row) => [row.uuid, row.name]));
-  const movementByImplement = new Map<string, number>();
-  for (const row of movementRows) {
-    if (!row.implement_uuid) {
-      continue;
-    }
-    movementByImplement.set(row.implement_uuid, (movementByImplement.get(row.implement_uuid) ?? 0) + 1);
-  }
-
-  const topImplements: MostRequestedItemRow[] = Array.from(movementByImplement.entries())
-    .map(([implementId, total]) => {
-      const implement = implementsRows.find((row) => row.uuid === implementId);
+  const topImplements: MostRequestedItemRow[] = movementSummary.topImplements
+    .map((item) => {
+      const implement = item.implementUuid
+        ? implementsRows.find((row) => row.uuid === item.implementUuid)
+        : undefined;
       const available = implement?.stock?.available ?? 0;
       const stockTone: "ok" | "warn" | "critical" = available <= 3 ? "critical" : available <= 10 ? "warn" : "ok";
       return {
-        implement: implementNameById.get(implementId) ?? "Implemento sin nombre disponible",
-        requests: total,
+        implement: item.implementUuid
+          ? implementNameById.get(item.implementUuid) ?? item.implementName ?? "Implemento sin nombre disponible"
+          : item.implementName ?? "Implemento sin nombre disponible",
+        requests: item.movementCount,
         rejects: 0,
         stock: `${available} unidades`,
         stockTone,
       };
     })
-    .sort((a, b) => b.requests - a.requests)
     .slice(0, 6);
 
   const totalImplements = implementsRows.length;
@@ -135,7 +118,7 @@ function buildDashboardData(
     { key: "total", title: "Implementos totales", value: totalImplements, tone: "blue" as const, trend: `${totalImplements}` },
     { key: "loaned", title: "En prestamo", value: totalLoaned, tone: "blue" as const, trend: `${totalLoaned}` },
     { key: "alerts", title: "Alertas criticas", value: totalAlerts, tone: "red" as const, trend: `${totalAlerts}` },
-    { key: "movements", title: "Movimientos registrados", value: movementRows.length, tone: "green" as const, trend: `${movementRows.length}` },
+    { key: "movements", title: "Movimientos registrados", value: movementSummary.totalMovements, tone: "green" as const, trend: `${movementSummary.totalMovements}` },
   ];
 
   return { kpis, inventory, alerts, topUsers, topImplements };
@@ -149,12 +132,11 @@ export function DirectorDashboardPage({ embedded = false }: { embedded?: boolean
   async function load() {
     setStatus("loading");
     try {
-      const [implementsRows, movementRows, usersRows] = await Promise.all([
+      const [implementsRows, movementSummary] = await Promise.all([
         fetchImplements(),
-        fetchInventoryMovements(),
-        listUsers(),
+        fetchInventoryMovementDashboardSummary(),
       ]);
-      setData(buildDashboardData(implementsRows, movementRows, usersRows));
+      setData(buildDashboardData(implementsRows, movementSummary));
       setStatus("ready");
     } catch (error) {
       setErrorMessage(getErrorMessage(error, "No fue posible cargar el panel ejecutivo."));

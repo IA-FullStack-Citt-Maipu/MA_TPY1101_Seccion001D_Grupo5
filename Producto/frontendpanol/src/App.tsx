@@ -8,6 +8,7 @@ import {
 import { InventoryCategoriesPage } from "./pages/InventoryCategoriesPage";
 import { DirectorCreateUserPage } from "./pages/DirectorCreateUserPage";
 import { DirectorDashboardPage } from "./pages/DirectorDashboardPage";
+import { DirectorMovementHistoryPage } from "./pages/DirectorMovementHistoryPage";
 import { InventoryHealthDashboardPage } from "./pages/InventoryHealthDashboardPage";
 import { InventoryItemDetailPage } from "./pages/InventoryItemDetailPage";
 import { InventoryImplementCreatePage } from "./pages/InventoryImplementCreatePage";
@@ -268,6 +269,17 @@ function App() {
         activeSection: "director-users",
         breadcrumbs: [{ label: "Director" }, { label: "Usuarios" }],
         content: <DirectorCreateUserPage embedded />,
+      };
+    }
+
+    if (directorRole && currentHashPath.startsWith("#/director/movimientos")) {
+      return {
+        key: "director-moves",
+        navigationMode: "director",
+        activeSection: "director-moves",
+        breadcrumbs: [{ label: "Director" }, { label: "Movimientos" }],
+        showSearch: false,
+        content: <DirectorMovementHistoryPage embedded />,
       };
     }
 
