@@ -18,7 +18,7 @@ export function KpiCard({
       <div className="director-kpi__icon" aria-hidden="true">
         <Icon size={24} />
       </div>
-      <div>
+      <div className="director-kpi__content">
         <p>{title}</p>
         <strong>{value}</strong>
       </div>

@@ -149,7 +149,7 @@ export function DirectorDashboardPage({ embedded = false }: { embedded?: boolean
   }, []);
 
   const content = (
-    <>
+    <div className="director-dashboard">
       <section className="content-header director-header">
         <div>
           <h1>Panel - Director de carrera</h1>
@@ -191,7 +191,7 @@ export function DirectorDashboardPage({ embedded = false }: { embedded?: boolean
           {data.topImplements.length === 0 ? <EmptyState message="Sin datos suficientes de movimientos para mostrar ranking de implementos." /> : null}
         </>
       ) : null}
-    </>
+    </div>
   );
 
   return embedded ? content : content;
