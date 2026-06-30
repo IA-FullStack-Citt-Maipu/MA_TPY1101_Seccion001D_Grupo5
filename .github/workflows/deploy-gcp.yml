@@ -526,6 +526,16 @@ jobs:
             "gcloud iam service-accounts describe panol-runtime-staging-perf@${GCP_PROJECT_ID}.iam.gserviceaccount.com --project=${GCP_PROJECT_ID}"
 
           import_if_present \
+            'module.backend_service.google_cloud_run_v2_service.this' \
+            "projects/${GCP_PROJECT_ID}/locations/${GCP_REGION}/services/panol-backend-staging-perf" \
+            "gcloud run services describe panol-backend-staging-perf --region=${GCP_REGION} --project=${GCP_PROJECT_ID}"
+
+          import_if_present \
+            'module.frontend_service.google_cloud_run_v2_service.this' \
+            "projects/${GCP_PROJECT_ID}/locations/${GCP_REGION}/services/panol-frontend-staging-perf" \
+            "gcloud run services describe panol-frontend-staging-perf --region=${GCP_REGION} --project=${GCP_PROJECT_ID}"
+
+          import_if_present \
             'module.secret_manager.google_secret_manager_secret.this["APP_AUTH_JWT_SECRET"]' \
             "projects/${GCP_PROJECT_ID}/secrets/APP_AUTH_JWT_SECRET" \
             "gcloud secrets describe APP_AUTH_JWT_SECRET --project=${GCP_PROJECT_ID}"
