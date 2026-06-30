@@ -381,6 +381,21 @@ jobs:
     runs-on: ubuntu-latest
     environment: staging-perf
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: panol_ci
+          POSTGRES_PASSWORD: panol_ci
+          POSTGRES_DB: panol_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U panol_ci -d panol_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -560,42 +575,20 @@ jobs:
             -target=module.runtime_iam \
             -target=module.cloud_sql
 
-      - name: Start Cloud SQL proxy for backend build
+      - name: Initialize schema for jOOQ codegen
         env:
-          CLOUDSQL_CONNECTION_NAME: ${{ vars.GCP_PROJECT_ID_STAGING_PERF }}:${{ vars.GCP_REGION_STAGING_PERF }}:${{ vars.CLOUDSQL_INSTANCE_NAME_STAGING_PERF }}
-        run: |
-          docker run -d \
-            --name cloud-sql-proxy-staging-perf \
-            --restart=unless-stopped \
-            --user 0:0 \
-            -p 5432:5432 \
-            -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gha-creds.json \
-            -v "$GOOGLE_APPLICATION_CREDENTIALS:/tmp/gha-creds.json:ro" \
-            gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.22.1 \
-            "${CLOUDSQL_CONNECTION_NAME}" \
-            --address 0.0.0.0 \
-            --port 5432
-
-      - name: Wait for Cloud SQL proxy readiness
+          PGPASSWORD: panol_ci
         run: |
           set -euo pipefail
-
-          for _ in $(seq 1 30); do
-            if bash -lc 'echo > /dev/tcp/127.0.0.1/5432' >/dev/null 2>&1; then
-              exit 0
-            fi
-            sleep 2
-          done
-
-          echo "Cloud SQL proxy did not become ready in time." >&2
-          docker logs cloud-sql-proxy-staging-perf || true
-          exit 1
+          psql -v ON_ERROR_STOP=1 \
+            -h 127.0.0.1 -U panol_ci -d panol_ci \
+            -f Producto/databasepanol/migrations/v25/apply-all.sql
 
       - name: Build backend image
         env:
-          JOOQ_DB_URL: jdbc:postgresql://host.docker.internal:5432/${{ vars.CLOUDSQL_DB_NAME_STAGING_PERF }}?sslmode=disable
-          JOOQ_DB_USER: ${{ vars.CLOUDSQL_DB_USER_STAGING_PERF }}
-          JOOQ_DB_PASSWORD: ${{ secrets.DB_CLOUDSQL_PASSWORD_STAGING_PERF }}
+          JOOQ_DB_URL: jdbc:postgresql://host.docker.internal:5432/panol_ci?sslmode=disable
+          JOOQ_DB_USER: panol_ci
+          JOOQ_DB_PASSWORD: panol_ci
         run: |
           docker build \
             -f ./Producto/backendpanol/Dockerfile \
