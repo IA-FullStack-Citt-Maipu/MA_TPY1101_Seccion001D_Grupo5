@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -19,11 +20,17 @@ import com.panol_project.backendpanol.modules.auth.application.dto.ChangeCurrent
 import com.panol_project.backendpanol.modules.auth.application.dto.CurrentUserSessionSummary;
 import com.panol_project.backendpanol.modules.auth.application.dto.LoginCommand;
 import com.panol_project.backendpanol.modules.auth.application.dto.LoginResult;
+import com.panol_project.backendpanol.modules.auth.application.dto.PasswordRecoveryRequestCommand;
+import com.panol_project.backendpanol.modules.auth.application.dto.PasswordRecoveryResetCommand;
+import com.panol_project.backendpanol.modules.auth.application.dto.PasswordRecoveryVerificationResult;
+import com.panol_project.backendpanol.modules.auth.application.dto.PasswordRecoveryVerifyCommand;
 import com.panol_project.backendpanol.modules.auth.application.dto.RefreshResult;
 import com.panol_project.backendpanol.modules.auth.application.dto.RevokeCurrentUserSessionResult;
 import com.panol_project.backendpanol.modules.auth.application.dto.UpdateCurrentEmailCommand;
 import com.panol_project.backendpanol.modules.auth.domain.AuditLogPort;
 import com.panol_project.backendpanol.modules.auth.domain.AuthUser;
+import com.panol_project.backendpanol.modules.auth.domain.PasswordRecoveryNotificationPort;
+import com.panol_project.backendpanol.modules.auth.domain.PasswordRecoveryRequestRecord;
 import com.panol_project.backendpanol.modules.auth.domain.RefreshSession;
 import com.panol_project.backendpanol.modules.auth.domain.RefreshSessionPort;
 import com.panol_project.backendpanol.modules.auth.domain.TokenRevocationPort;
@@ -65,6 +72,9 @@ class AuthServiceTest {
 
     @Mock
     private JwtDecoder jwtDecoder;
+
+    @Mock
+    private PasswordRecoveryNotificationPort passwordRecoveryNotificationPort;
 
     @Mock
     private AuditLogPort auditLogPort;
@@ -780,11 +790,257 @@ class AuthServiceTest {
         verify(userAuthPort, never()).updatePasswordHash(any(), any());
     }
 
+    @Test
+    void requestPasswordRecoveryDebeCrearSolicitudYEncolarCorreo() {
+        UUID userUuid = UUID.randomUUID();
+        AuthUser authUser = new AuthUser(
+                userUuid,
+                "12345678K",
+                "Ana Perez",
+                "ana.perez@panol.test",
+                BCrypt.hashpw("Panol123", BCrypt.gensalt()),
+                "DOCENTE",
+                0,
+                null
+        );
+        ArgumentCaptor<String> emailedCodeCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> storedCodeHashCaptor = ArgumentCaptor.forClass(String.class);
+
+        when(passwordRecoveryNotificationPort.isAvailable()).thenReturn(true);
+        when(userAuthPort.findAuthUserByRut("12345678K")).thenReturn(Optional.of(authUser));
+        when(userAuthPort.findLatestPasswordRecoveryRequestByUserUuid(userUuid)).thenReturn(Optional.empty());
+
+        AuthService service = buildService();
+
+        service.requestPasswordRecovery(new PasswordRecoveryRequestCommand("12.345.678-K"));
+
+        verify(userAuthPort).invalidatePasswordRecoveryRequests(eq(userUuid), any(OffsetDateTime.class));
+        verify(userAuthPort).createPasswordRecoveryRequest(
+                eq(userUuid),
+                storedCodeHashCaptor.capture(),
+                any(OffsetDateTime.class),
+                any(OffsetDateTime.class)
+        );
+        verify(passwordRecoveryNotificationPort).enqueuePasswordRecoveryEmail(
+                eq("Ana Perez"),
+                eq("ana.perez@panol.test"),
+                eq("12345678K"),
+                emailedCodeCaptor.capture(),
+                eq(15)
+        );
+        verify(auditLogPort).log("user_password_recovery_requested", userUuid, userUuid, Map.of("rut", "12345678K"));
+        verify(outboxService).enqueue("auth", userUuid, "UserPasswordRecoveryRequested", userUuid, Map.of("rut", "12345678K"));
+
+        String emailedCode = emailedCodeCaptor.getValue();
+        assertEquals(8, emailedCode.length());
+        assertTrue(emailedCode.matches("[A-Z0-9]{8}"));
+        assertEquals(sha256(emailedCode), storedCodeHashCaptor.getValue());
+    }
+
+    @Test
+    void requestPasswordRecoveryDebeIgnorarCooldownActivoSinFiltrarExistencia() {
+        UUID userUuid = UUID.randomUUID();
+        AuthUser authUser = new AuthUser(
+                userUuid,
+                "12345678K",
+                "Ana Perez",
+                "ana.perez@panol.test",
+                BCrypt.hashpw("Panol123", BCrypt.gensalt()),
+                "DOCENTE",
+                0,
+                null
+        );
+        PasswordRecoveryRequestRecord activeRequest = new PasswordRecoveryRequestRecord(
+                1L,
+                userUuid,
+                "Ana Perez",
+                "ana.perez@panol.test",
+                "12345678K",
+                authUser.passwordHash(),
+                sha256("AB12CD34"),
+                null,
+                OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(15),
+                null,
+                null,
+                OffsetDateTime.now(ZoneOffset.UTC).minusSeconds(30),
+                0,
+                OffsetDateTime.now(ZoneOffset.UTC).minusSeconds(30),
+                OffsetDateTime.now(ZoneOffset.UTC).minusSeconds(30)
+        );
+
+        when(passwordRecoveryNotificationPort.isAvailable()).thenReturn(true);
+        when(userAuthPort.findAuthUserByRut("12345678K")).thenReturn(Optional.of(authUser));
+        when(userAuthPort.findLatestPasswordRecoveryRequestByUserUuid(userUuid)).thenReturn(Optional.of(activeRequest));
+
+        AuthService service = buildService();
+
+        service.requestPasswordRecovery(new PasswordRecoveryRequestCommand("12.345.678-K"));
+
+        verify(userAuthPort, never()).createPasswordRecoveryRequest(any(), any(), any(), any());
+        verify(passwordRecoveryNotificationPort, never()).enqueuePasswordRecoveryEmail(any(), any(), any(), any(), anyInt());
+    }
+
+    @Test
+    void verifyPasswordRecoveryCodeDebeEmitirResetTokenCuandoElCodigoEsValido() {
+        UUID userUuid = UUID.randomUUID();
+        String currentPasswordHash = BCrypt.hashpw("Panol123", BCrypt.gensalt());
+        AuthUser authUser = new AuthUser(
+                userUuid,
+                "12345678K",
+                "Ana Perez",
+                "ana.perez@panol.test",
+                currentPasswordHash,
+                "DOCENTE",
+                0,
+                null
+        );
+        PasswordRecoveryRequestRecord requestRecord = new PasswordRecoveryRequestRecord(
+                10L,
+                userUuid,
+                "Ana Perez",
+                "ana.perez@panol.test",
+                "12345678K",
+                currentPasswordHash,
+                sha256("AB12CD34"),
+                null,
+                OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(10),
+                null,
+                null,
+                OffsetDateTime.now(ZoneOffset.UTC).minusSeconds(20),
+                0,
+                OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(1),
+                OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(1)
+        );
+
+        when(userAuthPort.findAuthUserByRut("12345678K")).thenReturn(Optional.of(authUser));
+        when(userAuthPort.findLatestPasswordRecoveryRequestByUserUuid(userUuid)).thenReturn(Optional.of(requestRecord));
+
+        AuthService service = buildService();
+
+        PasswordRecoveryVerificationResult result = service.verifyPasswordRecoveryCode(
+                new PasswordRecoveryVerifyCommand("12.345.678-K", "ab12cd34")
+        );
+
+        assertFalse(result.resetToken().isBlank());
+        assertEquals(600, result.expiresInSeconds());
+        verify(userAuthPort).verifyPasswordRecoveryRequest(eq(10L), anyString(), any(OffsetDateTime.class), any(OffsetDateTime.class));
+        verify(auditLogPort).log("user_password_recovery_verified", userUuid, userUuid, Map.of("rut", "12345678K"));
+        verify(outboxService).enqueue("auth", userUuid, "UserPasswordRecoveryVerified", userUuid, Map.of("rut", "12345678K"));
+    }
+
+    @Test
+    void verifyPasswordRecoveryCodeDebeInvalidarseAlQuintoIntentoFallido() {
+        UUID userUuid = UUID.randomUUID();
+        String currentPasswordHash = BCrypt.hashpw("Panol123", BCrypt.gensalt());
+        AuthUser authUser = new AuthUser(
+                userUuid,
+                "12345678K",
+                "Ana Perez",
+                "ana.perez@panol.test",
+                currentPasswordHash,
+                "DOCENTE",
+                0,
+                null
+        );
+        PasswordRecoveryRequestRecord requestRecord = new PasswordRecoveryRequestRecord(
+                12L,
+                userUuid,
+                "Ana Perez",
+                "ana.perez@panol.test",
+                "12345678K",
+                currentPasswordHash,
+                sha256("AB12CD34"),
+                null,
+                OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(10),
+                null,
+                null,
+                OffsetDateTime.now(ZoneOffset.UTC).minusSeconds(20),
+                4,
+                OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(1),
+                OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(1)
+        );
+
+        when(userAuthPort.findAuthUserByRut("12345678K")).thenReturn(Optional.of(authUser));
+        when(userAuthPort.findLatestPasswordRecoveryRequestByUserUuid(userUuid)).thenReturn(Optional.of(requestRecord));
+
+        AuthService service = buildService();
+
+        ApiException ex = assertThrows(
+                ApiException.class,
+                () -> service.verifyPasswordRecoveryCode(new PasswordRecoveryVerifyCommand("12.345.678-K", "ZZ99ZZ99"))
+        );
+
+        assertEquals("AUTH_PASSWORD_RECOVERY_CODE_ATTEMPTS_EXCEEDED", ex.getCode());
+        verify(userAuthPort).incrementPasswordRecoveryAttempt(eq(12L), eq(5), any(OffsetDateTime.class));
+        verify(userAuthPort).consumePasswordRecoveryRequest(eq(12L), any(OffsetDateTime.class));
+    }
+
+    @Test
+    void resetPasswordFromRecoveryDebeActualizarHashYRevocarSesionesActivas() {
+        UUID userUuid = UUID.randomUUID();
+        String currentPasswordHash = BCrypt.hashpw("Panol123", BCrypt.gensalt());
+        PasswordRecoveryRequestRecord requestRecord = new PasswordRecoveryRequestRecord(
+                18L,
+                userUuid,
+                "Ana Perez",
+                "ana.perez@panol.test",
+                "12345678K",
+                currentPasswordHash,
+                sha256("AB12CD34"),
+                sha256("reset-token"),
+                OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5),
+                OffsetDateTime.now(ZoneOffset.UTC).minusSeconds(30),
+                null,
+                OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(2),
+                1,
+                OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(2),
+                OffsetDateTime.now(ZoneOffset.UTC).minusSeconds(30)
+        );
+
+        when(userAuthPort.findPasswordRecoveryRequestByResetTokenHash(sha256("reset-token"))).thenReturn(Optional.of(requestRecord));
+        when(refreshSessionPort.deleteSessionsByUserUuid(userUuid)).thenReturn(List.of(
+                new RefreshSession(
+                        71L,
+                        userUuid,
+                        sha256("refresh-a"),
+                        "Browser A",
+                        "jti-a",
+                        OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(30),
+                        OffsetDateTime.now(ZoneOffset.UTC).plusDays(1),
+                        OffsetDateTime.now(ZoneOffset.UTC).minusDays(1),
+                        true
+                ),
+                new RefreshSession(
+                        72L,
+                        userUuid,
+                        sha256("refresh-b"),
+                        "Browser B",
+                        null,
+                        null,
+                        OffsetDateTime.now(ZoneOffset.UTC).plusHours(10),
+                        OffsetDateTime.now(ZoneOffset.UTC).minusHours(3),
+                        false
+                )
+        ));
+
+        AuthService service = buildService();
+
+        service.resetPasswordFromRecovery(new PasswordRecoveryResetCommand("reset-token", "Nueva1234"));
+
+        verify(userAuthPort).updatePasswordHash(eq(userUuid), anyString());
+        verify(refreshSessionPort).deleteSessionsByUserUuid(userUuid);
+        verify(tokenRevocationPort).revokeToken(eq("jti-a"), eq(userUuid), any(OffsetDateTime.class));
+        verify(userAuthPort).consumePasswordRecoveryRequest(eq(18L), any(OffsetDateTime.class));
+        verify(auditLogPort).log("user_password_changed", userUuid, userUuid, Map.of("source", "password_recovery"));
+        verify(outboxService).enqueue("user", userUuid, "UserPasswordChanged", userUuid, Map.of("source", "password_recovery"));
+    }
+
     private AuthService buildService() {
         return new AuthService(
                 userAuthPort,
                 refreshSessionPort,
                 tokenRevocationPort,
+                passwordRecoveryNotificationPort,
                 jwtEncoder,
                 jwtDecoder,
                 auditLogPort,
@@ -794,6 +1050,11 @@ class AuthServiceTest {
                 3600,
                 604800,
                 86400,
+                8,
+                15,
+                5,
+                120,
+                600,
                 "panol-backend",
                 300,
                 "bot-panol"

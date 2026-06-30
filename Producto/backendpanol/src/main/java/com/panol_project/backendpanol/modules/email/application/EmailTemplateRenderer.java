@@ -58,6 +58,8 @@ public class EmailTemplateRenderer {
         context.setVariable("previewText", resolvePreviewText(templateData));
         context.setVariable("actionUrl", resolveActionUrl(templateData));
         context.setVariable("actionLabel", resolveActionLabel(emailType, templateData));
+        context.setVariable("verificationCode", asString(templateData.get("verification_code")));
+        context.setVariable("expiresInMinutes", asInteger(templateData.get("expires_in_minutes")));
         context.setVariable("docenteSummaryTitle", resolveDocenteSummaryTitle(emailType, templateData));
         context.setVariable("docenteRequestNoteTitle", resolveDocenteRequestNoteTitle(emailType));
         context.setVariable("docenteDetailsTitle", resolveDocenteDetailsTitle(emailType, templateData));
@@ -75,6 +77,7 @@ public class EmailTemplateRenderer {
             case "loan.request_submitted.coordinador", "loan.request_updated.coordinador" -> "loan-request-coordinador";
             case "loan.status_changed.docente" -> "loan-request-docente";
             case "implement.stock_alert.coordinador", "implement.stock_alert.director" -> "stock-alert";
+            case "auth.password_recovery" -> "password-recovery";
             default -> throw new IllegalArgumentException("email_type no soportado: " + emailType);
         };
     }
@@ -90,6 +93,7 @@ public class EmailTemplateRenderer {
             case "loan.request_updated.coordinador" -> "Solicitud pendiente actualizada | Panol";
             case "loan.status_changed.docente" -> resolveLoanStatusSubject(templateData);
             case "implement.stock_alert.coordinador", "implement.stock_alert.director" -> "Alerta de stock | Panol";
+            case "auth.password_recovery" -> "Recupera tu contrasena | Panol";
             default -> "Notificacion | Panol";
         };
     }
@@ -110,6 +114,7 @@ public class EmailTemplateRenderer {
                  "loan.request_updated.coordinador" -> "loan-request";
             case "implement.stock_alert.coordinador",
                  "implement.stock_alert.director" -> "stock-alert";
+            case "auth.password_recovery" -> "password-recovery";
             default -> "notification";
         };
     }
@@ -124,6 +129,7 @@ public class EmailTemplateRenderer {
             case "loan.request_submitted.coordinador" -> "Revision requerida";
             case "loan.status_changed.docente" -> resolveDocenteStatusEyebrow(templateData);
             case "implement.stock_alert.coordinador", "implement.stock_alert.director" -> "Alerta operativa";
+            case "auth.password_recovery" -> "Recuperacion de contrasena";
             default -> "Notificacion automatica";
         };
     }
@@ -137,6 +143,8 @@ public class EmailTemplateRenderer {
             case "loan.status_changed.docente" -> resolveDocenteStatusSubtitle(templateData);
             case "implement.stock_alert.coordinador", "implement.stock_alert.director" ->
                     "Recibe visibilidad temprana para reaccionar antes de afectar la continuidad operativa.";
+            case "auth.password_recovery" ->
+                    "Usa el codigo temporal de este correo para validar tu identidad y definir una nueva contrasena de acceso.";
             default -> "Actualizacion automatica generada por Panol Salud.";
         };
     }
@@ -147,6 +155,7 @@ public class EmailTemplateRenderer {
             case "loan.request_submitted.coordinador", "loan.request_updated.coordinador" -> "Solicitud por revisar";
             case "loan.status_changed.docente" -> resolveDocenteStatusSectionTitle(templateData);
             case "implement.stock_alert.coordinador", "implement.stock_alert.director" -> "Resumen del stock";
+            case "auth.password_recovery" -> "Verifica tu identidad";
             default -> "Resumen operativo";
         };
     }
@@ -175,6 +184,7 @@ public class EmailTemplateRenderer {
         return switch (emailType) {
             case "loan.request_submitted.coordinador", "loan.request_updated.coordinador" -> "warning";
             case "implement.stock_alert.coordinador", "implement.stock_alert.director" -> "warning";
+            case "auth.password_recovery" -> "info";
             default -> "info";
         };
     }
@@ -213,6 +223,7 @@ public class EmailTemplateRenderer {
         return switch (emailType) {
             case "loan.request_submitted.coordinador", "loan.request_updated.coordinador" -> "Pendiente";
             case "loan.request_registered.docente" -> "Registrada";
+            case "auth.password_recovery" -> "Codigo temporal";
             default -> null;
         };
     }
@@ -249,11 +260,17 @@ public class EmailTemplateRenderer {
             case "loan.request_submitted.coordinador", "loan.request_updated.coordinador" -> "Abrir solicitud";
             case "loan.status_changed.docente" ->
                     isPreDeliveryStatus(status) ? "Ver solicitud" : "Ver prestamo";
+            case "auth.password_recovery" -> "Ingresar codigo";
             default -> "Ver detalle";
         };
     }
 
     private String resolveActionUrl(Map<String, Object> templateData) {
+        String explicitActionUrl = asString(templateData.get("action_url"));
+        if (StringUtils.hasText(explicitActionUrl)) {
+            return explicitActionUrl;
+        }
+
         String referenceType = asString(templateData.get("reference_type"));
         String referenceId = asString(templateData.get("reference_id"));
         if (!StringUtils.hasText(referenceType) || !StringUtils.hasText(referenceId)) {

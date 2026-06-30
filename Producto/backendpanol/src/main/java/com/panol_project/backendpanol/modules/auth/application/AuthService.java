@@ -6,11 +6,17 @@ import com.panol_project.backendpanol.modules.auth.application.dto.Authenticated
 import com.panol_project.backendpanol.modules.auth.application.dto.BotAccessTokenResult;
 import com.panol_project.backendpanol.modules.auth.application.dto.CurrentUserSessionSummary;
 import com.panol_project.backendpanol.modules.auth.application.dto.LoginResult;
+import com.panol_project.backendpanol.modules.auth.application.dto.PasswordRecoveryRequestCommand;
+import com.panol_project.backendpanol.modules.auth.application.dto.PasswordRecoveryResetCommand;
+import com.panol_project.backendpanol.modules.auth.application.dto.PasswordRecoveryVerificationResult;
+import com.panol_project.backendpanol.modules.auth.application.dto.PasswordRecoveryVerifyCommand;
 import com.panol_project.backendpanol.modules.auth.application.dto.RefreshResult;
 import com.panol_project.backendpanol.modules.auth.application.dto.RevokeCurrentUserSessionResult;
 import com.panol_project.backendpanol.modules.auth.application.dto.UpdateCurrentEmailCommand;
 import com.panol_project.backendpanol.modules.auth.domain.AuthUser;
 import com.panol_project.backendpanol.modules.auth.domain.AuditLogPort;
+import com.panol_project.backendpanol.modules.auth.domain.PasswordRecoveryNotificationPort;
+import com.panol_project.backendpanol.modules.auth.domain.PasswordRecoveryRequestRecord;
 import com.panol_project.backendpanol.modules.auth.domain.RefreshSession;
 import com.panol_project.backendpanol.modules.auth.domain.RefreshSessionPort;
 import com.panol_project.backendpanol.modules.auth.domain.TokenRevocationPort;
@@ -52,10 +58,12 @@ public class AuthService {
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final HexFormat HEX_FORMAT = HexFormat.of();
     private static final Set<String> BOT_ALLOWED_ROLES = Set.of("COORDINADOR", "DIRECTOR");
+    private static final String PASSWORD_RECOVERY_CODE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
     private final UserAuthPort userAuthRepository;
     private final RefreshSessionPort refreshSessionPort;
     private final TokenRevocationPort tokenRevocationRepository;
+    private final PasswordRecoveryNotificationPort passwordRecoveryNotificationPort;
     private final JwtEncoder jwtEncoder;
     private final JwtDecoder jwtDecoder;
     private final AuditLogPort auditLogPort;
@@ -65,6 +73,11 @@ public class AuthService {
     private final int tokenExpirationSeconds;
     private final int refreshTokenExpirationSeconds;
     private final int temporaryRefreshTokenExpirationSeconds;
+    private final int passwordRecoveryCodeLength;
+    private final int passwordRecoveryExpirationMinutes;
+    private final int passwordRecoveryMaxAttempts;
+    private final int passwordRecoveryResendCooldownSeconds;
+    private final int passwordRecoveryResetTokenExpirationSeconds;
     private final String jwtIssuer;
     private final int botTokenExpirationSeconds;
     private final String botTokenAudience;
@@ -73,6 +86,7 @@ public class AuthService {
             UserAuthPort userAuthRepository,
             RefreshSessionPort refreshSessionPort,
             TokenRevocationPort tokenRevocationRepository,
+            PasswordRecoveryNotificationPort passwordRecoveryNotificationPort,
             JwtEncoder jwtEncoder,
             JwtDecoder jwtDecoder,
             AuditLogPort auditLogPort,
@@ -82,6 +96,11 @@ public class AuthService {
             @Value("${app.auth.jwt.expiration-seconds:3600}") int tokenExpirationSeconds,
             @Value("${app.auth.refresh.expiration-seconds:604800}") int refreshTokenExpirationSeconds,
             @Value("${app.auth.refresh.temporary-expiration-seconds:86400}") int temporaryRefreshTokenExpirationSeconds,
+            @Value("${app.auth.password-recovery.code-length:8}") int passwordRecoveryCodeLength,
+            @Value("${app.auth.password-recovery.expiration-minutes:15}") int passwordRecoveryExpirationMinutes,
+            @Value("${app.auth.password-recovery.max-attempts:5}") int passwordRecoveryMaxAttempts,
+            @Value("${app.auth.password-recovery.resend-cooldown-seconds:120}") int passwordRecoveryResendCooldownSeconds,
+            @Value("${app.auth.password-recovery.reset-token-expiration-seconds:600}") int passwordRecoveryResetTokenExpirationSeconds,
             @Value("${app.auth.jwt.issuer:panol-backend}") String jwtIssuer,
             @Value("${app.auth.bot-token.expiration-seconds:300}") int botTokenExpirationSeconds,
             @Value("${app.auth.bot-token.audience:bot-panol}") String botTokenAudience
@@ -89,6 +108,7 @@ public class AuthService {
         this.userAuthRepository = userAuthRepository;
         this.refreshSessionPort = refreshSessionPort;
         this.tokenRevocationRepository = tokenRevocationRepository;
+        this.passwordRecoveryNotificationPort = passwordRecoveryNotificationPort;
         this.jwtEncoder = jwtEncoder;
         this.jwtDecoder = jwtDecoder;
         this.auditLogPort = auditLogPort;
@@ -98,6 +118,11 @@ public class AuthService {
         this.tokenExpirationSeconds = tokenExpirationSeconds;
         this.refreshTokenExpirationSeconds = refreshTokenExpirationSeconds;
         this.temporaryRefreshTokenExpirationSeconds = temporaryRefreshTokenExpirationSeconds;
+        this.passwordRecoveryCodeLength = passwordRecoveryCodeLength;
+        this.passwordRecoveryExpirationMinutes = passwordRecoveryExpirationMinutes;
+        this.passwordRecoveryMaxAttempts = passwordRecoveryMaxAttempts;
+        this.passwordRecoveryResendCooldownSeconds = passwordRecoveryResendCooldownSeconds;
+        this.passwordRecoveryResetTokenExpirationSeconds = passwordRecoveryResetTokenExpirationSeconds;
         this.jwtIssuer = jwtIssuer;
         this.botTokenExpirationSeconds = botTokenExpirationSeconds;
         this.botTokenAudience = botTokenAudience == null ? "bot-panol" : botTokenAudience.trim();
@@ -340,19 +365,126 @@ public class AuthService {
         if (!BCrypt.checkpw(currentPassword, user.passwordHash())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "AUTH_CURRENT_PASSWORD_INVALID", "La contrasena actual no coincide");
         }
-        if (newPassword == null || newPassword.trim().isBlank()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "AUTH_NEW_PASSWORD_REQUIRED", "Debes ingresar una nueva contrasena");
-        }
-        if (newPassword.length() < 8) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "AUTH_NEW_PASSWORD_TOO_SHORT", "La nueva contrasena debe tener al menos 8 caracteres");
-        }
-        if (BCrypt.checkpw(newPassword, user.passwordHash())) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "AUTH_PASSWORD_REUSE_NOT_ALLOWED", "La nueva contrasena debe ser distinta a la actual");
-        }
+        validateNewPassword(newPassword, user.passwordHash());
 
         userAuthRepository.updatePasswordHash(userUuid, BCrypt.hashpw(newPassword, BCrypt.gensalt()));
         auditLogPort.log("user_password_changed", userUuid, userUuid, Map.of("source", "self_service"));
         outboxService.enqueue("user", userUuid, "UserPasswordChanged", userUuid, Map.of("source", "self_service"));
+    }
+
+    @Transactional
+    public void requestPasswordRecovery(PasswordRecoveryRequestCommand command) {
+        if (!passwordRecoveryNotificationPort.isAvailable()) {
+            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "AUTH_PASSWORD_RECOVERY_UNAVAILABLE", "La recuperacion de contrasena no esta disponible en este momento");
+        }
+
+        String rut = normalizeRut(command.rut());
+        if (rut.isBlank()) {
+            return;
+        }
+
+        AuthUser user = userAuthRepository.findAuthUserByRut(rut).orElse(null);
+        if (user == null || user.email() == null || user.email().trim().isBlank()) {
+            return;
+        }
+
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        PasswordRecoveryRequestRecord latestRequest = userAuthRepository.findLatestPasswordRecoveryRequestByUserUuid(user.uuid()).orElse(null);
+        if (latestRequest != null
+                && latestRequest.consumedAt() == null
+                && latestRequest.lastSentAt() != null
+                && latestRequest.lastSentAt().plusSeconds(passwordRecoveryResendCooldownSeconds).isAfter(now)) {
+            return;
+        }
+
+        userAuthRepository.invalidatePasswordRecoveryRequests(user.uuid(), now);
+
+        String verificationCode = generatePasswordRecoveryCode();
+        userAuthRepository.createPasswordRecoveryRequest(
+                user.uuid(),
+                hashToken(verificationCode),
+                now.plusMinutes(passwordRecoveryExpirationMinutes),
+                now
+        );
+        passwordRecoveryNotificationPort.enqueuePasswordRecoveryEmail(
+                user.name(),
+                user.email(),
+                rut,
+                verificationCode,
+                passwordRecoveryExpirationMinutes
+        );
+        auditLogPort.log("user_password_recovery_requested", user.uuid(), user.uuid(), Map.of("rut", rut));
+        outboxService.enqueue("auth", user.uuid(), "UserPasswordRecoveryRequested", user.uuid(), Map.of("rut", rut));
+    }
+
+    @Transactional
+    public PasswordRecoveryVerificationResult verifyPasswordRecoveryCode(PasswordRecoveryVerifyCommand command) {
+        String rut = normalizeRut(command.rut());
+        String verificationCode = normalizePasswordRecoveryCode(command.code());
+        if (verificationCode.isBlank()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "AUTH_PASSWORD_RECOVERY_CODE_REQUIRED", "Debes ingresar el codigo de verificacion");
+        }
+
+        AuthUser user = userAuthRepository.findAuthUserByRut(rut).orElseThrow(this::passwordRecoveryCodeInvalid);
+        PasswordRecoveryRequestRecord requestRecord = userAuthRepository.findLatestPasswordRecoveryRequestByUserUuid(user.uuid())
+                .orElseThrow(this::passwordRecoveryCodeInvalid);
+
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        if (requestRecord.consumedAt() != null) {
+            throw passwordRecoveryCodeInvalid();
+        }
+        if (requestRecord.expiresAt() == null || !requestRecord.expiresAt().isAfter(now)) {
+            userAuthRepository.consumePasswordRecoveryRequest(requestRecord.id(), now);
+            throw new ApiException(HttpStatus.GONE, "AUTH_PASSWORD_RECOVERY_CODE_EXPIRED", "El codigo de verificacion expiro");
+        }
+
+        if (!hashToken(verificationCode).equals(requestRecord.codeHash())) {
+            int nextAttemptCount = requestRecord.attemptCount() + 1;
+            userAuthRepository.incrementPasswordRecoveryAttempt(requestRecord.id(), nextAttemptCount, now);
+            if (nextAttemptCount >= passwordRecoveryMaxAttempts) {
+                userAuthRepository.consumePasswordRecoveryRequest(requestRecord.id(), now);
+                throw new ApiException(
+                        HttpStatus.TOO_MANY_REQUESTS,
+                        "AUTH_PASSWORD_RECOVERY_CODE_ATTEMPTS_EXCEEDED",
+                        "Superaste el maximo de intentos permitidos para este codigo"
+                );
+            }
+            throw passwordRecoveryCodeInvalid();
+        }
+
+        String resetToken = generateOpaqueToken();
+        userAuthRepository.verifyPasswordRecoveryRequest(requestRecord.id(), hashToken(resetToken), now, now);
+        auditLogPort.log("user_password_recovery_verified", user.uuid(), user.uuid(), Map.of("rut", rut));
+        outboxService.enqueue("auth", user.uuid(), "UserPasswordRecoveryVerified", user.uuid(), Map.of("rut", rut));
+        return new PasswordRecoveryVerificationResult(resetToken, passwordRecoveryResetTokenExpirationSeconds);
+    }
+
+    @Transactional
+    public void resetPasswordFromRecovery(PasswordRecoveryResetCommand command) {
+        String resetToken = command.resetToken() == null ? "" : command.resetToken().trim();
+        if (resetToken.isBlank()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "AUTH_PASSWORD_RECOVERY_TOKEN_INVALID", "El token de recuperacion es invalido");
+        }
+
+        PasswordRecoveryRequestRecord requestRecord = userAuthRepository.findPasswordRecoveryRequestByResetTokenHash(hashToken(resetToken))
+                .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "AUTH_PASSWORD_RECOVERY_TOKEN_INVALID", "El token de recuperacion es invalido"));
+
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        if (requestRecord.consumedAt() != null || requestRecord.verifiedAt() == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "AUTH_PASSWORD_RECOVERY_TOKEN_INVALID", "El token de recuperacion es invalido");
+        }
+        if (requestRecord.expiresAt() == null || !requestRecord.expiresAt().isAfter(now)) {
+            userAuthRepository.consumePasswordRecoveryRequest(requestRecord.id(), now);
+            throw new ApiException(HttpStatus.GONE, "AUTH_PASSWORD_RECOVERY_TOKEN_EXPIRED", "El token de recuperacion expiro");
+        }
+
+        validateNewPassword(command.newPassword(), requestRecord.userPasswordHash());
+
+        userAuthRepository.updatePasswordHash(requestRecord.userUuid(), BCrypt.hashpw(command.newPassword(), BCrypt.gensalt()));
+        revokeAllUserSessions(requestRecord.userUuid());
+        userAuthRepository.consumePasswordRecoveryRequest(requestRecord.id(), now);
+        auditLogPort.log("user_password_changed", requestRecord.userUuid(), requestRecord.userUuid(), Map.of("source", "password_recovery"));
+        outboxService.enqueue("user", requestRecord.userUuid(), "UserPasswordChanged", requestRecord.userUuid(), Map.of("source", "password_recovery"));
     }
 
     private ApiException invalidCredentials(String rut) {
@@ -363,6 +495,10 @@ public class AuthService {
 
     private ApiException refreshSessionInvalid() {
         return new ApiException(HttpStatus.UNAUTHORIZED, "AUTH_REFRESH_SESSION_INVALID", "Sesion expirada");
+    }
+
+    private ApiException passwordRecoveryCodeInvalid() {
+        return new ApiException(HttpStatus.BAD_REQUEST, "AUTH_PASSWORD_RECOVERY_CODE_INVALID", "El codigo de verificacion no es valido");
     }
 
     private String normalizeRole(String rawRole) {
@@ -398,6 +534,38 @@ public class AuthService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "AUTH_EMAIL_REQUIRED", "El correo es obligatorio");
         }
         return emailRaw.trim().toLowerCase();
+    }
+
+    private String normalizePasswordRecoveryCode(String rawCode) {
+        if (rawCode == null || rawCode.trim().isBlank()) {
+            return "";
+        }
+        String normalized = rawCode.replaceAll("[^A-Za-z0-9]", "").trim().toUpperCase();
+        if (normalized.length() != passwordRecoveryCodeLength) {
+            return "";
+        }
+        return normalized;
+    }
+
+    private String generatePasswordRecoveryCode() {
+        StringBuilder builder = new StringBuilder(passwordRecoveryCodeLength);
+        for (int i = 0; i < passwordRecoveryCodeLength; i++) {
+            int index = SECURE_RANDOM.nextInt(PASSWORD_RECOVERY_CODE_ALPHABET.length());
+            builder.append(PASSWORD_RECOVERY_CODE_ALPHABET.charAt(index));
+        }
+        return builder.toString();
+    }
+
+    private void validateNewPassword(String newPassword, String currentPasswordHash) {
+        if (newPassword == null || newPassword.trim().isBlank()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "AUTH_NEW_PASSWORD_REQUIRED", "Debes ingresar una nueva contrasena");
+        }
+        if (newPassword.length() < 8) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "AUTH_NEW_PASSWORD_TOO_SHORT", "La nueva contrasena debe tener al menos 8 caracteres");
+        }
+        if (currentPasswordHash != null && BCrypt.checkpw(newPassword, currentPasswordHash)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "AUTH_PASSWORD_REUSE_NOT_ALLOWED", "La nueva contrasena debe ser distinta a la actual");
+        }
     }
 
     private IssuedAccessToken issueAccessToken(UUID userUuid, String normalizedRole) {
@@ -490,6 +658,13 @@ public class AuthService {
 
     private int resolveRefreshSessionExpirationSeconds(boolean persistentLogin) {
         return persistentLogin ? refreshTokenExpirationSeconds : temporaryRefreshTokenExpirationSeconds;
+    }
+
+    private void revokeAllUserSessions(UUID userUuid) {
+        List<RefreshSession> deletedSessions = refreshSessionPort.deleteSessionsByUserUuid(userUuid);
+        for (RefreshSession session : deletedSessions) {
+            revokeStoredAccessToken(session);
+        }
     }
 
     private String hashToken(String rawToken) {

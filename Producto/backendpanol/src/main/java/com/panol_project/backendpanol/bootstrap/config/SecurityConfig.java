@@ -54,7 +54,14 @@ public class SecurityConfig {
                 .addFilterBefore(aiAgentRequestFilter, BearerTokenAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                        .requestMatchers("/api/v2/auth/login", "/api/v2/auth/logout", "/api/v2/auth/refresh").permitAll()
+                        .requestMatchers(
+                                "/api/v2/auth/login",
+                                "/api/v2/auth/logout",
+                                "/api/v2/auth/refresh",
+                                "/api/v2/auth/password-recovery/request",
+                                "/api/v2/auth/password-recovery/verify",
+                                "/api/v2/auth/password-recovery/reset"
+                        ).permitAll()
                         .requestMatchers("/internal/**", "/api/v1/**").denyAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex

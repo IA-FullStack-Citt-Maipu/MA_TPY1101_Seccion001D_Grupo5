@@ -67,6 +67,12 @@ app:
       initial-delay-ms: ${APP_AUTH_TOKEN_REVOCATION_CLEANUP_INITIAL_DELAY_MS:300000}
       delay-ms: ${APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS:1800000}
       batch-size: ${APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE:500}
+    password-recovery:
+      code-length: ${APP_AUTH_PASSWORD_RECOVERY_CODE_LENGTH:8}
+      expiration-minutes: ${APP_AUTH_PASSWORD_RECOVERY_EXPIRATION_MINUTES:15}
+      max-attempts: ${APP_AUTH_PASSWORD_RECOVERY_MAX_ATTEMPTS:5}
+      resend-cooldown-seconds: ${APP_AUTH_PASSWORD_RECOVERY_RESEND_COOLDOWN_SECONDS:120}
+      reset-token-expiration-seconds: ${APP_AUTH_PASSWORD_RECOVERY_RESET_TOKEN_EXPIRATION_SECONDS:600}
     bot-token:
       expiration-seconds: ${APP_AUTH_BOT_TOKEN_EXPIRATION_SECONDS:300}
       audience: ${APP_AUTH_BOT_TOKEN_AUDIENCE:bot-panol}

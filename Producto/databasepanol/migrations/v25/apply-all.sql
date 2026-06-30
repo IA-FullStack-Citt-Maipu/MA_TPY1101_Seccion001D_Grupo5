@@ -26,3 +26,4 @@
 \ir ./V50__loan_status_email_copy_for_approved_and_prepared.sql
 \ir ./V51__auto_reserved_docente_approved_email.sql
 \ir ./V52__director_without_loan_notifications.sql
+\ir ./V53__auth_password_recovery_flow.sql
