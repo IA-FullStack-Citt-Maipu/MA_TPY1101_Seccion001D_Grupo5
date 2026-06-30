@@ -500,7 +500,7 @@ jobs:
 
           import_if_present \
             'module.cloud_sql.google_sql_user.app' \
-            "projects/${GCP_PROJECT_ID}/instances/${CLOUDSQL_INSTANCE_NAME}/users/${CLOUDSQL_DB_USER}" \
+            "${GCP_PROJECT_ID}/${CLOUDSQL_INSTANCE_NAME}/${CLOUDSQL_DB_USER}" \
             "gcloud sql users describe ${CLOUDSQL_DB_USER} --instance=${CLOUDSQL_INSTANCE_NAME} --project=${GCP_PROJECT_ID}"
 
           import_if_present \
