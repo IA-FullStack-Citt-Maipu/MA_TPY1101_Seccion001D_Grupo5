@@ -12,6 +12,8 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanDeliveryCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanDeliveryItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanDeliveryResult;
 import com.panol_project.backendpanol.modules.loan.domain.LoanPrepareCommand;
+import com.panol_project.backendpanol.modules.loan.domain.LoanRequesterHistoryPage;
+import com.panol_project.backendpanol.modules.loan.domain.LoanRequesterSummaryPage;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRepositoryPort;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReturnContextView;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReturnCommand;
@@ -54,6 +56,17 @@ public class GestionPrestamoUseCase {
     @Transactional(readOnly = true)
     public LoanSummaryPage listar(UUID requesterUuid, OffsetDateTime from, OffsetDateTime to, int page, int size) {
         return loanRepositoryPort.findVisibleLoanSummaries(requesterUuid, from, to, page, size);
+    }
+
+    @Transactional(readOnly = true)
+    public LoanRequesterSummaryPage listarSolicitantesDocentes(String search, int page, int size) {
+        return loanRepositoryPort.findLoanRequesterSummaries(search, page, size);
+    }
+
+    @Transactional(readOnly = true)
+    public LoanRequesterHistoryPage obtenerHistorialSolicitante(UUID requesterUuid, int page, int size) {
+        return loanRepositoryPort.findLoanRequesterHistory(requesterUuid, page, size)
+                .orElseThrow(() -> new NotFoundException("LOAN_REQUESTER_NOT_FOUND", "Docente no encontrado"));
     }
 
     @Transactional(readOnly = true)

@@ -6,6 +6,10 @@ import com.panol_project.backendpanol.modules.loan.api.dto.CreateLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.api.dto.DeliverLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanItemV2Response;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanPageV2Response;
+import com.panol_project.backendpanol.modules.loan.api.dto.LoanRequesterHistoryItemV2Response;
+import com.panol_project.backendpanol.modules.loan.api.dto.LoanRequesterHistoryPageV2Response;
+import com.panol_project.backendpanol.modules.loan.api.dto.LoanRequesterItemV2Response;
+import com.panol_project.backendpanol.modules.loan.api.dto.LoanRequesterPageV2Response;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanReturnContextIndividualV2Response;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanReturnContextItemV2Response;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanReturnContextV2Response;
@@ -33,6 +37,10 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanStatus;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryPage;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStatusTimelineEntry;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReturnContextView;
+import com.panol_project.backendpanol.modules.loan.domain.LoanRequesterHistoryItem;
+import com.panol_project.backendpanol.modules.loan.domain.LoanRequesterHistoryPage;
+import com.panol_project.backendpanol.modules.loan.domain.LoanRequesterSummary;
+import com.panol_project.backendpanol.modules.loan.domain.LoanRequesterSummaryPage;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
 import com.panol_project.backendpanol.shared.error.ApiException;
 import com.panol_project.backendpanol.shared.error.BadRequestException;
@@ -165,6 +173,38 @@ public class LoanV2Controller {
         );
 
         return toPageResponse(summaryPage);
+    }
+
+    @GetMapping("/requesters")
+    @PreAuthorize("hasAnyRole('COORDINADOR','DIRECTOR')")
+    public LoanRequesterPageV2Response listarSolicitantesDocentes(
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "15") Integer size,
+            @RequestParam(required = false) String search
+    ) {
+        int resolvedPage = page == null ? DEFAULT_PAGE : page;
+        int resolvedSize = size == null ? 15 : size;
+
+        validatePagination(resolvedPage, resolvedSize);
+
+        LoanRequesterSummaryPage summaryPage = gestionPrestamoUseCase.listarSolicitantesDocentes(search, resolvedPage, resolvedSize);
+        return toRequesterPageResponse(summaryPage);
+    }
+
+    @GetMapping("/requesters/{requesterUuid}/history")
+    @PreAuthorize("hasAnyRole('COORDINADOR','DIRECTOR')")
+    public LoanRequesterHistoryPageV2Response obtenerHistorialSolicitante(
+            @PathVariable UUID requesterUuid,
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "6") Integer size
+    ) {
+        int resolvedPage = page == null ? DEFAULT_PAGE : page;
+        int resolvedSize = size == null ? 6 : size;
+
+        validatePagination(resolvedPage, resolvedSize);
+
+        LoanRequesterHistoryPage historyPage = gestionPrestamoUseCase.obtenerHistorialSolicitante(requesterUuid, resolvedPage, resolvedSize);
+        return toRequesterHistoryPageResponse(historyPage);
     }
 
     @GetMapping("/{loanUuid}")
@@ -401,6 +441,86 @@ public class LoanV2Controller {
                 page.totalPages(),
                 hasNext,
                 hasPrevious
+        );
+    }
+
+    private LoanRequesterPageV2Response toRequesterPageResponse(LoanRequesterSummaryPage page) {
+        boolean hasNext = page.page() < page.totalPages();
+        boolean hasPrevious = page.page() > 1;
+        return new LoanRequesterPageV2Response(
+                page.items().stream()
+                        .map(this::toRequesterItemResponse)
+                        .toList(),
+                page.page(),
+                page.size(),
+                page.totalItems(),
+                page.totalPages(),
+                hasNext,
+                hasPrevious
+        );
+    }
+
+    private LoanRequesterHistoryPageV2Response toRequesterHistoryPageResponse(LoanRequesterHistoryPage page) {
+        boolean hasNext = page.page() < page.totalPages();
+        boolean hasPrevious = page.page() > 1;
+        return new LoanRequesterHistoryPageV2Response(
+                toRequesterItemResponse(page.requester()),
+                page.items().stream()
+                        .map(this::toRequesterHistoryItemResponse)
+                        .toList(),
+                page.page(),
+                page.size(),
+                page.totalItems(),
+                page.totalPages(),
+                hasNext,
+                hasPrevious
+        );
+    }
+
+    private LoanRequesterItemV2Response toRequesterItemResponse(LoanRequesterSummary requester) {
+        return new LoanRequesterItemV2Response(
+                requester.requesterUuid(),
+                requester.requesterName(),
+                requester.requesterEmail(),
+                requester.requesterRut(),
+                requester.lastLoanAt(),
+                requester.latestLoanUuid(),
+                requester.latestLoanStatus() == null ? null : requester.latestLoanStatus().literal(),
+                requester.latestRoomName(),
+                requester.latestSubjectName(),
+                requester.totalLoans(),
+                requester.activeLoans()
+        );
+    }
+
+    private LoanRequesterHistoryItemV2Response toRequesterHistoryItemResponse(LoanRequesterHistoryItem item) {
+        return new LoanRequesterHistoryItemV2Response(
+                item.uuid(),
+                item.status().literal(),
+                item.scheduledAt(),
+                item.expectedReturnAt(),
+                item.createdAt(),
+                item.completedAt(),
+                item.stateDates() == null ? null : item.stateDates().approvedAt(),
+                item.stateDates() == null ? null : item.stateDates().preparedAt(),
+                item.stateDates() == null ? null : item.stateDates().deliveredAt(),
+                item.stateDates() == null ? null : item.stateDates().rejectedAt(),
+                item.stateDates() == null ? null : item.stateDates().cancelledAt(),
+                item.stateDates() == null ? null : item.stateDates().expiredAt(),
+                item.stateDates() == null ? null : item.stateDates().overdueAt(),
+                item.room() == null ? null : new LoanRoomV2Response(item.room().uuid(), item.room().name()),
+                item.subject() == null ? null : new LoanSubjectV2Response(item.subject().uuid(), item.subject().name()),
+                item.items().stream()
+                        .map(loanItem -> new LoanItemV2Response(
+                                loanItem.implementUuid(),
+                                loanItem.implementName(),
+                                loanItem.itemType(),
+                                loanItem.requestedQuantity(),
+                                loanItem.reservedQuantity(),
+                                loanItem.deliveredQuantity(),
+                                loanItem.returnedQuantity()
+                        ))
+                        .toList()
         );
     }
 

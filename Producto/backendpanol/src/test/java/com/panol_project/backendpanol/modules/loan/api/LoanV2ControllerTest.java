@@ -22,8 +22,13 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanAggregate;
 import com.panol_project.backendpanol.modules.loan.domain.LoanCreateCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanDetailItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanImplementAvailability;
+import com.panol_project.backendpanol.modules.loan.domain.LoanRequesterHistoryItem;
+import com.panol_project.backendpanol.modules.loan.domain.LoanRequesterHistoryPage;
+import com.panol_project.backendpanol.modules.loan.domain.LoanRequesterSummary;
+import com.panol_project.backendpanol.modules.loan.domain.LoanRequesterSummaryPage;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRepositoryPort;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRequestedItemAvailability;
+import com.panol_project.backendpanol.modules.loan.domain.LoanStateDatesView;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStatus;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryPage;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
@@ -322,6 +327,187 @@ class LoanV2ControllerTest {
                 .andExpect(jsonPath("$.code").value("LOAN_RANGE_INVALID"));
 
         verifyNoInteractions(loanRepositoryPort);
+    }
+
+    @Test
+    void listarSolicitantesDocentesDebePermitirCoordinador() throws Exception {
+        UUID requesterUuid = UUID.randomUUID();
+        UUID loanUuid = UUID.randomUUID();
+
+        when(loanRepositoryPort.findLoanRequesterSummaries("lucas", 1, 15))
+                .thenReturn(new LoanRequesterSummaryPage(
+                        List.of(new LoanRequesterSummary(
+                                requesterUuid,
+                                "Lucas Docente",
+                                "lucas.docente@duocuc.cl",
+                                "123456789",
+                                OffsetDateTime.parse("2099-06-12T10:30:00-04:00"),
+                                loanUuid,
+                                LoanStatus.APPROVED,
+                                "Sala 301",
+                                "Farmacologia",
+                                4,
+                                2
+                        )),
+                        1,
+                        15,
+                        1,
+                        1
+                ));
+
+        mockMvc.perform(get("/api/v2/loans/requesters")
+                        .with(authentication(jwtAuthentication(UUID.randomUUID(), "COORDINADOR")))
+                        .param("search", "lucas"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].requester_uuid").value(requesterUuid.toString()))
+                .andExpect(jsonPath("$.items[0].requester_name").value("Lucas Docente"))
+                .andExpect(jsonPath("$.items[0].latest_status").value("approved"))
+                .andExpect(jsonPath("$.items[0].total_loans").value(4))
+                .andExpect(jsonPath("$.items[0].active_loans").value(2));
+    }
+
+    @Test
+    void listarSolicitantesDocentesDebePermitirDirector() throws Exception {
+        UUID requesterUuid = UUID.randomUUID();
+
+        when(loanRepositoryPort.findLoanRequesterSummaries(null, 1, 15))
+                .thenReturn(new LoanRequesterSummaryPage(
+                        List.of(new LoanRequesterSummary(
+                                requesterUuid,
+                                "Docente Ejecutivo",
+                                "docente.ejecutivo@duocuc.cl",
+                                "123456789",
+                                OffsetDateTime.parse("2099-06-12T10:30:00-04:00"),
+                                UUID.randomUUID(),
+                                LoanStatus.COMPLETED,
+                                "Sala 201",
+                                "Gestion",
+                                2,
+                                0
+                        )),
+                        1,
+                        15,
+                        1,
+                        1
+                ));
+
+        mockMvc.perform(get("/api/v2/loans/requesters")
+                        .with(authentication(jwtAuthentication(UUID.randomUUID(), "DIRECTOR"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].requester_uuid").value(requesterUuid.toString()))
+                .andExpect(jsonPath("$.items[0].requester_name").value("Docente Ejecutivo"));
+    }
+
+    @Test
+    void listarSolicitantesDocentesDebeRetornar403ParaDocente() throws Exception {
+        mockMvc.perform(get("/api/v2/loans/requesters")
+                        .with(authentication(jwtAuthentication(UUID.randomUUID(), "DOCENTE"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        verifyNoInteractions(loanRepositoryPort);
+    }
+
+    @Test
+    void obtenerHistorialSolicitanteDebeRetornarPaginaDetallada() throws Exception {
+        UUID requesterUuid = UUID.randomUUID();
+        UUID loanUuid = UUID.randomUUID();
+        UUID roomUuid = UUID.randomUUID();
+        UUID subjectUuid = UUID.randomUUID();
+        UUID implementUuid = UUID.randomUUID();
+        OffsetDateTime approvedAt = OffsetDateTime.parse("2099-06-12T10:35:00-04:00");
+
+        LoanRequesterSummary requester = new LoanRequesterSummary(
+                requesterUuid,
+                "Lucas Docente",
+                "lucas.docente@duocuc.cl",
+                "123456789",
+                OffsetDateTime.parse("2099-06-12T10:30:00-04:00"),
+                loanUuid,
+                LoanStatus.PREPARED,
+                "Sala 410",
+                "Anatomia",
+                6,
+                1
+        );
+
+        LoanRequesterHistoryItem historyItem = new LoanRequesterHistoryItem(
+                loanUuid,
+                LoanStatus.PREPARED,
+                OffsetDateTime.parse(FUTURE_SCHEDULED_AT),
+                OffsetDateTime.parse(FUTURE_EXPECTED_RETURN_AT),
+                OffsetDateTime.parse("2099-06-01T09:00:00-04:00"),
+                null,
+                new LoanStateDatesView(
+                        approvedAt,
+                        OffsetDateTime.parse("2099-06-12T11:00:00-04:00"),
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null
+                ),
+                new LoanSummaryView.RoomView(roomUuid, "Sala 410"),
+                new LoanSummaryView.SubjectView(subjectUuid, "Anatomia"),
+                List.of(new LoanSummaryView.ItemView(implementUuid, "Simulador", "reusable", 2, 2, 0, 0))
+        );
+
+        when(loanRepositoryPort.findLoanRequesterHistory(requesterUuid, 1, 6))
+                .thenReturn(Optional.of(new LoanRequesterHistoryPage(
+                        requester,
+                        List.of(historyItem),
+                        1,
+                        6,
+                        1,
+                        1
+                )));
+
+        mockMvc.perform(get("/api/v2/loans/requesters/{requesterUuid}/history", requesterUuid)
+                        .with(authentication(jwtAuthentication(UUID.randomUUID(), "COORDINADOR"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.requester.requester_uuid").value(requesterUuid.toString()))
+                .andExpect(jsonPath("$.requester.total_loans").value(6))
+                .andExpect(jsonPath("$.items[0].uuid").value(loanUuid.toString()))
+                .andExpect(jsonPath("$.items[0].status").value("prepared"))
+                .andExpect(jsonPath("$.items[0].approved_at").value("2099-06-12T10:35:00-04:00"))
+                .andExpect(jsonPath("$.items[0].room.uuid").value(roomUuid.toString()))
+                .andExpect(jsonPath("$.items[0].subject.name").value("Anatomia"))
+                .andExpect(jsonPath("$.items[0].items[0].implement_uuid").value(implementUuid.toString()))
+                .andExpect(jsonPath("$.items[0].items[0].item_type").value("reusable"));
+    }
+
+    @Test
+    void obtenerHistorialSolicitanteDebePermitirDirector() throws Exception {
+        UUID requesterUuid = UUID.randomUUID();
+
+        when(loanRepositoryPort.findLoanRequesterHistory(requesterUuid, 1, 6))
+                .thenReturn(Optional.of(new LoanRequesterHistoryPage(
+                        new LoanRequesterSummary(
+                                requesterUuid,
+                                "Docente Ejecutivo",
+                                "docente.ejecutivo@duocuc.cl",
+                                "123456789",
+                                OffsetDateTime.parse("2099-06-12T10:30:00-04:00"),
+                                UUID.randomUUID(),
+                                LoanStatus.APPROVED,
+                                "Sala 201",
+                                "Gestion",
+                                3,
+                                1
+                        ),
+                        List.of(),
+                        1,
+                        6,
+                        0,
+                        1
+                )));
+
+        mockMvc.perform(get("/api/v2/loans/requesters/{requesterUuid}/history", requesterUuid)
+                        .with(authentication(jwtAuthentication(UUID.randomUUID(), "DIRECTOR"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.requester.requester_uuid").value(requesterUuid.toString()))
+                .andExpect(jsonPath("$.items").isArray());
     }
 
     @Test
