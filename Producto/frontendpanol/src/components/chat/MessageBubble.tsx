@@ -96,16 +96,16 @@ export const MessageBubble = ({ role, content, timestamp, uiBlocks }: MessageBub
             <p className={styles.messageText}>{content}</p>
           ) : (
             <div className={styles.assistantBubbleBody}>
-              {uiBlocks && uiBlocks.length > 0 ? (
-                <div className={styles.chatUiBlockStack}>
-                  {uiBlocks.map((block, index) => renderUiBlock(block, index))}
-                </div>
-              ) : null}
               {content.trim().length > 0 ? (
                 <div className={styles.markdownBody}>
                   <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
                     {content}
                   </ReactMarkdown>
+                </div>
+              ) : null}
+              {uiBlocks && uiBlocks.length > 0 ? (
+                <div className={styles.chatUiBlockStack}>
+                  {uiBlocks.map((block, index) => renderUiBlock(block, index))}
                 </div>
               ) : null}
             </div>
