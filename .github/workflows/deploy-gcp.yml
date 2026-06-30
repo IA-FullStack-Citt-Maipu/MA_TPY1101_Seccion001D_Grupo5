@@ -418,6 +418,32 @@ jobs:
           echo "tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
           echo "repo=${{ vars.GCP_ARTIFACT_REGISTRY_LOCATION_STAGING_PERF }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID_STAGING_PERF }}/panol-apps-staging-perf" >> "$GITHUB_OUTPUT"
 
+      - name: Validate required inputs (staging-perf)
+        env:
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID_STAGING_PERF }}
+          GCP_REGION: ${{ vars.GCP_REGION_STAGING_PERF }}
+          GCP_ARTIFACT_REGISTRY_LOCATION: ${{ vars.GCP_ARTIFACT_REGISTRY_LOCATION_STAGING_PERF }}
+          GCP_TFSTATE_BUCKET: ${{ vars.GCP_TFSTATE_BUCKET_STAGING_PERF }}
+          CLOUDSQL_INSTANCE_NAME: ${{ vars.CLOUDSQL_INSTANCE_NAME_STAGING_PERF }}
+          CLOUDSQL_DB_NAME: ${{ vars.CLOUDSQL_DB_NAME_STAGING_PERF }}
+          CLOUDSQL_DB_USER: ${{ vars.CLOUDSQL_DB_USER_STAGING_PERF }}
+          DB_CLOUDSQL_PASSWORD: ${{ secrets.DB_CLOUDSQL_PASSWORD_STAGING_PERF }}
+          APP_AUTH_JWT_SECRET: ${{ secrets.APP_AUTH_JWT_SECRET_STAGING_PERF }}
+          APP_SECURITY_AI_AGENT_SECRET: ${{ secrets.APP_SECURITY_AI_AGENT_SECRET_STAGING_PERF }}
+        run: |
+          set -euo pipefail
+          required=(
+            GCP_PROJECT_ID GCP_REGION GCP_ARTIFACT_REGISTRY_LOCATION GCP_TFSTATE_BUCKET
+            CLOUDSQL_INSTANCE_NAME CLOUDSQL_DB_NAME CLOUDSQL_DB_USER
+            DB_CLOUDSQL_PASSWORD APP_AUTH_JWT_SECRET APP_SECURITY_AI_AGENT_SECRET
+          )
+          for key in "${required[@]}"; do
+            if [ -z "${!key:-}" ]; then
+              echo "Missing required value: $key" >&2
+              exit 1
+            fi
+          done
+
       - name: Configure Docker auth for Artifact Registry
         run: |
           gcloud auth configure-docker "${{ vars.GCP_ARTIFACT_REGISTRY_LOCATION_STAGING_PERF }}-docker.pkg.dev" --quiet
@@ -472,6 +498,7 @@ jobs:
           TF_VAR_frontend_concurrency: "40"
           TF_VAR_db_cloudsql_password_secret_value: ${{ secrets.DB_CLOUDSQL_PASSWORD_STAGING_PERF }}
           TF_VAR_app_auth_jwt_secret_value: ${{ secrets.APP_AUTH_JWT_SECRET_STAGING_PERF }}
+          TF_VAR_app_security_ai_agent_secret_value: ${{ secrets.APP_SECURITY_AI_AGENT_SECRET_STAGING_PERF }}
           TF_VAR_runtime_sa_user_members: '["serviceAccount:${{ secrets.GCP_SERVICE_ACCOUNT_STAGING_PERF }}"]'
         run: |
           set -euo pipefail
@@ -541,6 +568,11 @@ jobs:
             "gcloud secrets describe APP_AUTH_JWT_SECRET --project=${GCP_PROJECT_ID}"
 
           import_if_present \
+            'module.secret_manager.google_secret_manager_secret.this["APP_SECURITY_AI_AGENT_SECRET"]' \
+            "projects/${GCP_PROJECT_ID}/secrets/APP_SECURITY_AI_AGENT_SECRET" \
+            "gcloud secrets describe APP_SECURITY_AI_AGENT_SECRET --project=${GCP_PROJECT_ID}"
+
+          import_if_present \
             'module.secret_manager.google_secret_manager_secret.this["DB_CLOUDSQL_PASSWORD"]' \
             "projects/${GCP_PROJECT_ID}/secrets/DB_CLOUDSQL_PASSWORD" \
             "gcloud secrets describe DB_CLOUDSQL_PASSWORD --project=${GCP_PROJECT_ID}"
@@ -575,6 +607,7 @@ jobs:
           TF_VAR_app_auth_token_revocation_cleanup_batch_size: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE_STAGING_PERF }}
           TF_VAR_db_cloudsql_password_secret_value: ${{ secrets.DB_CLOUDSQL_PASSWORD_STAGING_PERF }}
           TF_VAR_app_auth_jwt_secret_value: ${{ secrets.APP_AUTH_JWT_SECRET_STAGING_PERF }}
+          TF_VAR_app_security_ai_agent_secret_value: ${{ secrets.APP_SECURITY_AI_AGENT_SECRET_STAGING_PERF }}
           TF_VAR_runtime_sa_user_members: '["serviceAccount:${{ secrets.GCP_SERVICE_ACCOUNT_STAGING_PERF }}"]'
           TF_VAR_backend_domain: ""
           TF_VAR_frontend_domain: ""
@@ -642,6 +675,7 @@ jobs:
           TF_VAR_app_auth_token_revocation_cleanup_batch_size: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE_STAGING_PERF }}
           TF_VAR_db_cloudsql_password_secret_value: ${{ secrets.DB_CLOUDSQL_PASSWORD_STAGING_PERF }}
           TF_VAR_app_auth_jwt_secret_value: ${{ secrets.APP_AUTH_JWT_SECRET_STAGING_PERF }}
+          TF_VAR_app_security_ai_agent_secret_value: ${{ secrets.APP_SECURITY_AI_AGENT_SECRET_STAGING_PERF }}
           TF_VAR_runtime_sa_user_members: '["serviceAccount:${{ secrets.GCP_SERVICE_ACCOUNT_STAGING_PERF }}"]'
           TF_VAR_backend_domain: ""
           TF_VAR_frontend_domain: ""
@@ -692,6 +726,7 @@ jobs:
           TF_VAR_app_auth_token_revocation_cleanup_batch_size: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE_STAGING_PERF }}
           TF_VAR_db_cloudsql_password_secret_value: ${{ secrets.DB_CLOUDSQL_PASSWORD_STAGING_PERF }}
           TF_VAR_app_auth_jwt_secret_value: ${{ secrets.APP_AUTH_JWT_SECRET_STAGING_PERF }}
+          TF_VAR_app_security_ai_agent_secret_value: ${{ secrets.APP_SECURITY_AI_AGENT_SECRET_STAGING_PERF }}
           TF_VAR_runtime_sa_user_members: '["serviceAccount:${{ secrets.GCP_SERVICE_ACCOUNT_STAGING_PERF }}"]'
           TF_VAR_backend_domain: ""
           TF_VAR_frontend_domain: ""

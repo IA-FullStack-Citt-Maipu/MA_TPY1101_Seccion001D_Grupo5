@@ -62,11 +62,13 @@ module "secret_manager" {
   project_id = var.gcp_project_id
   secrets = [
     "DB_CLOUDSQL_PASSWORD",
-    "APP_AUTH_JWT_SECRET"
+    "APP_AUTH_JWT_SECRET",
+    "APP_SECURITY_AI_AGENT_SECRET"
   ]
   secret_values = {
-    DB_CLOUDSQL_PASSWORD = var.db_cloudsql_password_secret_value
-    APP_AUTH_JWT_SECRET  = var.app_auth_jwt_secret_value
+    DB_CLOUDSQL_PASSWORD         = var.db_cloudsql_password_secret_value
+    APP_AUTH_JWT_SECRET          = var.app_auth_jwt_secret_value
+    APP_SECURITY_AI_AGENT_SECRET = var.app_security_ai_agent_secret_value
   }
 }
 
@@ -126,6 +128,10 @@ module "backend_service" {
     }
     APP_AUTH_JWT_SECRET = {
       secret  = "projects/${var.gcp_project_id}/secrets/APP_AUTH_JWT_SECRET"
+      version = "latest"
+    }
+    APP_SECURITY_AI_AGENT_SECRET = {
+      secret  = "projects/${var.gcp_project_id}/secrets/APP_SECURITY_AI_AGENT_SECRET"
       version = "latest"
     }
   }

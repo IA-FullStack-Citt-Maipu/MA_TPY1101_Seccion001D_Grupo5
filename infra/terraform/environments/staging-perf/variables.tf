@@ -224,3 +224,9 @@ variable "app_auth_jwt_secret_value" {
   default   = ""
   sensitive = true
 }
+
+variable "app_security_ai_agent_secret_value" {
+  type      = string
+  default   = ""
+  sensitive = true
+}
