@@ -110,12 +110,17 @@ jobs:
           SUPABASE_DB_USER: ${{ vars.SUPABASE_DB_USER_DEV }}
           APP_AUTH_JWT_ISSUER: ${{ vars.APP_AUTH_JWT_ISSUER_DEV }}
           APP_AUTH_JWT_EXPIRATION_SECONDS: ${{ vars.APP_AUTH_JWT_EXPIRATION_SECONDS_DEV }}
+          APP_EMAIL_ENABLED: ${{ vars.APP_EMAIL_ENABLED_DEV }}
+          APP_EMAIL_PROVIDER: ${{ vars.APP_EMAIL_PROVIDER_DEV }}
+          APP_EMAIL_FROM_NAME: ${{ vars.APP_EMAIL_FROM_NAME_DEV }}
+          APP_EMAIL_FROM_ADDRESS: ${{ vars.APP_EMAIL_FROM_ADDRESS_DEV }}
           JWT_ISSUER_URI: ${{ vars.JWT_ISSUER_URI_DEV }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY_DEV }}
           DB_SUPABASE_PASSWORD: ${{ secrets.DB_SUPABASE_PASSWORD_DEV }}
           APP_AUTH_JWT_SECRET: ${{ secrets.APP_AUTH_JWT_SECRET_DEV }}
           APP_SECURITY_AI_AGENT_SECRET: ${{ secrets.APP_SECURITY_AI_AGENT_SECRET_DEV }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY_DEV }}
+          APP_EMAIL_RESEND_API_KEY: ${{ secrets.APP_EMAIL_RESEND_API_KEY_DEV }}
         run: |
           set -euo pipefail
           required=(
@@ -123,8 +128,10 @@ jobs:
             BOT_MIN_INSTANCES BOT_MAX_INSTANCES BOT_TIMEOUT_SECONDS BOT_CONCURRENCY
             GEMINI_MODEL BOT_LLM_TIMEOUT_SECONDS BOT_BACKEND_TIMEOUT_SECONDS BOT_BACKEND_RETRY_COUNT
             SUPABASE_DB_HOST SUPABASE_DB_PORT SUPABASE_DB_NAME SUPABASE_DB_USER
-            APP_AUTH_JWT_ISSUER APP_AUTH_JWT_EXPIRATION_SECONDS JWT_ISSUER_URI VITE_SUPABASE_PUBLISHABLE_KEY
-            DB_SUPABASE_PASSWORD APP_AUTH_JWT_SECRET APP_SECURITY_AI_AGENT_SECRET GOOGLE_API_KEY
+            APP_AUTH_JWT_ISSUER APP_AUTH_JWT_EXPIRATION_SECONDS
+            APP_EMAIL_ENABLED APP_EMAIL_PROVIDER APP_EMAIL_FROM_NAME APP_EMAIL_FROM_ADDRESS
+            JWT_ISSUER_URI VITE_SUPABASE_PUBLISHABLE_KEY
+            DB_SUPABASE_PASSWORD APP_AUTH_JWT_SECRET APP_SECURITY_AI_AGENT_SECRET GOOGLE_API_KEY APP_EMAIL_RESEND_API_KEY
           )
           for key in "${required[@]}"; do
             if [ -z "${!key:-}" ]; then
@@ -164,6 +171,10 @@ jobs:
           TF_VAR_app_auth_jwt_issuer: ${{ vars.APP_AUTH_JWT_ISSUER_DEV }}
           TF_VAR_app_auth_jwt_expiration_seconds: ${{ vars.APP_AUTH_JWT_EXPIRATION_SECONDS_DEV }}
           TF_VAR_app_auth_refresh_expiration_seconds: ${{ vars.APP_AUTH_REFRESH_EXPIRATION_SECONDS_DEV }}
+          TF_VAR_app_email_enabled: ${{ vars.APP_EMAIL_ENABLED_DEV }}
+          TF_VAR_app_email_provider: ${{ vars.APP_EMAIL_PROVIDER_DEV }}
+          TF_VAR_app_email_from_name: ${{ vars.APP_EMAIL_FROM_NAME_DEV }}
+          TF_VAR_app_email_from_address: ${{ vars.APP_EMAIL_FROM_ADDRESS_DEV }}
           TF_VAR_app_auth_cookie_secure: ${{ vars.APP_AUTH_COOKIE_SECURE_DEV }}
           TF_VAR_app_auth_cookie_same_site: ${{ vars.APP_AUTH_COOKIE_SAME_SITE_DEV }}
           TF_VAR_app_auth_token_revocation_cleanup_enabled: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_ENABLED_DEV }}
@@ -176,6 +187,7 @@ jobs:
           TF_VAR_app_auth_jwt_secret_value: ${{ secrets.APP_AUTH_JWT_SECRET_DEV }}
           TF_VAR_app_security_ai_agent_secret_value: ${{ secrets.APP_SECURITY_AI_AGENT_SECRET_DEV }}
           TF_VAR_google_api_key_secret_value: ${{ secrets.GOOGLE_API_KEY_DEV }}
+          TF_VAR_app_email_resend_api_key_secret_value: ${{ secrets.APP_EMAIL_RESEND_API_KEY_DEV }}
           TF_VAR_runtime_sa_user_members: '["serviceAccount:${{ secrets.GCP_SERVICE_ACCOUNT_DEV }}"]'
           TF_VAR_backend_domain: "api.dev.panol.cl"
           TF_VAR_bot_domain: ""
@@ -246,6 +258,10 @@ jobs:
           TF_VAR_app_auth_jwt_issuer: ${{ vars.APP_AUTH_JWT_ISSUER_DEV }}
           TF_VAR_app_auth_jwt_expiration_seconds: ${{ vars.APP_AUTH_JWT_EXPIRATION_SECONDS_DEV }}
           TF_VAR_app_auth_refresh_expiration_seconds: ${{ vars.APP_AUTH_REFRESH_EXPIRATION_SECONDS_DEV }}
+          TF_VAR_app_email_enabled: ${{ vars.APP_EMAIL_ENABLED_DEV }}
+          TF_VAR_app_email_provider: ${{ vars.APP_EMAIL_PROVIDER_DEV }}
+          TF_VAR_app_email_from_name: ${{ vars.APP_EMAIL_FROM_NAME_DEV }}
+          TF_VAR_app_email_from_address: ${{ vars.APP_EMAIL_FROM_ADDRESS_DEV }}
           TF_VAR_app_auth_cookie_secure: ${{ vars.APP_AUTH_COOKIE_SECURE_DEV }}
           TF_VAR_app_auth_cookie_same_site: ${{ vars.APP_AUTH_COOKIE_SAME_SITE_DEV }}
           TF_VAR_app_auth_token_revocation_cleanup_enabled: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_ENABLED_DEV }}
@@ -258,6 +274,7 @@ jobs:
           TF_VAR_app_auth_jwt_secret_value: ${{ secrets.APP_AUTH_JWT_SECRET_DEV }}
           TF_VAR_app_security_ai_agent_secret_value: ${{ secrets.APP_SECURITY_AI_AGENT_SECRET_DEV }}
           TF_VAR_google_api_key_secret_value: ${{ secrets.GOOGLE_API_KEY_DEV }}
+          TF_VAR_app_email_resend_api_key_secret_value: ${{ secrets.APP_EMAIL_RESEND_API_KEY_DEV }}
           TF_VAR_runtime_sa_user_members: '["serviceAccount:${{ secrets.GCP_SERVICE_ACCOUNT_DEV }}"]'
           TF_VAR_backend_domain: "api.dev.panol.cl"
           TF_VAR_bot_domain: ""
@@ -323,6 +340,10 @@ jobs:
           TF_VAR_app_auth_jwt_issuer: ${{ vars.APP_AUTH_JWT_ISSUER_DEV }}
           TF_VAR_app_auth_jwt_expiration_seconds: ${{ vars.APP_AUTH_JWT_EXPIRATION_SECONDS_DEV }}
           TF_VAR_app_auth_refresh_expiration_seconds: ${{ vars.APP_AUTH_REFRESH_EXPIRATION_SECONDS_DEV }}
+          TF_VAR_app_email_enabled: ${{ vars.APP_EMAIL_ENABLED_DEV }}
+          TF_VAR_app_email_provider: ${{ vars.APP_EMAIL_PROVIDER_DEV }}
+          TF_VAR_app_email_from_name: ${{ vars.APP_EMAIL_FROM_NAME_DEV }}
+          TF_VAR_app_email_from_address: ${{ vars.APP_EMAIL_FROM_ADDRESS_DEV }}
           TF_VAR_app_auth_cookie_secure: ${{ vars.APP_AUTH_COOKIE_SECURE_DEV }}
           TF_VAR_app_auth_cookie_same_site: ${{ vars.APP_AUTH_COOKIE_SAME_SITE_DEV }}
           TF_VAR_app_auth_token_revocation_cleanup_enabled: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_ENABLED_DEV }}
@@ -335,6 +356,7 @@ jobs:
           TF_VAR_app_auth_jwt_secret_value: ${{ secrets.APP_AUTH_JWT_SECRET_DEV }}
           TF_VAR_app_security_ai_agent_secret_value: ${{ secrets.APP_SECURITY_AI_AGENT_SECRET_DEV }}
           TF_VAR_google_api_key_secret_value: ${{ secrets.GOOGLE_API_KEY_DEV }}
+          TF_VAR_app_email_resend_api_key_secret_value: ${{ secrets.APP_EMAIL_RESEND_API_KEY_DEV }}
           TF_VAR_runtime_sa_user_members: '["serviceAccount:${{ secrets.GCP_SERVICE_ACCOUNT_DEV }}"]'
           TF_VAR_backend_domain: "api.dev.panol.cl"
           TF_VAR_bot_domain: ""
