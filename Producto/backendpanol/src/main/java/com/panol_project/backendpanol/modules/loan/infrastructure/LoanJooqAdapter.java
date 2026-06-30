@@ -7,6 +7,7 @@ import static com.panol_project.backendpanol.jooq.tables.Loan.LOAN;
 import static com.panol_project.backendpanol.jooq.tables.LoanDetail.LOAN_DETAIL;
 import static com.panol_project.backendpanol.jooq.tables.LoanDetailIndividual.LOAN_DETAIL_INDIVIDUAL;
 import static com.panol_project.backendpanol.jooq.tables.LoanStatusHistory.LOAN_STATUS_HISTORY;
+import static com.panol_project.backendpanol.jooq.tables.Role.ROLE;
 import static com.panol_project.backendpanol.jooq.tables.Room.ROOM;
 import static com.panol_project.backendpanol.jooq.tables.Stock.STOCK;
 import static com.panol_project.backendpanol.jooq.tables.Subject.SUBJECT;
@@ -31,6 +32,10 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanDeliveryResult;
 import com.panol_project.backendpanol.modules.loan.domain.LoanDetailItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanImplementAvailability;
 import com.panol_project.backendpanol.modules.loan.domain.LoanPrepareCommand;
+import com.panol_project.backendpanol.modules.loan.domain.LoanRequesterHistoryItem;
+import com.panol_project.backendpanol.modules.loan.domain.LoanRequesterHistoryPage;
+import com.panol_project.backendpanol.modules.loan.domain.LoanRequesterSummary;
+import com.panol_project.backendpanol.modules.loan.domain.LoanRequesterSummaryPage;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRepositoryPort;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRequestedItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRequestedItemAvailability;
@@ -414,6 +419,75 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 .map(row -> toSummaryView(row, itemsByLoanId.getOrDefault(row.loanId(), List.of())))
                 .toList();
         return new LoanSummaryPage(items, safePage, safeSize, totalItems, totalPages);
+    }
+
+    @Override
+    public LoanRequesterSummaryPage findLoanRequesterSummaries(String search, int page, int size) {
+        int safePage = Math.max(1, page);
+        int safeSize = Math.max(1, size);
+        int offset = (safePage - 1) * safeSize;
+
+        long totalItems = countLoanRequesterSummaryRows(search);
+        int totalPages = totalItems == 0 ? 1 : (int) Math.ceil((double) totalItems / safeSize);
+        if (safePage > totalPages) {
+            safePage = totalPages;
+            offset = (safePage - 1) * safeSize;
+        }
+
+        List<LoanRequesterSummaryRow> rows = fetchLoanRequesterSummaryRows(null, search, safeSize, offset);
+        if (rows.isEmpty()) {
+            return new LoanRequesterSummaryPage(List.of(), safePage, safeSize, totalItems, totalPages);
+        }
+
+        Map<Long, LoanRequesterLatestLoanContext> latestLoanByRequesterId = fetchLatestLoanContextByRequesterIds(
+                rows.stream().map(LoanRequesterSummaryRow::requesterId).toList()
+        );
+
+        List<LoanRequesterSummary> items = rows.stream()
+                .map(row -> toRequesterSummary(row, latestLoanByRequesterId.get(row.requesterId())))
+                .toList();
+
+        return new LoanRequesterSummaryPage(items, safePage, safeSize, totalItems, totalPages);
+    }
+
+    @Override
+    public Optional<LoanRequesterHistoryPage> findLoanRequesterHistory(UUID requesterUuid, int page, int size) {
+        if (requesterUuid == null) {
+            return Optional.empty();
+        }
+
+        List<LoanRequesterSummaryRow> requesterRows = fetchLoanRequesterSummaryRows(requesterUuid, null, 1, 0);
+        if (requesterRows.isEmpty()) {
+            return Optional.empty();
+        }
+
+        LoanRequesterSummaryRow requesterRow = requesterRows.getFirst();
+        LoanRequesterLatestLoanContext latestLoanContext = fetchLatestLoanContextByRequesterIds(List.of(requesterRow.requesterId()))
+                .get(requesterRow.requesterId());
+        LoanRequesterSummary requester = toRequesterSummary(requesterRow, latestLoanContext);
+
+        int safePage = Math.max(1, page);
+        int safeSize = Math.max(1, size);
+        int offset = (safePage - 1) * safeSize;
+
+        long totalItems = countLoanSummaryRows(requesterUuid, null, null);
+        int totalPages = totalItems == 0 ? 1 : (int) Math.ceil((double) totalItems / safeSize);
+        if (safePage > totalPages) {
+            safePage = totalPages;
+            offset = (safePage - 1) * safeSize;
+        }
+
+        List<LoanRequesterHistoryRow> rows = fetchLoanRequesterHistoryRows(requesterUuid, safeSize, offset);
+        if (rows.isEmpty()) {
+            return Optional.of(new LoanRequesterHistoryPage(requester, List.of(), safePage, safeSize, totalItems, totalPages));
+        }
+
+        Map<Long, List<LoanSummaryView.ItemView>> itemsByLoanId = fetchLoanSummaryItems(rows.stream().map(LoanRequesterHistoryRow::loanId).toList());
+        List<LoanRequesterHistoryItem> items = rows.stream()
+                .map(row -> toRequesterHistoryItem(row, itemsByLoanId.getOrDefault(row.loanId(), List.of())))
+                .toList();
+
+        return Optional.of(new LoanRequesterHistoryPage(requester, items, safePage, safeSize, totalItems, totalPages));
     }
 
     @Override
@@ -982,6 +1056,200 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
             condition = condition.and(LOAN.SCHEDULED_AT.ge(from)).and(LOAN.SCHEDULED_AT.lt(to));
         }
         return condition;
+    }
+
+    private List<LoanRequesterSummaryRow> fetchLoanRequesterSummaryRows(
+            UUID onlyRequesterUuid,
+            String search,
+            int limit,
+            int offset
+    ) {
+        Field<OffsetDateTime> lastLoanAtField = DSL.max(LOAN.CREATED_AT).as("last_loan_at");
+        Field<Integer> totalLoansField = DSL.count().cast(Integer.class).as("total_loans");
+        Field<Integer> activeLoansField = DSL.sum(
+                DSL.when(LOAN.STATUS.in(
+                        LoanStatusEnum.pending,
+                        LoanStatusEnum.approved,
+                        LoanStatusEnum.prepared,
+                        LoanStatusEnum.delivered,
+                        LoanStatusEnum.overdue
+                ), DSL.inline(1)).otherwise(DSL.inline(0))
+        ).cast(Integer.class).as("active_loans");
+
+        return dsl.select(
+                        USER.ID,
+                        USER.UUID,
+                        USER.NAME,
+                        USER.EMAIL,
+                        USER.RUT,
+                        lastLoanAtField,
+                        totalLoansField,
+                        activeLoansField
+                )
+                .from(LOAN)
+                .join(USER).on(USER.ID.eq(LOAN.REQUESTER_ID))
+                .join(ROLE).on(ROLE.ID.eq(USER.ROLE_ID))
+                .where(buildLoanRequesterCondition(onlyRequesterUuid, search))
+                .groupBy(USER.ID, USER.UUID, USER.NAME, USER.EMAIL, USER.RUT)
+                .orderBy(lastLoanAtField.desc(), USER.NAME.asc(), USER.ID.asc())
+                .limit(limit)
+                .offset(offset)
+                .fetch(record -> new LoanRequesterSummaryRow(
+                        record.get(USER.ID),
+                        record.get(USER.UUID),
+                        record.get(USER.NAME),
+                        record.get(USER.EMAIL),
+                        record.get(USER.RUT),
+                        record.get(lastLoanAtField),
+                        record.get(totalLoansField) == null ? 0 : record.get(totalLoansField),
+                        record.get(activeLoansField) == null ? 0 : record.get(activeLoansField)
+                ));
+    }
+
+    private long countLoanRequesterSummaryRows(String search) {
+        Integer count = dsl.selectCount()
+                .from(
+                        dsl.select(USER.ID)
+                                .from(LOAN)
+                                .join(USER).on(USER.ID.eq(LOAN.REQUESTER_ID))
+                                .join(ROLE).on(ROLE.ID.eq(USER.ROLE_ID))
+                                .where(buildLoanRequesterCondition(null, search))
+                                .groupBy(USER.ID)
+                                .asTable("loan_requesters")
+                )
+                .fetchOne(0, Integer.class);
+        return count == null ? 0L : count.longValue();
+    }
+
+    private Condition buildLoanRequesterCondition(UUID onlyRequesterUuid, String search) {
+        Condition condition = ROLE.NAME.likeIgnoreCase("%DOCENT%");
+        if (onlyRequesterUuid != null) {
+            condition = condition.and(USER.UUID.eq(onlyRequesterUuid));
+        }
+
+        String normalizedSearch = normalizeOptionalText(search);
+        if (normalizedSearch != null) {
+            condition = condition.and(
+                    USER.NAME.likeIgnoreCase('%' + normalizedSearch + '%')
+                            .or(USER.EMAIL.likeIgnoreCase('%' + normalizedSearch + '%'))
+                            .or(USER.RUT.likeIgnoreCase('%' + normalizedSearch + '%'))
+            );
+        }
+        return condition;
+    }
+
+    private Map<Long, LoanRequesterLatestLoanContext> fetchLatestLoanContextByRequesterIds(List<Long> requesterIds) {
+        if (requesterIds == null || requesterIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Field<Long> requesterIdField = LOAN.REQUESTER_ID.as("requester_id");
+        Field<UUID> loanUuidField = LOAN.UUID.as("loan_uuid");
+        Field<LoanStatusEnum> statusField = LOAN.STATUS.as("loan_status");
+        Field<String> roomNameField = ROOM.NAME.as("room_name");
+        Field<String> subjectNameField = SUBJECT.NAME.as("subject_name");
+        Field<Integer> rankField = DSL.rowNumber()
+                .over(DSL.partitionBy(LOAN.REQUESTER_ID).orderBy(LOAN.CREATED_AT.desc(), LOAN.ID.desc()))
+                .as("row_rank");
+
+        var latestLoanTable = dsl.select(
+                        requesterIdField,
+                        loanUuidField,
+                        statusField,
+                        roomNameField,
+                        subjectNameField,
+                        rankField
+                )
+                .from(LOAN)
+                .leftJoin(ROOM).on(ROOM.ID.eq(LOAN.ROOM_ID))
+                .leftJoin(SUBJECT).on(SUBJECT.ID.eq(LOAN.SUBJECT_ID))
+                .where(LOAN.REQUESTER_ID.in(requesterIds))
+                .asTable("latest_loan_per_requester");
+
+        Field<Long> latestRequesterIdField = latestLoanTable.field("requester_id", Long.class);
+        Field<UUID> latestLoanUuidField = latestLoanTable.field("loan_uuid", UUID.class);
+        Field<LoanStatusEnum> latestStatusField = latestLoanTable.field("loan_status", LoanStatusEnum.class);
+        Field<String> latestRoomNameField = latestLoanTable.field("room_name", String.class);
+        Field<String> latestSubjectNameField = latestLoanTable.field("subject_name", String.class);
+        Field<Integer> latestRankField = latestLoanTable.field("row_rank", Integer.class);
+
+        return dsl.select(
+                        latestRequesterIdField,
+                        latestLoanUuidField,
+                        latestStatusField,
+                        latestRoomNameField,
+                        latestSubjectNameField
+                )
+                .from(latestLoanTable)
+                .where(latestRankField.eq(1))
+                .fetchMap(
+                        latestRequesterIdField,
+                        record -> new LoanRequesterLatestLoanContext(
+                                record.get(latestLoanUuidField),
+                                toDomainStatusNullable(record.get(latestStatusField)),
+                                record.get(latestRoomNameField),
+                                record.get(latestSubjectNameField)
+                        )
+                );
+    }
+
+    private List<LoanRequesterHistoryRow> fetchLoanRequesterHistoryRows(UUID requesterUuid, int limit, int offset) {
+        Condition condition = buildLoanSummaryCondition(null, requesterUuid, null, null)
+                .and(ROLE.NAME.likeIgnoreCase("%DOCENT%"));
+
+        return dsl.select(
+                        LOAN.ID,
+                        LOAN.UUID,
+                        LOAN.STATUS,
+                        LOAN.SCHEDULED_AT,
+                        LOAN.EXPECTED_RETURN_AT,
+                        LOAN.CREATED_AT,
+                        V_LOAN_STATE_DATES.COMPLETED_AT,
+                        V_LOAN_STATE_DATES.APPROVED_AT,
+                        V_LOAN_STATE_DATES.PREPARED_AT,
+                        V_LOAN_STATE_DATES.DELIVERED_AT,
+                        V_LOAN_STATE_DATES.REJECTED_AT,
+                        V_LOAN_STATE_DATES.CANCELLED_AT,
+                        V_LOAN_STATE_DATES.EXPIRED_AT,
+                        V_LOAN_STATE_DATES.OVERDUE_AT,
+                        ROOM.UUID.as("room_uuid"),
+                        ROOM.NAME.as("room_name"),
+                        SUBJECT.UUID.as("subject_uuid"),
+                        SUBJECT.NAME.as("subject_name")
+                )
+                .from(LOAN)
+                .join(USER).on(USER.ID.eq(LOAN.REQUESTER_ID))
+                .join(ROLE).on(ROLE.ID.eq(USER.ROLE_ID))
+                .leftJoin(V_LOAN_STATE_DATES).on(V_LOAN_STATE_DATES.LOAN_ID.eq(LOAN.ID))
+                .leftJoin(ROOM).on(ROOM.ID.eq(LOAN.ROOM_ID))
+                .leftJoin(SUBJECT).on(SUBJECT.ID.eq(LOAN.SUBJECT_ID))
+                .where(condition)
+                .orderBy(LOAN.CREATED_AT.desc(), LOAN.ID.desc())
+                .limit(limit)
+                .offset(offset)
+                .fetch(record -> new LoanRequesterHistoryRow(
+                        record.get(LOAN.ID),
+                        record.get(LOAN.UUID),
+                        toDomainStatus(record.get(LOAN.STATUS)),
+                        record.get(LOAN.SCHEDULED_AT),
+                        record.get(LOAN.EXPECTED_RETURN_AT),
+                        record.get(LOAN.CREATED_AT),
+                        record.get(V_LOAN_STATE_DATES.COMPLETED_AT),
+                        new LoanStateDatesView(
+                                record.get(V_LOAN_STATE_DATES.APPROVED_AT),
+                                record.get(V_LOAN_STATE_DATES.PREPARED_AT),
+                                record.get(V_LOAN_STATE_DATES.DELIVERED_AT),
+                                record.get(V_LOAN_STATE_DATES.COMPLETED_AT),
+                                record.get(V_LOAN_STATE_DATES.REJECTED_AT),
+                                record.get(V_LOAN_STATE_DATES.CANCELLED_AT),
+                                record.get(V_LOAN_STATE_DATES.EXPIRED_AT),
+                                record.get(V_LOAN_STATE_DATES.OVERDUE_AT)
+                        ),
+                        record.get("room_uuid", UUID.class),
+                        record.get("room_name", String.class),
+                        record.get("subject_uuid", UUID.class),
+                        record.get("subject_name", String.class)
+                ));
     }
 
     private LoanRow requireLoanRowForUpdate(UUID loanUuid) {
@@ -1663,6 +1931,44 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
                 row.expectedReturnAt(),
                 row.createdAt(),
                 row.completedAt(),
+                room,
+                subject,
+                items
+        );
+    }
+
+    private LoanRequesterSummary toRequesterSummary(LoanRequesterSummaryRow row, LoanRequesterLatestLoanContext latestLoanContext) {
+        return new LoanRequesterSummary(
+                row.requesterUuid(),
+                row.requesterName(),
+                row.requesterEmail(),
+                row.requesterRut(),
+                row.lastLoanAt(),
+                latestLoanContext == null ? null : latestLoanContext.loanUuid(),
+                latestLoanContext == null ? null : latestLoanContext.status(),
+                latestLoanContext == null ? null : latestLoanContext.roomName(),
+                latestLoanContext == null ? null : latestLoanContext.subjectName(),
+                row.totalLoans(),
+                row.activeLoans()
+        );
+    }
+
+    private LoanRequesterHistoryItem toRequesterHistoryItem(LoanRequesterHistoryRow row, List<LoanSummaryView.ItemView> items) {
+        LoanSummaryView.RoomView room = row.roomUuid() == null
+                ? null
+                : new LoanSummaryView.RoomView(row.roomUuid(), row.roomName());
+        LoanSummaryView.SubjectView subject = row.subjectUuid() == null
+                ? null
+                : new LoanSummaryView.SubjectView(row.subjectUuid(), row.subjectName());
+
+        return new LoanRequesterHistoryItem(
+                row.loanUuid(),
+                row.status(),
+                row.scheduledAt(),
+                row.expectedReturnAt(),
+                row.createdAt(),
+                row.completedAt(),
+                row.stateDates(),
                 room,
                 subject,
                 items
@@ -2359,6 +2665,42 @@ public class LoanJooqAdapter implements LoanRepositoryPort {
             OffsetDateTime expectedReturnAt,
             OffsetDateTime createdAt,
             OffsetDateTime completedAt,
+            UUID roomUuid,
+            String roomName,
+            UUID subjectUuid,
+            String subjectName
+    ) {
+    }
+
+    private record LoanRequesterSummaryRow(
+            Long requesterId,
+            UUID requesterUuid,
+            String requesterName,
+            String requesterEmail,
+            String requesterRut,
+            OffsetDateTime lastLoanAt,
+            int totalLoans,
+            int activeLoans
+    ) {
+    }
+
+    private record LoanRequesterLatestLoanContext(
+            UUID loanUuid,
+            LoanStatus status,
+            String roomName,
+            String subjectName
+    ) {
+    }
+
+    private record LoanRequesterHistoryRow(
+            Long loanId,
+            UUID loanUuid,
+            LoanStatus status,
+            OffsetDateTime scheduledAt,
+            OffsetDateTime expectedReturnAt,
+            OffsetDateTime createdAt,
+            OffsetDateTime completedAt,
+            LoanStateDatesView stateDates,
             UUID roomUuid,
             String roomName,
             UUID subjectUuid,

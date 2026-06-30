@@ -51,6 +51,18 @@ public interface LoanRepositoryPort {
             int size
     );
 
+    LoanRequesterSummaryPage findLoanRequesterSummaries(
+            String search,
+            int page,
+            int size
+    );
+
+    java.util.Optional<LoanRequesterHistoryPage> findLoanRequesterHistory(
+            UUID requesterUuid,
+            int page,
+            int size
+    );
+
     List<LoanSummaryView> findAllVisibleLoanSummaries();
 
     LoanAggregate reviewLoan(LoanReviewCommand command);
