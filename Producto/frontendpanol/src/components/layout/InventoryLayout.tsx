@@ -535,120 +535,138 @@ export function TopBar({
               {notificationCount > 0 ? <span className="topbar__notify-badge">{notificationCount > 99 ? "99+" : notificationCount}</span> : null}
             </button>
             {notificationsOpen ? (
-              <div className="notifications-dropdown" role="dialog" aria-label="Bandeja de notificaciones">
-                <div className="notifications-dropdown__header">
-                  <div>
-                    <strong>Notificaciones</strong>
-                    <p>{notificationCount} pendientes</p>
-                  </div>
-                  <button
-                    type="button"
-                    className="button button--table"
-                    onClick={() => {
-                      setNotificationsOpen(false);
-                      onNotificationsViewAll();
-                    }}
-                  >
-                    Ver todas
-                  </button>
-                </div>
-                <div className="notifications-dropdown__body">
-                  {notificationsLoading ? (
-                    <div className="notifications-dropdown__state">
-                      <p>Cargando notificaciones...</p>
+              <>
+                <button
+                  type="button"
+                  className="notifications-dropdown__backdrop"
+                  aria-label="Cerrar notificaciones"
+                  onClick={() => setNotificationsOpen(false)}
+                />
+                <div className="notifications-dropdown" role="dialog" aria-modal="true" aria-label="Bandeja de notificaciones">
+                  <div className="notifications-dropdown__header">
+                    <div>
+                      <strong>Notificaciones</strong>
+                      <p>{notificationCount} pendientes</p>
                     </div>
-                  ) : notificationsError ? (
-                    <div className="notifications-dropdown__state">
-                      <p>{notificationsError}</p>
-                      <button type="button" className="button button--table" onClick={onNotificationsOpen}>
-                        Reintentar
+                    <div className="notifications-dropdown__header-actions">
+                      <button
+                        type="button"
+                        className="button button--table"
+                        onClick={() => {
+                          setNotificationsOpen(false);
+                          onNotificationsViewAll();
+                        }}
+                      >
+                        Ver todas
+                      </button>
+                      <button
+                        type="button"
+                        className="notifications-dropdown__close"
+                        aria-label="Cerrar notificaciones"
+                        onClick={() => setNotificationsOpen(false)}
+                      >
+                        <X size={18} />
                       </button>
                     </div>
-                  ) : notificationItems.length === 0 ? (
-                    <div className="notifications-dropdown__state">
-                      <p>No tienes notificaciones nuevas.</p>
-                    </div>
-                  ) : (
-                    <div className="notifications-dropdown__list">
-                      {notificationItems.map((notification) => {
-                        const href = resolveNotificationHref(notification);
-                        const quickMarkAsReadButton = (
-                          <button
-                            type="button"
-                            className="notifications-dropdown__quick-action"
-                            aria-label={notification.read
-                              ? `Marcar como no leida ${notification.title}`
-                              : `Marcar como leida ${notification.title}`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void onNotificationMarkAsRead?.(notification);
-                            }}
-                          >
-                            {notification.read ? <RotateCcw size={15} /> : <Check size={15} />}
-                          </button>
-                        );
-                        const itemContent = (
-                          <>
-                            <div className="notifications-dropdown__title-row">
-                              <div className="notifications-dropdown__title">
-                                <span className={notification.read ? "notifications-dropdown__dot" : "notifications-dropdown__dot is-unread"} aria-hidden="true" />
-                                <div>
-                                  <strong>{notification.title}</strong>
-                                  <p>{notification.message}</p>
+                  </div>
+                  <div className="notifications-dropdown__body">
+                    {notificationsLoading ? (
+                      <div className="notifications-dropdown__state">
+                        <p>Cargando notificaciones...</p>
+                      </div>
+                    ) : notificationsError ? (
+                      <div className="notifications-dropdown__state">
+                        <p>{notificationsError}</p>
+                        <button type="button" className="button button--table" onClick={onNotificationsOpen}>
+                          Reintentar
+                        </button>
+                      </div>
+                    ) : notificationItems.length === 0 ? (
+                      <div className="notifications-dropdown__state">
+                        <p>No tienes notificaciones nuevas.</p>
+                      </div>
+                    ) : (
+                      <div className="notifications-dropdown__list">
+                        {notificationItems.map((notification) => {
+                          const href = resolveNotificationHref(notification);
+                          const quickMarkAsReadButton = (
+                            <button
+                              type="button"
+                              className="notifications-dropdown__quick-action"
+                              aria-label={notification.read
+                                ? `Marcar como no leida ${notification.title}`
+                                : `Marcar como leida ${notification.title}`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void onNotificationMarkAsRead?.(notification);
+                              }}
+                            >
+                              {notification.read ? <RotateCcw size={15} /> : <Check size={15} />}
+                            </button>
+                          );
+                          const itemContent = (
+                            <>
+                              <div className="notifications-dropdown__title-row">
+                                <div className="notifications-dropdown__title">
+                                  <span className={notification.read ? "notifications-dropdown__dot" : "notifications-dropdown__dot is-unread"} aria-hidden="true" />
+                                  <div>
+                                    <strong>{notification.title}</strong>
+                                    <p>{notification.message}</p>
+                                  </div>
+                                </div>
+                                {!notification.read ? <span className="notifications-dropdown__badge">Nueva</span> : null}
+                              </div>
+                              <div className="notifications-dropdown__meta">
+                                <time dateTime={notification.createdAt} title={formatNotificationTimestamp(notification.createdAt)}>
+                                  {formatNotificationRelativeTime(notification.createdAt)}
+                                </time>
+                                <span>{href ? "Ver detalle" : "Informativa"}</span>
+                              </div>
+                            </>
+                          );
+
+                          if (!href) {
+                            return (
+                              <div
+                                key={notification.uuid}
+                                className={notification.read ? "notifications-dropdown__item is-static" : "notifications-dropdown__item is-unread is-static"}
+                              >
+                                <div className="notifications-dropdown__item-shell">
+                                  <div className="notifications-dropdown__item-main">
+                                    {itemContent}
+                                  </div>
+                                  {quickMarkAsReadButton}
                                 </div>
                               </div>
-                              {!notification.read ? <span className="notifications-dropdown__badge">Nueva</span> : null}
-                            </div>
-                            <div className="notifications-dropdown__meta">
-                              <time dateTime={notification.createdAt} title={formatNotificationTimestamp(notification.createdAt)}>
-                                {formatNotificationRelativeTime(notification.createdAt)}
-                              </time>
-                              <span>{href ? "Ver detalle" : "Informativa"}</span>
-                            </div>
-                          </>
-                        );
+                            );
+                          }
 
-                        if (!href) {
                           return (
                             <div
                               key={notification.uuid}
-                              className={notification.read ? "notifications-dropdown__item is-static" : "notifications-dropdown__item is-unread is-static"}
+                              className={notification.read ? "notifications-dropdown__item" : "notifications-dropdown__item is-unread"}
                             >
                               <div className="notifications-dropdown__item-shell">
-                                <div className="notifications-dropdown__item-main">
+                                <button
+                                  type="button"
+                                  className="notifications-dropdown__item-main notifications-dropdown__item--button"
+                                  onClick={() => {
+                                    setNotificationsOpen(false);
+                                    void onNotificationSelect?.(notification);
+                                  }}
+                                >
                                   {itemContent}
-                                </div>
+                                </button>
                                 {quickMarkAsReadButton}
                               </div>
                             </div>
                           );
-                        }
-
-                        return (
-                          <div
-                            key={notification.uuid}
-                            className={notification.read ? "notifications-dropdown__item" : "notifications-dropdown__item is-unread"}
-                          >
-                            <div className="notifications-dropdown__item-shell">
-                              <button
-                                type="button"
-                                className="notifications-dropdown__item-main notifications-dropdown__item--button"
-                                onClick={() => {
-                                  setNotificationsOpen(false);
-                                  void onNotificationSelect?.(notification);
-                                }}
-                              >
-                                {itemContent}
-                              </button>
-                              {quickMarkAsReadButton}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              </>
             ) : null}
           </div>
           <button type="button" className="topbar__icon" aria-label="Soporte" onClick={onOpenSupport}>
