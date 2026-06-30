@@ -1,10 +1,10 @@
 - Estado del documento: vigente
-- Ultima verificacion: 2026-06-28
+- Ultima verificacion: 2026-06-29
 - Fuente de verdad: ver matriz canonica vigente y codigo fuente actual
 
 # Payloads Frontend / Backend
 
-- Ultima actualizacion: 2026-06-28
+- Ultima actualizacion: 2026-06-29
 - Alcance: contratos JSON usados por frontend y backend
 
 ## 1) Payload de error publico (backend -> frontend)
@@ -258,7 +258,115 @@ Error funcional esperado:
   `PATCH /api/v2/auth/me/email` y `PATCH /api/v2/auth/me/password`.
 - Cualquier otro detalle tecnico debe permanecer en logs internos del backend.
 
-## 12) Prestamos v2
+## 12) Administracion de usuarios
+
+### Request de creacion (`POST /api/v2/users`)
+
+```json
+{
+  "name": "Docente QA",
+  "rut": "123456789",
+  "email": "docente.qa@duocuc.cl",
+  "role": "DOCENTE",
+  "password": "Panol123"
+}
+```
+
+Notas:
+
+- `rut` se envia limpio, completo y con DV.
+- El frontend puede mostrarlo formateado (`12.345.678-9`), pero el contrato al backend es compacto (`123456789`).
+- `role` admite `COORDINADOR` o `DOCENTE` en el alta desde director.
+
+### Request de actualizacion (`PUT /api/v2/users/{userUuid}`)
+
+```json
+{
+  "name": "Docente QA Actualizado",
+  "rut": "123456789",
+  "email": "docente.qa@duocuc.cl"
+}
+```
+
+### Request de activacion/desactivacion (`PATCH /api/v2/users/{userUuid}/active?active=true|false`)
+
+- Sin body.
+- `PATCH .../active` es la ruta oficial para activar o desactivar.
+
+### Request de eliminacion definitiva (`DELETE /api/v2/users/{userUuid}`)
+
+- Sin body.
+- Solo aplica sobre usuarios inactivos y sin referencias bloqueantes.
+
+## 13) Historial y resumen de movimientos
+
+### Query de historial (`GET /api/v2/implements/movements/history`)
+
+Params soportados:
+
+- `page`
+- `size`
+- `search`
+- `action`
+- `from`
+- `to`
+
+### Response
+
+```json
+{
+  "items": [
+    {
+      "id": "44",
+      "action": "loan_delivery",
+      "quantity": 3,
+      "timestamp": "2026-06-29T14:30:00Z",
+      "notes": "Entrega para laboratorio",
+      "implement_uuid": "7f6f4a4e-1f69-4b7a-b0a2-b2c34c7b3a90",
+      "implement_name": "Simulador",
+      "barcode": "SIM-123",
+      "item_type": "reusable",
+      "category_name": "Simulacion",
+      "location_name": "Bodega 1",
+      "performed_by_uuid": "0b4a3b32-7f4a-4af4-964d-7d732dbeb4df",
+      "performed_by": "Ana Perez",
+      "performed_by_role": "COORDINADOR"
+    }
+  ],
+  "page": 1,
+  "size": 15,
+  "total_items": 27,
+  "total_pages": 2,
+  "has_next": true,
+  "has_previous": false
+}
+```
+
+### Query de resumen (`GET /api/v2/implements/movements/summary`)
+
+### Response
+
+```json
+{
+  "total_movements": 18,
+  "top_users": [
+    {
+      "name": "Coordinador QA Local",
+      "role": "COORDINADOR",
+      "movement_count": 11
+    }
+  ],
+  "top_implements": [
+    {
+      "implement_uuid": "7f6f4a4e-1f69-4b7a-b0a2-b2c34c7b3a90",
+      "implement_name": "Simulador",
+      "movement_count": 9
+    }
+  ]
+}
+```
+
+## 14) Prestamos v2
 
 ### Flujo vigente
 
@@ -267,7 +375,7 @@ Error funcional esperado:
 - La auto-reserva no descuenta stock fisico al crear o editar.
 - Para `reusable` e `individual`, la disponibilidad sigue evaluandose por traslape del rango solicitado.
 - Para `consumable`, la disponibilidad reservada queda bloqueada globalmente mientras el prestamo siga en `approved` o `prepared`.
-- El docente solo recibe notificacion cuando el prestamo pasa a `prepared`, no cuando entra en `approved`.
+- El docente recibe correo cuando la solicitud queda en `approved` y en cambios de estado relevantes posteriores.
 - `PATCH /api/v2/loans/{loanUuid}` reutiliza el payload de creacion y solo se permite mientras el prestamo siga en `approved`.
 - `PATCH /api/v2/loans/{loanUuid}/cancel` mantiene cancelacion operativa para reservas/preparaciones activas.
 - `POST /api/v2/loans/{loanUuid}/prepare` separa fisicamente implementos y hoy solo valida estado `approved`.

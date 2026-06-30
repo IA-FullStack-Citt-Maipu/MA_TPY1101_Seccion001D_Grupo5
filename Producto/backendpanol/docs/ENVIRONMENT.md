@@ -1,7 +1,7 @@
 # Entorno y Secrets del Backend
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-06-13
+- Ultima verificacion: 2026-06-29
 - Fuente de verdad: `application.yaml`, `Producto/databasepanol/.env.example`, `.env`, `.env.local.example`, compose vigentes
 
 ## Selector de entorno de BD
@@ -53,6 +53,16 @@ Comunes:
 - `APP_AUTH_TOKEN_REVOCATION_CLEANUP_INITIAL_DELAY_MS`
 - `APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS`
 - `APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE`
+- `APP_EMAIL_ENABLED`
+- `APP_EMAIL_PROVIDER`
+- `APP_EMAIL_RESEND_API_KEY`
+- `APP_EMAIL_FROM_NAME`
+- `APP_EMAIL_FROM_ADDRESS`
+- `APP_EMAIL_WORKER_DELAY_MS`
+- `APP_EMAIL_BATCH_SIZE`
+- `APP_EMAIL_MAX_RETRIES`
+- `APP_EMAIL_CONNECT_TIMEOUT_MS`
+- `APP_EMAIL_READ_TIMEOUT_MS`
 
 Docker DB:
 - `DB_DOCKER_HOST`
@@ -117,6 +127,39 @@ jOOQ (build-time):
 - `APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE`
   - maximo de filas expiradas borradas por corrida.
   - Default: `500`.
+
+## Notificaciones por correo
+
+- `APP_EMAIL_ENABLED`
+  - habilita o deshabilita el pipeline de correo.
+  - Default: `false`.
+- `APP_EMAIL_PROVIDER`
+  - proveedor de entrega configurado.
+  - Default actual: `resend`.
+- `APP_EMAIL_RESEND_API_KEY`
+  - API key usada por el cliente `ResendEmailClient`.
+  - Obligatoria cuando `APP_EMAIL_ENABLED=true` y `APP_EMAIL_PROVIDER=resend`.
+- `APP_EMAIL_FROM_NAME`
+  - nombre visible del remitente.
+  - Default: `Panol`.
+- `APP_EMAIL_FROM_ADDRESS`
+  - direccion visible del remitente.
+  - Default: `notificaciones@panol.cl`.
+- `APP_EMAIL_WORKER_DELAY_MS`
+  - intervalo del worker que procesa la cola de correo.
+  - Default: `5000` ms.
+- `APP_EMAIL_BATCH_SIZE`
+  - maximo de correos procesados por ciclo.
+  - Default: `20`.
+- `APP_EMAIL_MAX_RETRIES`
+  - maximo de reintentos por correo fallido.
+  - Default: `5`.
+- `APP_EMAIL_CONNECT_TIMEOUT_MS`
+  - timeout de conexion al proveedor.
+  - Default: `5000` ms.
+- `APP_EMAIL_READ_TIMEOUT_MS`
+  - timeout de lectura de la respuesta del proveedor.
+  - Default: `10000` ms.
 
 ## Compose y entorno
 
