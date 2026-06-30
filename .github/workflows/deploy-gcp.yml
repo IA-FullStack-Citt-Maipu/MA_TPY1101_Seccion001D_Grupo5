@@ -567,13 +567,13 @@ jobs:
           docker run -d \
             --name cloud-sql-proxy-staging-perf \
             --restart=unless-stopped \
-            --network host \
             --user 0:0 \
+            -p 5432:5432 \
             -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gha-creds.json \
             -v "$GOOGLE_APPLICATION_CREDENTIALS:/tmp/gha-creds.json:ro" \
             gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.22.1 \
             "${CLOUDSQL_CONNECTION_NAME}" \
-            --address 127.0.0.1 \
+            --address 0.0.0.0 \
             --port 5432
 
       - name: Wait for Cloud SQL proxy readiness
