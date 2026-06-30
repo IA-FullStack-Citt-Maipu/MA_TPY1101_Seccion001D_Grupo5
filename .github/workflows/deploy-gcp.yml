@@ -414,6 +414,75 @@ jobs:
             -backend-config="bucket=${{ vars.GCP_TFSTATE_BUCKET_STAGING_PERF }}" \
             -backend-config="prefix=terraform/state"
 
+      - name: Import existing staging-perf resources
+        working-directory: infra/terraform/environments/staging-perf
+        env:
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID_STAGING_PERF }}
+          GCP_REGION: ${{ vars.GCP_REGION_STAGING_PERF }}
+          GCP_ARTIFACT_REGISTRY_LOCATION: ${{ vars.GCP_ARTIFACT_REGISTRY_LOCATION_STAGING_PERF }}
+          CLOUDSQL_INSTANCE_NAME: ${{ vars.CLOUDSQL_INSTANCE_NAME_STAGING_PERF }}
+          CLOUDSQL_DB_NAME: ${{ vars.CLOUDSQL_DB_NAME_STAGING_PERF }}
+          CLOUDSQL_DB_USER: ${{ vars.CLOUDSQL_DB_USER_STAGING_PERF }}
+        run: |
+          set -euo pipefail
+
+          state_has() {
+            terraform state list | grep -Fxq "$1"
+          }
+
+          import_if_present() {
+            local address="$1"
+            local resource_id="$2"
+            local describe_command="$3"
+
+            if state_has "$address"; then
+              echo "Already in state: $address"
+              return 0
+            fi
+
+            if eval "$describe_command" >/dev/null 2>&1; then
+              echo "Importing $address"
+              terraform import -input=false "$address" "$resource_id"
+            else
+              echo "Skipping $address because the resource was not found"
+            fi
+          }
+
+          import_if_present \
+            'module.artifact_registry.google_artifact_registry_repository.this' \
+            "projects/${GCP_PROJECT_ID}/locations/${GCP_ARTIFACT_REGISTRY_LOCATION}/repositories/panol-apps-staging-perf" \
+            "gcloud artifacts repositories describe panol-apps-staging-perf --location=${GCP_ARTIFACT_REGISTRY_LOCATION} --project=${GCP_PROJECT_ID}"
+
+          import_if_present \
+            'module.cloud_sql.google_sql_database_instance.this' \
+            "projects/${GCP_PROJECT_ID}/instances/${CLOUDSQL_INSTANCE_NAME}" \
+            "gcloud sql instances describe ${CLOUDSQL_INSTANCE_NAME} --project=${GCP_PROJECT_ID}"
+
+          import_if_present \
+            'module.cloud_sql.google_sql_database.app' \
+            "projects/${GCP_PROJECT_ID}/instances/${CLOUDSQL_INSTANCE_NAME}/databases/${CLOUDSQL_DB_NAME}" \
+            "gcloud sql databases describe ${CLOUDSQL_DB_NAME} --instance=${CLOUDSQL_INSTANCE_NAME} --project=${GCP_PROJECT_ID}"
+
+          import_if_present \
+            'module.cloud_sql.google_sql_user.app' \
+            "projects/${GCP_PROJECT_ID}/instances/${CLOUDSQL_INSTANCE_NAME}/users/${CLOUDSQL_DB_USER}" \
+            "gcloud sql users describe ${CLOUDSQL_DB_USER} --instance=${CLOUDSQL_INSTANCE_NAME} --project=${GCP_PROJECT_ID}"
+
+          import_if_present \
+            'module.runtime_iam.google_service_account.runtime' \
+            "projects/${GCP_PROJECT_ID}/serviceAccounts/panol-runtime-staging-perf@${GCP_PROJECT_ID}.iam.gserviceaccount.com" \
+            "gcloud iam service-accounts describe panol-runtime-staging-perf@${GCP_PROJECT_ID}.iam.gserviceaccount.com --project=${GCP_PROJECT_ID}"
+
+          import_if_present \
+            'module.secret_manager.google_secret_manager_secret.this["DB_CLOUDSQL_PASSWORD"]' \
+            "projects/${GCP_PROJECT_ID}/secrets/DB_CLOUDSQL_PASSWORD" \
+            "gcloud secrets describe DB_CLOUDSQL_PASSWORD --project=${GCP_PROJECT_ID}"
+
+          import_if_present \
+            'module.secret_manager.google_secret_manager_secret.this["APP_AUTH_JWT_SECRET"]' \
+            "projects/${GCP_PROJECT_ID}/secrets/APP_AUTH_JWT_SECRET" \
+            "gcloud secrets describe APP_AUTH_JWT_SECRET --project=${GCP_PROJECT_ID}"
+
       - name: Bootstrap infra (registry + secrets + IAM + Cloud SQL)
         working-directory: infra/terraform/environments/staging-perf
         env:
