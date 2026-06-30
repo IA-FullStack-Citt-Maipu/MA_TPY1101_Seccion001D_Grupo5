@@ -102,6 +102,7 @@ jobs:
           BOT_CONCURRENCY: ${{ vars.BOT_CONCURRENCY_DEV }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL_DEV }}
           BOT_LLM_TIMEOUT_SECONDS: ${{ vars.BOT_LLM_TIMEOUT_SECONDS_DEV }}
+          BOT_LLM_TOTAL_TIMEOUT_SECONDS: ${{ vars.BOT_LLM_TOTAL_TIMEOUT_SECONDS_DEV }}
           BOT_BACKEND_TIMEOUT_SECONDS: ${{ vars.BOT_BACKEND_TIMEOUT_SECONDS_DEV }}
           BOT_BACKEND_RETRY_COUNT: ${{ vars.BOT_BACKEND_RETRY_COUNT_DEV }}
           SUPABASE_DB_HOST: ${{ vars.SUPABASE_DB_HOST_DEV }}
@@ -126,7 +127,7 @@ jobs:
           required=(
             GCP_PROJECT_ID GCP_REGION GCP_ARTIFACT_REGISTRY_LOCATION GCP_TFSTATE_BUCKET
             BOT_MIN_INSTANCES BOT_MAX_INSTANCES BOT_TIMEOUT_SECONDS BOT_CONCURRENCY
-            GEMINI_MODEL BOT_LLM_TIMEOUT_SECONDS BOT_BACKEND_TIMEOUT_SECONDS BOT_BACKEND_RETRY_COUNT
+            GEMINI_MODEL BOT_LLM_TIMEOUT_SECONDS BOT_LLM_TOTAL_TIMEOUT_SECONDS BOT_BACKEND_TIMEOUT_SECONDS BOT_BACKEND_RETRY_COUNT
             SUPABASE_DB_HOST SUPABASE_DB_PORT SUPABASE_DB_NAME SUPABASE_DB_USER
             APP_AUTH_JWT_ISSUER APP_AUTH_JWT_EXPIRATION_SECONDS
             APP_EMAIL_ENABLED APP_EMAIL_PROVIDER APP_EMAIL_FROM_NAME APP_EMAIL_FROM_ADDRESS
@@ -198,6 +199,7 @@ jobs:
           TF_VAR_bot_concurrency: ${{ vars.BOT_CONCURRENCY_DEV }}
           TF_VAR_gemini_model: ${{ vars.GEMINI_MODEL_DEV }}
           TF_VAR_bot_llm_timeout_seconds: ${{ vars.BOT_LLM_TIMEOUT_SECONDS_DEV }}
+          TF_VAR_bot_llm_total_timeout_seconds: ${{ vars.BOT_LLM_TOTAL_TIMEOUT_SECONDS_DEV }}
           TF_VAR_bot_backend_timeout_seconds: ${{ vars.BOT_BACKEND_TIMEOUT_SECONDS_DEV }}
           TF_VAR_bot_backend_retry_count: ${{ vars.BOT_BACKEND_RETRY_COUNT_DEV }}
         run: |
@@ -287,6 +289,7 @@ jobs:
           TF_VAR_bot_concurrency: ${{ vars.BOT_CONCURRENCY_DEV }}
           TF_VAR_gemini_model: ${{ vars.GEMINI_MODEL_DEV }}
           TF_VAR_bot_llm_timeout_seconds: ${{ vars.BOT_LLM_TIMEOUT_SECONDS_DEV }}
+          TF_VAR_bot_llm_total_timeout_seconds: ${{ vars.BOT_LLM_TOTAL_TIMEOUT_SECONDS_DEV }}
           TF_VAR_bot_backend_timeout_seconds: ${{ vars.BOT_BACKEND_TIMEOUT_SECONDS_DEV }}
           TF_VAR_bot_backend_retry_count: ${{ vars.BOT_BACKEND_RETRY_COUNT_DEV }}
           TF_VAR_frontend_min_instances: "0"
@@ -369,6 +372,7 @@ jobs:
           TF_VAR_bot_concurrency: ${{ vars.BOT_CONCURRENCY_DEV }}
           TF_VAR_gemini_model: ${{ vars.GEMINI_MODEL_DEV }}
           TF_VAR_bot_llm_timeout_seconds: ${{ vars.BOT_LLM_TIMEOUT_SECONDS_DEV }}
+          TF_VAR_bot_llm_total_timeout_seconds: ${{ vars.BOT_LLM_TOTAL_TIMEOUT_SECONDS_DEV }}
           TF_VAR_bot_backend_timeout_seconds: ${{ vars.BOT_BACKEND_TIMEOUT_SECONDS_DEV }}
           TF_VAR_bot_backend_retry_count: ${{ vars.BOT_BACKEND_RETRY_COUNT_DEV }}
           TF_VAR_frontend_min_instances: "0"

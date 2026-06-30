@@ -42,13 +42,20 @@ locals {
   })
 
   bot_env = {
-    GEMINI_MODEL            = var.gemini_model
-    LLM_TIMEOUT_SECONDS     = tostring(var.bot_llm_timeout_seconds)
-    BACKEND_BASE_URL        = local.backend_origin
-    BACKEND_TIMEOUT_SECONDS = tostring(var.bot_backend_timeout_seconds)
-    BACKEND_RETRY_COUNT     = tostring(var.bot_backend_retry_count)
-    JWT_ISSUER              = var.app_auth_jwt_issuer
-    CORS_ALLOWED_ORIGINS    = local.frontend_origin
+    GEMINI_MODEL              = var.gemini_model
+    LLM_TIMEOUT_SECONDS       = tostring(var.bot_llm_timeout_seconds)
+    LLM_TOTAL_TIMEOUT_SECONDS = tostring(var.bot_llm_total_timeout_seconds)
+    BACKEND_BASE_URL          = local.backend_origin
+    BACKEND_TIMEOUT_SECONDS   = tostring(var.bot_backend_timeout_seconds)
+    BACKEND_RETRY_COUNT       = tostring(var.bot_backend_retry_count)
+    JWT_ISSUER                = var.app_auth_jwt_issuer
+    JWT_AUDIENCE              = "bot-panol"
+    JWT_LEEWAY_SECONDS        = "30"
+    MAX_ITERATIONS            = "10"
+    MAX_HISTORY_MESSAGES      = "20"
+    METRICS_ENABLED           = "true"
+    LOG_LEVEL                 = "INFO"
+    CORS_ALLOWED_ORIGINS      = local.frontend_origin
   }
 
   frontend_env = {

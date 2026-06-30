@@ -64,6 +64,7 @@ Se propagan via `GitHub Variables -> TF_VAR_* -> env_vars de Cloud Run`:
 - `BOT_TIMEOUT_SECONDS`
 - `BOT_CONCURRENCY`
 - `BOT_LLM_TIMEOUT_SECONDS`
+- `BOT_LLM_TOTAL_TIMEOUT_SECONDS`
 - `BOT_BACKEND_TIMEOUT_SECONDS`
 - `BOT_BACKEND_RETRY_COUNT`
 - host/port/name/user de Supabase y flags del backend
@@ -78,6 +79,15 @@ Se propagan via `GitHub Variables -> TF_VAR_* -> env_vars de Cloud Run`:
 - El bot se publica como servicio Cloud Run independiente.
   - `dev`: usa temporalmente `run.app` y no depende de `BOT_DOMAIN_DEV`
   - `prod`: mantiene dominio propio por entorno
+- El runtime del bot queda explicitado en Cloud Run con sus timeouts y limites operativos:
+  - `LLM_TIMEOUT_SECONDS`
+  - `LLM_TOTAL_TIMEOUT_SECONDS`
+  - `JWT_AUDIENCE`
+  - `JWT_LEEWAY_SECONDS`
+  - `MAX_ITERATIONS`
+  - `MAX_HISTORY_MESSAGES`
+  - `METRICS_ENABLED`
+  - `LOG_LEVEL`
 - El backend y el bot comparten `APP_SECURITY_AI_AGENT_SECRET` para la autenticacion de herramientas internas.
 
 ## Nota sobre el bloqueo del dominio del bot en dev
