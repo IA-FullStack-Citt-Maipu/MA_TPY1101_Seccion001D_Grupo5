@@ -462,7 +462,9 @@ jobs:
           set -euo pipefail
 
           state_has() {
-            terraform state list | grep -Fxq "$1"
+            local state_list
+            state_list="$(terraform state list 2>/dev/null || true)"
+            grep -Fxq "$1" <<<"$state_list"
           }
 
           import_if_present() {
