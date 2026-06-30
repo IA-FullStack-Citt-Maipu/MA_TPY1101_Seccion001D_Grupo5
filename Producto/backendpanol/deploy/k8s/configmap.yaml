@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: panol-backend-config
+data:
+  APP_PORT: "8080"
+  APP_DB_ENV: "supabase"
+  DB_DOCKER_HOST: "postgres"
+  DB_DOCKER_PORT: "5432"
+  DB_DOCKER_NAME: "panol"
+  DB_DOCKER_USER: "panol_user"
+  DB_DOCKER_SSL_MODE: "disable"
+  DB_SUPABASE_HOST: "aws-1-us-east-1.pooler.supabase.com"
+  DB_SUPABASE_PORT: "5432"
+  DB_SUPABASE_NAME: "postgres"
+  DB_SUPABASE_USER: "postgres.ekqbucfoygimzgxupdhm"
+  DB_SUPABASE_SSL_MODE: "require"
+  JWT_ISSUER_URI: "https://ekqbucfoygimzgxupdhm.supabase.co/auth/v1"
+  VITE_SUPABASE_URL: "https://ekqbucfoygimzgxupdhm.supabase.co"
+  VITE_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_zz8M0TK5BSRjk00UMl9h6g_qgWycc02"

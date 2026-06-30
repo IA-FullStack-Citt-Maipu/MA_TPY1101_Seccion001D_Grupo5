@@ -1,0 +1,199 @@
+export type LoanItemType = "consumable" | "reusable" | "individual";
+
+export interface LoanItem {
+  implement_uuid: string;
+  implement_name: string;
+  item_type: LoanItemType | null;
+  requested_quantity: number;
+  reserved_quantity: number;
+  delivered_quantity: number;
+  returned_quantity: number;
+}
+
+export interface LoanRoomSummary {
+  uuid: string;
+  name: string;
+}
+
+export interface LoanSubjectSummary {
+  uuid: string;
+  name: string;
+}
+
+export interface LoanSummary {
+  uuid: string;
+  requester_uuid: string;
+  status: LoanStatus;
+  scheduled_at: string;
+  expected_return_at: string;
+  created_at: string;
+  completed_at: string | null;
+  room: LoanRoomSummary | null;
+  subject: LoanSubjectSummary | null;
+  items: LoanItem[];
+}
+
+export interface LoanPage {
+  items: LoanSummary[];
+  page: number;
+  size: number;
+  total_items: number;
+  total_pages: number;
+  has_next: boolean;
+  has_previous: boolean;
+}
+
+export interface LoanRequesterSummary {
+  requesterUuid: string;
+  requesterName: string;
+  requesterEmail: string | null;
+  requesterRut: string | null;
+  lastLoanAt: string | null;
+  latestLoanUuid: string | null;
+  latestStatus: LoanStatus | null;
+  latestRoomName: string | null;
+  latestSubjectName: string | null;
+  totalLoans: number;
+  activeLoans: number;
+}
+
+export interface LoanRequesterPage {
+  items: LoanRequesterSummary[];
+  page: number;
+  size: number;
+  totalItems: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
+}
+
+export interface LoanRequesterHistoryItem {
+  uuid: string;
+  status: LoanStatus;
+  scheduledAt: string;
+  expectedReturnAt: string | null;
+  createdAt: string;
+  completedAt: string | null;
+  approvedAt: string | null;
+  preparedAt: string | null;
+  deliveredAt: string | null;
+  rejectedAt: string | null;
+  cancelledAt: string | null;
+  expiredAt: string | null;
+  overdueAt: string | null;
+  room: LoanRoomSummary | null;
+  subject: LoanSubjectSummary | null;
+  items: LoanItem[];
+}
+
+export interface LoanRequesterHistoryPage {
+  requester: LoanRequesterSummary | null;
+  items: LoanRequesterHistoryItem[];
+  page: number;
+  size: number;
+  totalItems: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
+}
+
+export interface CreateLoanItemPayload {
+  implement_uuid: string;
+  requested_quantity: number;
+}
+
+export interface CreateLoanPayload {
+  room_uuid: string;
+  subject_uuid?: string | null;
+  scheduled_at: string;
+  expected_return_at?: string | null;
+  notes?: string | null;
+  items: CreateLoanItemPayload[];
+}
+
+export interface DeliverLoanItemPayload {
+  implement_uuid: string;
+  quantity: number;
+  asset_codes?: string[];
+}
+
+export interface DeliverLoanPayload {
+  items: DeliverLoanItemPayload[];
+  notes?: string | null;
+}
+
+export interface PrepareLoanPayload {
+  notes?: string | null;
+}
+
+export interface CompleteLoanPayload {
+  notes?: string | null;
+}
+
+export interface ReturnLoanIndividualPayload {
+  individual_uuid: string;
+  return_condition: "good" | "damaged" | "lost" | "discarded";
+}
+
+export interface ReturnLoanConsumablePayload {
+  implement_uuid: string;
+  quantity: number;
+}
+
+export interface ReturnLoanPayload {
+  returned_individuals?: ReturnLoanIndividualPayload[];
+  consumable_returns?: ReturnLoanConsumablePayload[];
+  notes?: string | null;
+}
+
+export interface LoanReturnContextIndividual {
+  individual_uuid: string;
+  asset_code: string;
+}
+
+export interface LoanReturnContextItem {
+  implement_uuid: string;
+  implement_name: string;
+  item_type: LoanItemType | null;
+  delivered_quantity: number;
+  pending_return_quantity: number;
+  individuals: LoanReturnContextIndividual[];
+}
+
+export interface LoanReturnContext {
+  loan_uuid: string;
+  items: LoanReturnContextItem[];
+}
+
+export type LoanStatus =
+  | "pending"
+  | "approved"
+  | "prepared"
+  | "delivered"
+  | "completed"
+  | "rejected"
+  | "cancelled"
+  | "expired"
+  | "overdue";
+
+export interface LoanStateDates {
+  approved_at: string | null;
+  prepared_at: string | null;
+  delivered_at: string | null;
+  completed_at: string | null;
+  rejected_at: string | null;
+  cancelled_at: string | null;
+  expired_at: string | null;
+  overdue_at: string | null;
+}
+
+export interface LoanStatusTimelineEntry {
+  history_id: number;
+  from_status: LoanStatus | null;
+  to_status: LoanStatus;
+  actor_user_id: number;
+  actor_name: string | null;
+  actor_email: string | null;
+  notes: string | null;
+  changed_at: string;
+}

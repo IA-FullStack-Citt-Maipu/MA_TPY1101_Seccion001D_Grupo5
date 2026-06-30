@@ -1,0 +1,87 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backendpanol/Dockerfile
+      args:
+        JOOQ_DB_URL: ${JOOQ_DB_URL}
+        JOOQ_DB_USER: ${JOOQ_DB_USER}
+        JOOQ_DB_PASSWORD: ${JOOQ_DB_PASSWORD}
+    container_name: panol-backend
+    restart: unless-stopped
+    env_file:
+      - ./backendpanol/.env
+      - ./backendpanol/.env.local
+    environment:
+      APP_PORT: ${BACKEND_INTERNAL_PORT:-8080}
+      APP_SECURITY_ENABLED: ${APP_SECURITY_ENABLED:-true}
+      APP_SECURITY_AI_AGENT_SECRET: ${APP_SECURITY_AI_AGENT_SECRET:-panol-ai-agent-secret-change-in-prod-1234567890123}
+      APP_AUTH_MAX_FAILED_ATTEMPTS: ${APP_AUTH_MAX_FAILED_ATTEMPTS:-5}
+      APP_AUTH_LOCK_MINUTES: ${APP_AUTH_LOCK_MINUTES:-15}
+      APP_AUTH_JWT_ISSUER: ${APP_AUTH_JWT_ISSUER:-panol-backend}
+      APP_AUTH_JWT_EXPIRATION_SECONDS: ${APP_AUTH_JWT_EXPIRATION_SECONDS:-3600}
+      APP_AUTH_REFRESH_EXPIRATION_SECONDS: ${APP_AUTH_REFRESH_EXPIRATION_SECONDS:-604800}
+      APP_AUTH_REFRESH_TEMPORARY_EXPIRATION_SECONDS: ${APP_AUTH_REFRESH_TEMPORARY_EXPIRATION_SECONDS:-86400}
+      APP_AUTH_BOT_TOKEN_EXPIRATION_SECONDS: ${APP_AUTH_BOT_TOKEN_EXPIRATION_SECONDS:-300}
+      APP_AUTH_BOT_TOKEN_AUDIENCE: ${APP_AUTH_BOT_TOKEN_AUDIENCE:-bot-panol}
+      APP_AUTH_COOKIE_SECURE: ${APP_AUTH_COOKIE_SECURE:-false}
+      APP_AUTH_COOKIE_SAME_SITE: ${APP_AUTH_COOKIE_SAME_SITE:-Lax}
+      APP_AUTH_TOKEN_REVOCATION_CLEANUP_ENABLED: ${APP_AUTH_TOKEN_REVOCATION_CLEANUP_ENABLED:-true}
+      APP_AUTH_TOKEN_REVOCATION_CLEANUP_INITIAL_DELAY_MS: ${APP_AUTH_TOKEN_REVOCATION_CLEANUP_INITIAL_DELAY_MS:-300000}
+      APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS: ${APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS:-86400000}
+      APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE: ${APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE:-500}
+      APP_AUTH_JWT_SECRET: ${APP_AUTH_JWT_SECRET:-panol-secret-key-change-in-prod-1234567890123}
+      DB_DOCKER_HOST: ${DB_DOCKER_HOST_DOCKER_COMPOSE:-panol-postgres}
+      DB_SUPABASE_HOST: ${DB_SUPABASE_HOST:-aws-1-us-east-1.pooler.supabase.com}
+      DB_SUPABASE_PORT: ${DB_SUPABASE_PORT:-5432}
+      DB_SUPABASE_NAME: ${DB_SUPABASE_NAME:-postgres}
+      DB_SUPABASE_USER: ${DB_SUPABASE_USER:-postgres.ekqbucfoygimzgxupdhm}
+      DB_SUPABASE_SSL_MODE: ${DB_SUPABASE_SSL_MODE:-require}
+    ports:
+      - "${BACKEND_PORT:-18080}:8080"
+    volumes:
+      - ./backendpanol/secrets:/app/secrets:ro
+    networks:
+      - panol-local
+
+  frontend:
+    build:
+      context: ./frontendpanol
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:18080}
+        VITE_BOT_API_BASE_URL: ${VITE_BOT_API_BASE_URL:-http://localhost:18082}
+        VITE_BOT_REQUEST_TIMEOUT_MS: ${VITE_BOT_REQUEST_TIMEOUT_MS:-80000}
+    container_name: panol-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-18081}:80"
+
+  bot:
+    build:
+      context: ./bot-panol
+      dockerfile: Dockerfile
+    container_name: panol-bot
+    restart: unless-stopped
+    depends_on:
+      - backend
+    env_file:
+      - ./.env
+      - ./bot-panol/.env
+    environment:
+      BACKEND_BASE_URL: http://backend:8080
+      BACKEND_CLIENT_SECRET: ${APP_SECURITY_AI_AGENT_SECRET:-panol-ai-agent-secret-change-in-prod-1234567890123}
+      JWT_SECRET_KEY: ${APP_AUTH_JWT_SECRET:-panol-secret-key-change-in-prod-1234567890123}
+      JWT_ISSUER: ${APP_AUTH_JWT_ISSUER:-panol-backend}
+      JWT_AUDIENCE: ${APP_AUTH_BOT_TOKEN_AUDIENCE:-bot-panol}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:18081,http://127.0.0.1:18081,http://localhost:5173,http://127.0.0.1:5173}
+    ports:
+      - "${BOT_PORT:-18082}:8000"
+    networks:
+      - panol-local
+
+networks:
+  panol-local:
+    name: panol-local

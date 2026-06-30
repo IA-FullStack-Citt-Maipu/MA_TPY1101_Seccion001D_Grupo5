@@ -49,3 +49,23 @@ failsafe-reports/
 *.swo
 *.bak
 *.tmp
+
+# === Environment / Secrets ===
+backendpanol/.env
+backendpanol/.env.local
+backendpanol/.env.*.local
+backendpanol/secrets/*.txt
+backendpanol/secrets/application-secrets.properties
+databasepanol/.env
+databasepanol/.env.local
+databasepanol/.env.*.local
+databasepanol/secrets/*.txt
+frontendpanol/.env
+frontendpanol/.env.local
+frontendpanol/.env.*.local
+frontendpanol/node_modules/
+frontendpanol/dist/
+.env
+
+# === Personal local documentation ===
+docs-personal/

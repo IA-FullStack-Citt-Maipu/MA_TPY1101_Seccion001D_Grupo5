@@ -1,0 +1,12 @@
+.venv
+.pytest_cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.log
+tmp-*
+test
+bot_panol.egg-info
+.env
+docker-compose.yml

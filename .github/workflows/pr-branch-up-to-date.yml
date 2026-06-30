@@ -1,0 +1,37 @@
+name: PR Branch Up-to-Date
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  branch-up-to-date:
+    name: Check PR branch is up-to-date
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate branch freshness
+        run: |
+          set -euo pipefail
+          BASE_BRANCH="${{ github.base_ref }}"
+          git fetch origin "${BASE_BRANCH}"
+
+          BASE_SHA="$(git rev-parse "origin/${BASE_BRANCH}")"
+          COMMON_SHA="$(git merge-base HEAD "origin/${BASE_BRANCH}")"
+
+          echo "Base branch: ${BASE_BRANCH}"
+          echo "Base SHA:    ${BASE_SHA}"
+          echo "Common SHA:  ${COMMON_SHA}"
+
+          if [ "${BASE_SHA}" != "${COMMON_SHA}" ]; then
+            echo "PR branch is behind origin/${BASE_BRANCH}. Please rebase or merge latest base branch."
+            exit 1
+          fi
+
+          echo "PR branch is up to date with origin/${BASE_BRANCH}."
+

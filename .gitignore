@@ -1,0 +1,27 @@
+# IDE
+.idea/
+.vscode/
+
+# Repo-local gcloud auth
+.gcloud-local/
+
+# Local helper scripts
+scripts/
+
+# Node / JS
+node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Accidental root npm files
+/package.json
+/package-lock.json
+
+# Supabase local workspace (root-level CLI folder)
+/supabase/
+
+# Local test artifacts
+/test-results/

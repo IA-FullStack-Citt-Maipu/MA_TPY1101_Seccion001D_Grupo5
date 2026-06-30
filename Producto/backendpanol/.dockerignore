@@ -1,0 +1,20 @@
+# Build output
+# Nota: necesitamos incluir el codegen de jOOQ para permitir builds Docker sin conexión a BD.
+target/*
+!target/generated-sources/
+!target/generated-sources/jooq/
+!target/generated-sources/jooq/**
+
+# VCS and IDE
+.git
+.idea
+.vscode
+
+# Environment and secrets
+.env
+.env.*
+secrets/*.txt
+secrets/application-secrets.properties
+
+# Logs
+*.log

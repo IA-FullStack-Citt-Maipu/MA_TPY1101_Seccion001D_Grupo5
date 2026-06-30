@@ -1,0 +1,365 @@
+package com.panol_project.backendpanol.modules.catalog.stock.infrastructure;
+
+import static com.panol_project.backendpanol.jooq.tables.Implement.IMPLEMENT;
+import static com.panol_project.backendpanol.jooq.tables.Individual.INDIVIDUAL;
+import static com.panol_project.backendpanol.jooq.tables.Location.LOCATION;
+import static com.panol_project.backendpanol.jooq.tables.Stock.STOCK;
+
+import com.panol_project.backendpanol.jooq.enums.IndividualConditionEnum;
+import com.panol_project.backendpanol.jooq.enums.IndividualStatusEnum;
+import com.panol_project.backendpanol.jooq.enums.ItemTypeEnum;
+import com.panol_project.backendpanol.modules.catalog.stock.domain.IndividualEntryDraft;
+import com.panol_project.backendpanol.modules.catalog.stock.domain.IndividualItem;
+import com.panol_project.backendpanol.modules.catalog.stock.domain.IndividualStatusSummary;
+import com.panol_project.backendpanol.modules.catalog.stock.domain.StockCounters;
+import com.panol_project.backendpanol.modules.catalog.stock.domain.StockItemType;
+import com.panol_project.backendpanol.modules.catalog.stock.domain.StockRepository;
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.jooq.DSLContext;
+import org.jooq.Field;
+import org.jooq.impl.DSL;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public class StockJooqRepository implements StockRepository {
+
+    private final DSLContext dsl;
+    private static final Field<UUID> LOCATION_UUID = DSL.field(DSL.name("location", "uuid"), UUID.class);
+
+    public StockJooqRepository(DSLContext dsl) {
+        this.dsl = dsl;
+    }
+
+    @Override
+    public Optional<ImplementStockContext> findImplementContext(UUID implementUuid) {
+        return dsl.select(IMPLEMENT.UUID, LOCATION_UUID, IMPLEMENT.ITEM_TYPE, IMPLEMENT.ACTIVE)
+                .from(IMPLEMENT)
+                .leftJoin(LOCATION).on(LOCATION.ID.eq(IMPLEMENT.LOCATION_ID))
+                .where(IMPLEMENT.UUID.eq(implementUuid))
+                .fetchOptional(record -> new ImplementStockContext(
+                        record.get(IMPLEMENT.UUID),
+                        record.get(LOCATION_UUID),
+                        toStockItemType(record.get(IMPLEMENT.ITEM_TYPE)),
+                        record.get(IMPLEMENT.ACTIVE)
+                ));
+    }
+
+    @Override
+    public void ensureStockRow(UUID implementUuid) {
+        Long implementId = findImplementIdByUuid(implementUuid);
+        if (implementId == null) {
+            return;
+        }
+        dsl.insertInto(STOCK)
+                .set(STOCK.IMPLEMENT_ID, implementId)
+                .onConflict(STOCK.IMPLEMENT_ID)
+                .doNothing()
+                .execute();
+    }
+
+    @Override
+    public Optional<StockCounters> findStockByImplementUuid(UUID implementUuid) {
+        Long implementId = findImplementIdByUuid(implementUuid);
+        if (implementId == null) {
+            return Optional.empty();
+        }
+        return dsl.select(STOCK.TOTAL_STOCK, STOCK.MIN_STOCK, STOCK.AVAILABLE, STOCK.RESERVED, STOCK.LOANED, STOCK.DAMAGED)
+                .from(STOCK)
+                .where(STOCK.IMPLEMENT_ID.eq(implementId))
+                .fetchOptional(record -> new StockCounters(
+                        record.get(STOCK.TOTAL_STOCK),
+                        record.get(STOCK.MIN_STOCK),
+                        record.get(STOCK.AVAILABLE),
+                        record.get(STOCK.RESERVED),
+                        record.get(STOCK.LOANED),
+                        record.get(STOCK.DAMAGED)
+                ));
+    }
+
+    @Override
+    public IndividualStatusSummary summarizeActiveIndividuals() {
+        Field<Integer> availableCount = countByStatus(IndividualStatusEnum.available, "available_count");
+        Field<Integer> loanedCount = countByStatus(IndividualStatusEnum.loaned, "loaned_count");
+        Field<Integer> maintenanceCount = countByStatus(IndividualStatusEnum.maintenance, "maintenance_count");
+        Field<Integer> damagedCount = countByStatus(IndividualStatusEnum.damaged, "damaged_count");
+        Field<Integer> blockedCount = countByStatus(IndividualStatusEnum.blocked, "blocked_count");
+        Field<Integer> retiredCount = countByStatus(IndividualStatusEnum.retired, "retired_count");
+
+        var record = dsl.select(
+                        availableCount,
+                        loanedCount,
+                        maintenanceCount,
+                        damagedCount,
+                        blockedCount,
+                        retiredCount,
+                        DSL.count().cast(Integer.class).as("total_count")
+                )
+                .from(INDIVIDUAL)
+                .join(IMPLEMENT).on(IMPLEMENT.ID.eq(INDIVIDUAL.IMPLEMENT_ID))
+                .where(INDIVIDUAL.ACTIVE.isTrue()
+                        .and(IMPLEMENT.ACTIVE.isTrue())
+                        .and(IMPLEMENT.ITEM_TYPE.eq(ItemTypeEnum.individual)))
+                .fetchOne();
+
+        if (record == null) {
+            return new IndividualStatusSummary(0, 0, 0, 0, 0, 0, 0);
+        }
+
+        return new IndividualStatusSummary(
+                safe(record.get(availableCount)),
+                safe(record.get(loanedCount)),
+                safe(record.get(maintenanceCount)),
+                safe(record.get(damagedCount)),
+                safe(record.get(blockedCount)),
+                safe(record.get(retiredCount)),
+                safe(record.get("total_count", Integer.class))
+        );
+    }
+
+    @Override
+    public List<IndividualItem> findActiveIndividualsByImplementUuid(UUID implementUuid) {
+        Long implementId = findImplementIdByUuid(implementUuid);
+        if (implementId == null) {
+            return List.of();
+        }
+
+        return dsl.select(
+                        INDIVIDUAL.UUID,
+                        INDIVIDUAL.ASSET_CODE,
+                        INDIVIDUAL.STATUS,
+                        INDIVIDUAL.CONDITION,
+                        INDIVIDUAL.NOTES,
+                        LOCATION_UUID,
+                        INDIVIDUAL.ACTIVE,
+                        INDIVIDUAL.REMAINING_LIFE,
+                        INDIVIDUAL.ASSET_CODE_REPRINT_REQUIRED
+                )
+                .from(INDIVIDUAL)
+                .leftJoin(LOCATION).on(LOCATION.ID.eq(INDIVIDUAL.CURRENT_LOCATION_ID))
+                .where(INDIVIDUAL.IMPLEMENT_ID.eq(implementId).and(INDIVIDUAL.ACTIVE.isTrue()))
+                .orderBy(INDIVIDUAL.UUID.asc())
+                .fetch(record -> new IndividualItem(
+                        record.get(INDIVIDUAL.UUID),
+                        implementUuid,
+                        record.get(INDIVIDUAL.ASSET_CODE),
+                        record.get(INDIVIDUAL.STATUS) == null ? null : record.get(INDIVIDUAL.STATUS).getLiteral(),
+                        record.get(INDIVIDUAL.CONDITION) == null ? null : record.get(INDIVIDUAL.CONDITION).getLiteral(),
+                        record.get(INDIVIDUAL.NOTES),
+                        record.get(LOCATION_UUID),
+                        record.get(INDIVIDUAL.ACTIVE),
+                        record.get(INDIVIDUAL.REMAINING_LIFE),
+                        record.get(INDIVIDUAL.ASSET_CODE_REPRINT_REQUIRED)
+                ));
+    }
+
+    @Override
+    public List<IndividualItem> findActiveIndividualsByUuids(UUID implementUuid, List<UUID> individualUuids) {
+        if (individualUuids == null || individualUuids.isEmpty()) {
+            return List.of();
+        }
+
+        Long implementId = findImplementIdByUuid(implementUuid);
+        if (implementId == null) {
+            return List.of();
+        }
+
+        return dsl.select(
+                        INDIVIDUAL.UUID,
+                        INDIVIDUAL.ASSET_CODE,
+                        INDIVIDUAL.STATUS,
+                        INDIVIDUAL.CONDITION,
+                        INDIVIDUAL.NOTES,
+                        LOCATION_UUID,
+                        INDIVIDUAL.ACTIVE,
+                        INDIVIDUAL.REMAINING_LIFE,
+                        INDIVIDUAL.ASSET_CODE_REPRINT_REQUIRED
+                )
+                .from(INDIVIDUAL)
+                .leftJoin(LOCATION).on(LOCATION.ID.eq(INDIVIDUAL.CURRENT_LOCATION_ID))
+                .where(INDIVIDUAL.IMPLEMENT_ID.eq(implementId)
+                        .and(INDIVIDUAL.ACTIVE.isTrue())
+                        .and(INDIVIDUAL.UUID.in(individualUuids)))
+                .orderBy(INDIVIDUAL.UUID.asc())
+                .fetch(record -> new IndividualItem(
+                        record.get(INDIVIDUAL.UUID),
+                        implementUuid,
+                        record.get(INDIVIDUAL.ASSET_CODE),
+                        record.get(INDIVIDUAL.STATUS) == null ? null : record.get(INDIVIDUAL.STATUS).getLiteral(),
+                        record.get(INDIVIDUAL.CONDITION) == null ? null : record.get(INDIVIDUAL.CONDITION).getLiteral(),
+                        record.get(INDIVIDUAL.NOTES),
+                        record.get(LOCATION_UUID),
+                        record.get(INDIVIDUAL.ACTIVE),
+                        record.get(INDIVIDUAL.REMAINING_LIFE),
+                        record.get(INDIVIDUAL.ASSET_CODE_REPRINT_REQUIRED)
+                ));
+    }
+
+    @Override
+    public void createIndividuals(UUID implementUuid, List<IndividualEntryDraft> individualEntries) {
+        if (individualEntries == null || individualEntries.isEmpty()) {
+            return;
+        }
+
+        Long implementId = findImplementIdByUuid(implementUuid);
+        if (implementId == null) {
+            return;
+        }
+        var now = OffsetDateTime.now();
+        var insert = dsl.insertInto(
+                INDIVIDUAL,
+                INDIVIDUAL.IMPLEMENT_ID,
+                INDIVIDUAL.ASSET_CODE,
+                INDIVIDUAL.STATUS,
+                INDIVIDUAL.CONDITION,
+                INDIVIDUAL.CURRENT_LOCATION_ID,
+                INDIVIDUAL.REMAINING_LIFE,
+                INDIVIDUAL.ASSET_CODE_REPRINT_REQUIRED,
+                INDIVIDUAL.ACTIVE,
+                INDIVIDUAL.CREATED_AT,
+                INDIVIDUAL.UPDATED_AT
+        );
+
+        for (IndividualEntryDraft entry : individualEntries) {
+            Long locationId = findLocationIdByUuid(entry.currentLocationUuid());
+            IndividualStatusEnum status = entry.status() == null
+                    ? IndividualStatusEnum.available
+                    : IndividualStatusEnum.lookupLiteral(entry.status());
+            IndividualConditionEnum condition = entry.condition() == null
+                    ? IndividualConditionEnum.good
+                    : IndividualConditionEnum.lookupLiteral(entry.condition());
+            insert = insert.values(
+                    implementId,
+                    entry.assetCode(),
+                    status,
+                    condition,
+                    locationId,
+                    entry.remainingLife(),
+                    Boolean.TRUE.equals(entry.assetCodeReprintRequired()),
+                    true,
+                    now,
+                    now
+            );
+        }
+
+        insert.execute();
+    }
+
+    @Override
+    public void updateStock(UUID implementUuid, int totalDelta, int availableDelta, int reservedDelta, int loanedDelta, int damagedDelta) {
+        Long implementId = findImplementIdByUuid(implementUuid);
+        if (implementId == null) {
+            return;
+        }
+        dsl.update(STOCK)
+                .set(STOCK.TOTAL_STOCK, STOCK.TOTAL_STOCK.add(totalDelta))
+                .set(STOCK.AVAILABLE, STOCK.AVAILABLE.add(availableDelta))
+                .set(STOCK.RESERVED, STOCK.RESERVED.add(reservedDelta))
+                .set(STOCK.LOANED, STOCK.LOANED.add(loanedDelta))
+                .set(STOCK.DAMAGED, STOCK.DAMAGED.add(damagedDelta))
+                .set(STOCK.UPDATED_AT, OffsetDateTime.now())
+                .where(STOCK.IMPLEMENT_ID.eq(implementId))
+                .execute();
+    }
+
+    @Override
+    public void replaceStock(UUID implementUuid, int total, int available, int reserved, int loaned, int damaged) {
+        Long implementId = findImplementIdByUuid(implementUuid);
+        if (implementId == null) {
+            return;
+        }
+        dsl.update(STOCK)
+                .set(STOCK.TOTAL_STOCK, total)
+                .set(STOCK.AVAILABLE, available)
+                .set(STOCK.RESERVED, reserved)
+                .set(STOCK.LOANED, loaned)
+                .set(STOCK.DAMAGED, damaged)
+                .set(STOCK.UPDATED_AT, OffsetDateTime.now())
+                .where(STOCK.IMPLEMENT_ID.eq(implementId))
+                .execute();
+    }
+
+    @Override
+    public void updateIndividualsState(
+            List<UUID> individualUuids,
+            String statusLiteral,
+            String conditionLiteral,
+            String notes,
+            UUID locationUuid,
+            Boolean active,
+            Integer remainingLife,
+            boolean remainingLifePresent,
+            Boolean assetCodeReprintRequired
+    ) {
+        if (individualUuids == null || individualUuids.isEmpty()) {
+            return;
+        }
+
+        var update = dsl.update(INDIVIDUAL)
+                .set(INDIVIDUAL.UPDATED_AT, OffsetDateTime.now());
+
+        if (statusLiteral != null) {
+            update = update.set(INDIVIDUAL.STATUS, IndividualStatusEnum.lookupLiteral(statusLiteral));
+        }
+        if (conditionLiteral != null) {
+            update = update.set(INDIVIDUAL.CONDITION, IndividualConditionEnum.lookupLiteral(conditionLiteral));
+        }
+        if (notes != null) {
+            update = update.set(INDIVIDUAL.NOTES, notes);
+        }
+        if (locationUuid != null) {
+            Long locationId = findLocationIdByUuid(locationUuid);
+            update = update.set(INDIVIDUAL.CURRENT_LOCATION_ID, locationId);
+        }
+        if (active != null) {
+            update = update.set(INDIVIDUAL.ACTIVE, active);
+        }
+        if (remainingLifePresent) {
+            update = update.set(INDIVIDUAL.REMAINING_LIFE, remainingLife);
+        }
+        if (assetCodeReprintRequired != null) {
+            update = update.set(INDIVIDUAL.ASSET_CODE_REPRINT_REQUIRED, assetCodeReprintRequired);
+        }
+
+        update.where(INDIVIDUAL.UUID.in(individualUuids)).execute();
+    }
+
+    private Long findImplementIdByUuid(UUID implementUuid) {
+        if (implementUuid == null) {
+            return null;
+        }
+        return dsl.select(IMPLEMENT.ID)
+                .from(IMPLEMENT)
+                .where(IMPLEMENT.UUID.eq(implementUuid))
+                .fetchOne(IMPLEMENT.ID);
+    }
+
+    private Long findLocationIdByUuid(UUID locationUuid) {
+        if (locationUuid == null) {
+            return null;
+        }
+        return dsl.select(LOCATION.ID)
+                .from(LOCATION)
+                .where(LOCATION.UUID.eq(locationUuid))
+                .fetchOne(LOCATION.ID);
+    }
+
+    private StockItemType toStockItemType(ItemTypeEnum itemType) {
+        return itemType == null
+                ? null
+                : StockItemType.fromLiteral(itemType.getLiteral()).orElse(null);
+    }
+
+    private Field<Integer> countByStatus(IndividualStatusEnum status, String alias) {
+        return DSL.coalesce(
+                DSL.sum(DSL.when(INDIVIDUAL.STATUS.eq(status), DSL.inline(1)).otherwise(DSL.inline(0))).cast(Integer.class),
+                DSL.inline(0)
+        ).as(alias);
+    }
+
+    private int safe(Integer value) {
+        return value == null ? 0 : value;
+    }
+}

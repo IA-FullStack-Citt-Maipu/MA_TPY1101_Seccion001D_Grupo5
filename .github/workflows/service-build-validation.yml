@@ -1,0 +1,86 @@
+name: Service Build Validation
+
+on:
+  pull_request:
+
+jobs:
+  build-services:
+    name: Build Backend and Frontend
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: panol_ci
+          POSTGRES_PASSWORD: panol_ci
+          POSTGRES_DB: panol_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U panol_ci -d panol_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: Producto/frontendpanol/package-lock.json
+
+      - name: Guardrails - block legacy vocabulary
+        run: |
+          set -euo pipefail
+          if rg -n -i "m[o]ngo(db)?|n[o]sql" Producto/backendpanol/src/main Producto/frontendpanol/src Producto/backendpanol/docs; then
+            echo "Legacy storage vocabulary found."
+            exit 1
+          fi
+          if rg -n "c[o]nsumable|r[e]usable|PR[O]CESSED" Producto/backendpanol/src/main Producto/frontendpanol/src Producto/backendpanol/docs; then
+            echo "Legacy enum/status vocabulary found."
+            exit 1
+          fi
+
+      - name: Initialize schema for jOOQ codegen (V25-V35)
+        env:
+          PGPASSWORD: panol_ci
+        run: |
+          set -euo pipefail
+          base_dir="Producto/databasepanol/migrations/v25"
+          psql -v ON_ERROR_STOP=1 \
+            -h 127.0.0.1 -U panol_ci -d panol_ci \
+            -f "${base_dir}/beforeMigrate.sql"
+          for migration in "${base_dir}"/V*.sql; do
+            echo "Applying ${migration}"
+            psql -v ON_ERROR_STOP=1 \
+              -h 127.0.0.1 -U panol_ci -d panol_ci \
+              -f "${migration}"
+          done
+
+      - name: Build backend
+        env:
+          JOOQ_DB_URL: jdbc:postgresql://127.0.0.1:5432/panol_ci
+          JOOQ_DB_USER: panol_ci
+          JOOQ_DB_PASSWORD: panol_ci
+        run: |
+          chmod +x ./mvnw
+          ./mvnw -B -DskipTests package
+        working-directory: Producto/backendpanol
+
+      - name: Build frontend
+        run: |
+          npm ci
+          npm run build
+        working-directory: Producto/frontendpanol

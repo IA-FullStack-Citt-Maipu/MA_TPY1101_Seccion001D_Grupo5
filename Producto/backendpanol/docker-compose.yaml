@@ -1,0 +1,25 @@
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: backendpanol/Dockerfile
+      args:
+        JOOQ_DB_URL: ${JOOQ_DB_URL}
+        JOOQ_DB_USER: ${JOOQ_DB_USER}
+        JOOQ_DB_PASSWORD: ${JOOQ_DB_PASSWORD}
+    container_name: panol-backend
+    restart: unless-stopped
+    env_file:
+      - .env.local
+    environment:
+      DB_DOCKER_HOST: ${DB_DOCKER_HOST_DOCKER_COMPOSE:-panol-postgres}
+    volumes:
+      - ./secrets:/app/secrets:ro
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    networks:
+      - panol-local
+
+networks:
+  panol-local:
+    name: panol-local

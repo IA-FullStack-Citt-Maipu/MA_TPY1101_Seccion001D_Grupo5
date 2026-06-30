@@ -1,3 +1,111 @@
-spring:
+﻿spring:
   application:
     name: backendpanol
+  jackson:
+    deserialization:
+      adjust-dates-to-context-time-zone: false
+    serialization:
+      write-dates-as-timestamps: false
+  profiles:
+    active: ${APP_DB_ENV:docker}
+  config:
+    import: optional:file:./secrets/application-secrets.properties
+  flyway:
+    enabled: true
+    locations: classpath:db/migration/v25
+    baseline-on-migrate: true
+    baseline-version: 25
+    baseline-description: v25-canonical-baseline
+    ignore-migration-patterns: "*:missing,*:future"
+    validate-on-migrate: true
+  jooq:
+    sql-dialect: POSTGRES
+
+app:
+  security:
+    enabled: ${APP_SECURITY_ENABLED:true}
+    ai-agent:
+      secret: ${APP_SECURITY_AI_AGENT_SECRET}
+  outbox:
+    system-user-uuid: ${APP_OUTBOX_SYSTEM_USER_UUID:99999999-9999-9999-9999-999999999999}
+    cleanup:
+      enabled: ${APP_OUTBOX_CLEANUP_ENABLED:true}
+      initial-delay-ms: ${APP_OUTBOX_CLEANUP_INITIAL_DELAY_MS:300000}
+      delay-ms: ${APP_OUTBOX_CLEANUP_DELAY_MS:86400000}
+      batch-size: ${APP_OUTBOX_CLEANUP_BATCH_SIZE:500}
+      retention-days: ${APP_OUTBOX_CLEANUP_RETENTION_DAYS:30}
+  notification:
+    cleanup:
+      enabled: ${APP_NOTIFICATION_CLEANUP_ENABLED:true}
+      initial-delay-ms: ${APP_NOTIFICATION_CLEANUP_INITIAL_DELAY_MS:300000}
+      delay-ms: ${APP_NOTIFICATION_CLEANUP_DELAY_MS:86400000}
+      batch-size: ${APP_NOTIFICATION_CLEANUP_BATCH_SIZE:500}
+      retention-days: ${APP_NOTIFICATION_CLEANUP_RETENTION_DAYS:15}
+  email:
+    enabled: ${APP_EMAIL_ENABLED:false}
+    provider: ${APP_EMAIL_PROVIDER:resend}
+    resend-api-key: ${APP_EMAIL_RESEND_API_KEY:}
+    from-name: ${APP_EMAIL_FROM_NAME:Panol}
+    from-address: ${APP_EMAIL_FROM_ADDRESS:notificaciones@panol.cl}
+    frontend-base-url: ${APP_FRONTEND_BASE_URL:${FRONTEND_ORIGIN:}}
+    worker-delay-ms: ${APP_EMAIL_WORKER_DELAY_MS:5000}
+    batch-size: ${APP_EMAIL_BATCH_SIZE:20}
+    max-retries: ${APP_EMAIL_MAX_RETRIES:5}
+    connect-timeout-ms: ${APP_EMAIL_CONNECT_TIMEOUT_MS:5000}
+    read-timeout-ms: ${APP_EMAIL_READ_TIMEOUT_MS:10000}
+  auth:
+    max-failed-attempts: ${APP_AUTH_MAX_FAILED_ATTEMPTS:5}
+    lock-minutes: ${APP_AUTH_LOCK_MINUTES:15}
+    refresh:
+      expiration-seconds: ${APP_AUTH_REFRESH_EXPIRATION_SECONDS:604800}
+      temporary-expiration-seconds: ${APP_AUTH_REFRESH_TEMPORARY_EXPIRATION_SECONDS:86400}
+    cookies:
+      secure: ${APP_AUTH_COOKIE_SECURE:false}
+      same-site: ${APP_AUTH_COOKIE_SAME_SITE:Lax}
+    token-revocation-cleanup:
+      enabled: ${APP_AUTH_TOKEN_REVOCATION_CLEANUP_ENABLED:true}
+      initial-delay-ms: ${APP_AUTH_TOKEN_REVOCATION_CLEANUP_INITIAL_DELAY_MS:300000}
+      delay-ms: ${APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS:1800000}
+      batch-size: ${APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE:500}
+    password-recovery:
+      code-length: ${APP_AUTH_PASSWORD_RECOVERY_CODE_LENGTH:8}
+      expiration-minutes: ${APP_AUTH_PASSWORD_RECOVERY_EXPIRATION_MINUTES:15}
+      max-attempts: ${APP_AUTH_PASSWORD_RECOVERY_MAX_ATTEMPTS:5}
+      resend-cooldown-seconds: ${APP_AUTH_PASSWORD_RECOVERY_RESEND_COOLDOWN_SECONDS:120}
+      reset-token-expiration-seconds: ${APP_AUTH_PASSWORD_RECOVERY_RESET_TOKEN_EXPIRATION_SECONDS:600}
+    bot-token:
+      expiration-seconds: ${APP_AUTH_BOT_TOKEN_EXPIRATION_SECONDS:300}
+      audience: ${APP_AUTH_BOT_TOKEN_AUDIENCE:bot-panol}
+    jwt:
+      issuer: ${APP_AUTH_JWT_ISSUER:panol-backend}
+      secret: ${APP_AUTH_JWT_SECRET:panol-secret-key-change-in-prod-1234567890123}
+      expiration-seconds: ${APP_AUTH_JWT_EXPIRATION_SECONDS:3600}
+
+server:
+  port: ${APP_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+---
+spring:
+  config:
+    activate:
+      on-profile: docker
+  datasource:
+    url: jdbc:postgresql://${DB_DOCKER_HOST:${DB_HOST:localhost}}:${DB_DOCKER_PORT:${DB_PORT:5432}}/${DB_DOCKER_NAME:${DB_NAME:panol}}?sslmode=${DB_DOCKER_SSL_MODE:${DB_SSL_MODE:disable}}
+    username: ${DB_DOCKER_USER:${DB_USER:postgres}}
+    password: ${DB_DOCKER_PASSWORD:${DB_PASSWORD:postgres}}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: supabase
+  datasource:
+    url: jdbc:postgresql://${DB_SUPABASE_HOST:${DB_HOST:aws-1-us-east-1.pooler.supabase.com}}:${DB_SUPABASE_PORT:${DB_PORT:5432}}/${DB_SUPABASE_NAME:${DB_NAME:postgres}}?sslmode=${DB_SUPABASE_SSL_MODE:${DB_SSL_MODE:require}}
+    username: ${DB_SUPABASE_USER:${DB_USER:postgres}}
+    password: ${DB_SUPABASE_PASSWORD:${DB_PASSWORD:postgres}}

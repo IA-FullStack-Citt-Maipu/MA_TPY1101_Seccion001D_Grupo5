@@ -1,0 +1,1868 @@
+import { useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowLeft,
+  ArrowUp,
+  Barcode,
+  Bookmark,
+  Box,
+  Boxes,
+  CircleArrowUp,
+  CircleMinus,
+  CircleCheck,
+  ClipboardList,
+  Edit3,
+  Image as ImageIcon,
+  Info,
+  MapPin,
+  PackageCheck,
+  Package,
+  Tag,
+  TrendingUp,
+  X,
+} from "lucide-react";
+import { InventoryLayout } from "../components/layout/InventoryLayout";
+import { HelpTooltip } from "../components/ui/HelpTooltip";
+import { getErrorMessage } from "../services/apiClient";
+import { fetchImplementById } from "../services/implementService";
+import { fetchLabelsPdfBlob, type LabelScope } from "../services/labelService";
+import { fetchLocations, fetchLocationsForManagement } from "../services/locationService";
+import { registerManualMovement, type ManualMovementType } from "../services/movementService";
+import { addStockEntry, applyStockMovement, fetchImplementStock, updateIndividualState } from "../services/stockService";
+import type { ImplementDetail, InventoryMovementDetail } from "../types/implement";
+import type { LocationOption } from "../types/location";
+import type { IndividualItem, StockDetail, StockEntryIndividualPayload, StockMovementPayload, StockMovementType } from "../types/stock";
+import { getSessionUserRole, type UserRole } from "../utils/auth";
+
+const ITEM_TYPE_LABELS: Record<"consumable" | "reusable" | "individual", string> = {
+  consumable: "Consumible",
+  reusable: "Reutilizable",
+  individual: "Activo",
+};
+
+const MOVEMENT_OPTIONS: { value: StockMovementType; label: string }[] = [
+  { value: "stock_out", label: "Salida de stock" },
+  { value: "loan_delivery", label: "Entrega de prestamo" },
+  { value: "loan_return", label: "Devolucion de prestamo" },
+  { value: "damage_report", label: "Reporte de dano" },
+  { value: "manual_adjustment", label: "Ajuste manual" },
+  { value: "consumption", label: "Consumo" },
+  { value: "discard", label: "Descarte" },
+  { value: "loss", label: "Perdida" },
+];
+
+const INDIVIDUAL_STATUS_OPTIONS: Array<IndividualItem["status"]> = [
+  "available",
+  "loaned",
+  "maintenance",
+  "damaged",
+  "blocked",
+  "retired",
+];
+
+const INDIVIDUAL_CONDITION_OPTIONS: Array<IndividualItem["condition"]> = [
+  "good",
+  "damaged_repairable",
+  "damaged_no_diagnosis",
+  "irreparable",
+];
+
+function statusLabel(status: string) {
+  if (status === "available") return "Disponible";
+  if (status === "loaned") return "Prestado";
+  if (status === "maintenance") return "Mantencion";
+  if (status === "damaged") return "Danado";
+  if (status === "blocked") return "Bloqueado";
+  if (status === "retired") return "Retirado";
+  return status;
+}
+
+function conditionLabel(condition: string) {
+  if (condition === "good") return "Bueno";
+  if (condition === "damaged_repairable") return "Danado reparable";
+  if (condition === "damaged_no_diagnosis") return "Danado sin diagnostico";
+  if (condition === "irreparable") return "Irreparable";
+  return condition;
+}
+
+function movementActionLabel(action: string) {
+  const labels: Record<string, string> = {
+    stock_in: "Ingreso de stock",
+    stock_out: "Salida de stock",
+    loan_delivery: "Entrega de prestamo",
+    loan_return: "Devolucion de prestamo",
+    damage_report: "Reporte de dano",
+    manual_adjustment: "Ajuste manual",
+    consumption: "Consumo",
+    discard: "Descarte",
+    loss: "Perdida",
+  };
+  if (labels[action]) return labels[action];
+  return action.replaceAll("_", " ");
+}
+
+function movementRowKey(movement: InventoryMovementDetail, index: number) {
+  const maybeId = (movement as InventoryMovementDetail & { id?: string }).id;
+  if (movement.uuid) return movement.uuid;
+  if (maybeId) return maybeId;
+  return `${movement.timestamp}-${movement.action}-${index}`;
+}
+
+function formatOptionalCurrency(value: number | null | undefined): string {
+  if (value == null) {
+    return "No informado";
+  }
+  const formattedValue = new Intl.NumberFormat("es-CL", {
+    minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+  return `$ ${formattedValue}`;
+}
+
+function getConditionHelp(condition: string) {
+  if (condition === "good") return "Bueno: la unidad esta operativa y apta para uso.";
+  if (condition === "damaged_repairable") return "Danado reparable: tiene un problema, pero podria recuperarse.";
+  if (condition === "damaged_no_diagnosis") return "Danado sin diagnostico: se detecto un dano, pero aun no se clasifica.";
+  if (condition === "irreparable") return "Irreparable: ya no debe volver a uso operativo.";
+  return "Condicion fisica u operativa de la unidad.";
+}
+
+function getStatusHelpMessage(status: string) {
+  if (status === "available") return "Disponible: la unidad esta lista para uso o prestamo.";
+  if (status === "loaned") return "Prestado: la unidad fue entregada y aun no vuelve al stock.";
+  if (status === "maintenance") return "Mantencion: la unidad esta en revision o intervencion tecnica.";
+  if (status === "damaged") return "Danado: la unidad presenta dano y requiere evaluacion.";
+  if (status === "blocked") return "Bloqueado: la unidad existe, pero no esta habilitada operativamente.";
+  if (status === "retired") return "Retirado: la unidad ya no forma parte del stock operativo.";
+  return "Estado operativo actual de la unidad.";
+}
+
+function getMovementHelpMessage(action: StockMovementType, itemType?: "consumable" | "reusable" | "individual" | null) {
+  if (action === "stock_out") return "Salida de stock: descuenta unidades existentes del inventario.";
+  if (action === "loan_delivery") return "Entrega de prestamo: mueve unidades al estado prestado.";
+  if (action === "loan_return" && itemType === "consumable") {
+    return "Devolucion de prestamo no aplica a consumibles, porque se consumen al entregar y no regresan al stock.";
+  }
+  if (action === "loan_return") return "Devolucion de prestamo: devuelve unidades que estaban prestadas.";
+  if (action === "damage_report") return "Reporte de dano: mueve unidades a dano o revision.";
+  if (action === "manual_adjustment") return "Ajuste manual: corrige operativamente el estado o disponibilidad.";
+  if (action === "consumption") return "Consumo: descuenta stock de uso unico o gastado definitivamente.";
+  if (action === "discard") return "Descarte: retira stock por descarte definitivo.";
+  if (action === "loss") return "Perdida: retira stock por extravio o perdida.";
+  return "Movimiento operativo interno del stock.";
+}
+
+function getLocationSelectionHelp() {
+  return "Puedes dejar la ubicacion principal del implemento o elegir una distinta para este activo.";
+}
+
+function getRemainingLifeHelp() {
+  return "Campo opcional del activo. Acepta enteros positivos o negativos segun la vigencia contable registrada.";
+}
+
+function getAssetCodeReprintHelp(value: boolean) {
+  return value
+    ? "Si: este activo queda marcado para reimprimir su codigo o etiqueta fisica."
+    : "No: este activo no requiere reimpresion de codigo por ahora.";
+}
+
+function getAvailableMovementOptions(
+  itemType?: "consumable" | "reusable" | "individual" | null,
+): { value: StockMovementType; label: string }[] {
+  if (itemType === "consumable") {
+    return MOVEMENT_OPTIONS.filter((option) => option.value !== "loan_return");
+  }
+  return MOVEMENT_OPTIONS;
+}
+
+function booleanLabel(value: boolean): string {
+  return value ? "Si" : "No";
+}
+
+function buildPseudoBarcodeBars(value: string) {
+  const source = (value || "0").trim();
+  const bars: Array<{ x: number; w: number }> = [];
+  let x = 2;
+
+  for (let i = 0; i < source.length; i += 1) {
+    const code = source.charCodeAt(i);
+    const widths = [1 + (code % 3), 1 + ((code >> 2) % 3), 1 + ((code >> 4) % 3)];
+    widths.forEach((w, idx) => {
+      bars.push({ x, w });
+      x += w;
+      if (idx < widths.length - 1) x += 1;
+    });
+    x += 2;
+  }
+
+  return { bars, width: Math.max(x + 2, 120) };
+}
+
+const STOCK_KPI_META = [
+  {
+    key: "available",
+    label: "Disponibles",
+    helper: "Unidades listas para uso",
+    icon: Box,
+    tone: "available",
+  },
+  {
+    key: "loaned",
+    label: "Prestados",
+    helper: "Actualmente en préstamo",
+    icon: PackageCheck,
+    tone: "loaned",
+  },
+  {
+    key: "reserved",
+    label: "Reservados",
+    helper: "Reservas activas",
+    icon: Bookmark,
+    tone: "warn",
+  },
+  {
+    key: "damaged",
+    label: "Dañados",
+    helper: "Requieren revisión",
+    icon: AlertTriangle,
+    tone: "danger",
+  },
+  {
+    key: "min_stock",
+    label: "Stock mínimo",
+    helper: "Nivel mínimo configurado",
+    icon: TrendingUp,
+    tone: "min",
+  },
+] as const;
+
+type AdjustOperation = "increase" | "decrease";
+type AdjustStep = 1 | 2;
+type AdjustIndividualEntryDraft = {
+  assetCode: string;
+  status: IndividualItem["status"];
+  condition: IndividualItem["condition"];
+  currentLocationUuid: string;
+  remainingLifeRaw: string;
+  assetCodeReprintRequired: boolean;
+};
+
+function createAdjustIndividualEntryDraft(): AdjustIndividualEntryDraft {
+  return {
+    assetCode: "",
+    status: "available",
+    condition: "good",
+    currentLocationUuid: "",
+    remainingLifeRaw: "",
+    assetCodeReprintRequired: false,
+  };
+}
+
+export function InventoryItemDetailPage({
+  implementUuid,
+  embedded = false,
+}: {
+  implementUuid: string;
+  embedded?: boolean;
+}) {
+  const [implement, setImplement] = useState<ImplementDetail | null>(null);
+  const [stockDetail, setStockDetail] = useState<StockDetail | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [stockLoading, setStockLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [stockError, setStockError] = useState<string | null>(null);
+  const [isStockAdjustModalOpen, setIsStockAdjustModalOpen] = useState(false);
+  const [isMovementModalOpen, setIsMovementModalOpen] = useState(false);
+  const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false);
+
+  const userRole: UserRole = getSessionUserRole();
+  const isDocente = userRole === "DOCENTE";
+  const isCoordinator = userRole === "COORDINADOR";
+  const availableMovementOptions = useMemo(
+    () => getAvailableMovementOptions(implement?.item_type ?? null),
+    [implement?.item_type],
+  );
+
+  const [locations, setLocations] = useState<LocationOption[]>([]);
+  const [locationsError, setLocationsError] = useState<string | null>(null);
+
+  const [entryQuantity, setEntryQuantity] = useState("1");
+  const [adjustIndividualEntries, setAdjustIndividualEntries] = useState<AdjustIndividualEntryDraft[]>([createAdjustIndividualEntryDraft()]);
+  const [adjustStep, setAdjustStep] = useState<AdjustStep>(1);
+  const [adjustOperation, setAdjustOperation] = useState<AdjustOperation>("increase");
+  const [adjustUseSameState, setAdjustUseSameState] = useState(true);
+  const [adjustStatus, setAdjustStatus] = useState<IndividualItem["status"]>("available");
+  const [adjustCondition, setAdjustCondition] = useState<IndividualItem["condition"]>("good");
+  const [adjustLocationId, setAdjustLocationId] = useState("");
+  const [adjustRemainingLifeRaw, setAdjustRemainingLifeRaw] = useState("");
+  const [adjustAssetCodeReprintRequired, setAdjustAssetCodeReprintRequired] = useState(false);
+  const [adjustNotes, setAdjustNotes] = useState("");
+  const [adjustReduceIndividualIds, setAdjustReduceIndividualIds] = useState<string[]>([]);
+  const [adjustReduceQuantity, setAdjustReduceQuantity] = useState("1");
+
+  const [movementType, setMovementType] = useState<StockMovementType>("stock_out");
+  const [movementQuantity, setMovementQuantity] = useState("1");
+  const [movementSelectedIndividualIds, setMovementSelectedIndividualIds] = useState<string[]>([]);
+  const [movementNotes, setMovementNotes] = useState("");
+  const [stockBusy, setStockBusy] = useState(false);
+  const [editingIndividual, setEditingIndividual] = useState<IndividualItem | null>(null);
+  const [individualStatus, setIndividualStatus] = useState<IndividualItem["status"]>("available");
+  const [individualCondition, setIndividualCondition] = useState<IndividualItem["condition"]>("good");
+  const [individualNotes, setIndividualNotes] = useState("");
+  const [individualLocationId, setIndividualLocationId] = useState<string>("");
+  const [individualActive, setIndividualActive] = useState(true);
+  const [individualRemainingLifeRaw, setIndividualRemainingLifeRaw] = useState("");
+  const [individualAssetCodeReprintRequired, setIndividualAssetCodeReprintRequired] = useState(false);
+
+  const [isLabelModalOpen, setIsLabelModalOpen] = useState(false);
+  const [labelScope, setLabelScope] = useState<LabelScope>("GENERAL");
+  const [labelIndividualUuid, setLabelIndividualUuid] = useState<string | null>(null);
+  const [labelPreviewUrl, setLabelPreviewUrl] = useState<string | null>(null);
+  const [labelBusy, setLabelBusy] = useState(false);
+  const locationNameByUuid = new Map(locations.map((location) => [location.uuid, location.name] as const));
+  const implementImageUrl = implement?.img_url?.trim() || null;
+  const implementImagePreviewSrc = implementImageUrl ?? "https://placehold.co/420x260/e9edf5/4d6284?text=Sin+imagen";
+
+  function resolveLabelDisplayCode(scope: LabelScope, individualUuid: string | null): string | null {
+    if (scope === "INDIVIDUAL") {
+      const selectedIndividual =
+        (stockDetail?.individuals ?? []).find((individual) => individual.uuid === individualUuid) ?? null;
+      return selectedIndividual?.asset_code?.trim() || null;
+    }
+    return implement?.barcode?.trim() || null;
+  }
+
+  const labelDisplayCode = resolveLabelDisplayCode(labelScope, labelIndividualUuid);
+
+  function resolveLocationName(locationUuid: string | null): string {
+    if (!locationUuid) {
+      return "Sin ubicacion";
+    }
+    return locationNameByUuid.get(locationUuid) ?? "Ubicacion no disponible";
+  }
+
+  useEffect(() => {
+    const hasModalOpen =
+      editingIndividual != null ||
+      isImagePreviewOpen ||
+      isLabelModalOpen ||
+      isStockAdjustModalOpen ||
+      isMovementModalOpen;
+    if (!hasModalOpen) {
+      return;
+    }
+    document.body.classList.add("modal-open");
+    return () => {
+      document.body.classList.remove("modal-open");
+    };
+  }, [editingIndividual, isImagePreviewOpen, isLabelModalOpen, isStockAdjustModalOpen, isMovementModalOpen]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+    fetchImplementById(implementUuid)
+      .then((detail) => {
+        setImplement(detail);
+      })
+      .catch((requestError) => setError(getErrorMessage(requestError, "No se pudo cargar la ficha del producto.")))
+      .finally(() => setLoading(false));
+  }, [implementUuid]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setStockLoading(true);
+    setStockError(null);
+    fetchImplementStock(implementUuid)
+      .then(setStockDetail)
+      .catch((requestError) => setStockError(getErrorMessage(requestError, "No se pudo cargar el stock.")))
+      .finally(() => setStockLoading(false));
+  }, [implementUuid]);
+
+  useEffect(() => {
+    const loadLocations = isCoordinator ? fetchLocationsForManagement : fetchLocations;
+    loadLocations()
+      .then((result) => setLocations(result))
+      .catch((requestError) => setLocationsError(getErrorMessage(requestError, "No se pudo cargar las ubicaciones.")))
+      .finally(() => undefined);
+  }, [isCoordinator]);
+
+  useEffect(() => {
+    if (availableMovementOptions.some((option: { value: StockMovementType; label: string }) => option.value === movementType)) {
+      return;
+    }
+    const fallbackMovement =
+      implement?.item_type === "consumable"
+        ? "consumption"
+        : availableMovementOptions[0]?.value ?? "stock_out";
+    setMovementType(fallbackMovement);
+  }, [availableMovementOptions, implement?.item_type, movementType]);
+
+  const parsedEntryQuantity = Number(entryQuantity);
+  const normalizedEntryQuantity =
+    Number.isFinite(parsedEntryQuantity) && parsedEntryQuantity >= 0 && Number.isInteger(parsedEntryQuantity)
+      ? parsedEntryQuantity
+      : 0;
+  const isIndividualIncreaseFlow = implement?.item_type === "individual" && adjustOperation === "increase";
+  const shouldShowSameStateToggle = isIndividualIncreaseFlow && normalizedEntryQuantity > 1;
+  const shouldApplySharedState =
+    isIndividualIncreaseFlow && normalizedEntryQuantity > 0 && (normalizedEntryQuantity <= 1 || adjustUseSameState);
+  const buildSharedAdjustDraft = () => ({
+    ...createAdjustIndividualEntryDraft(),
+    status: adjustStatus,
+    condition: adjustCondition,
+    currentLocationUuid: adjustLocationId,
+    remainingLifeRaw: adjustRemainingLifeRaw,
+    assetCodeReprintRequired: adjustAssetCodeReprintRequired,
+  });
+
+  useEffect(() => {
+    if (!(isStockAdjustModalOpen && implement?.item_type === "individual" && adjustOperation === "increase")) {
+      return;
+    }
+
+    const desiredLength = normalizedEntryQuantity;
+    setAdjustIndividualEntries((previous) => {
+      const next = Array.from({ length: desiredLength }, (_, index) => previous[index] ?? buildSharedAdjustDraft());
+      if (
+        next.length === previous.length &&
+        next.every((value, index) =>
+          value.assetCode === previous[index]?.assetCode &&
+          value.status === previous[index]?.status &&
+          value.condition === previous[index]?.condition &&
+          value.currentLocationUuid === previous[index]?.currentLocationUuid &&
+          value.remainingLifeRaw === previous[index]?.remainingLifeRaw &&
+          value.assetCodeReprintRequired === previous[index]?.assetCodeReprintRequired,
+        )
+      ) {
+        return previous;
+      }
+      return next;
+    });
+  }, [
+    adjustAssetCodeReprintRequired,
+    adjustCondition,
+    adjustLocationId,
+    adjustOperation,
+    adjustRemainingLifeRaw,
+    adjustStatus,
+    implement?.item_type,
+    isStockAdjustModalOpen,
+    normalizedEntryQuantity,
+  ]);
+
+  async function refreshImplement() {
+    const detail = await fetchImplementById(implementUuid);
+    setImplement(detail);
+  }
+
+  function resetAdjustStockState() {
+    setAdjustStep(1);
+    setAdjustOperation("increase");
+    setAdjustUseSameState(true);
+    setAdjustStatus("available");
+    setAdjustCondition("good");
+    setAdjustLocationId("");
+    setAdjustRemainingLifeRaw("");
+    setAdjustAssetCodeReprintRequired(false);
+    setAdjustNotes("");
+    setAdjustReduceIndividualIds([]);
+    setEntryQuantity("1");
+    setAdjustIndividualEntries([createAdjustIndividualEntryDraft()]);
+    setAdjustReduceQuantity("1");
+  }
+
+  function openAdjustStockModal() {
+    resetAdjustStockState();
+    setIsStockAdjustModalOpen(true);
+  }
+
+  function closeAdjustStockModal() {
+    setIsStockAdjustModalOpen(false);
+    resetAdjustStockState();
+  }
+
+  function openMovementModal() {
+    setMovementType("stock_out");
+    setMovementQuantity("1");
+    setMovementSelectedIndividualIds([]);
+    setMovementNotes("");
+    setIsMovementModalOpen(true);
+  }
+
+  function closeMovementModal() {
+    setIsMovementModalOpen(false);
+    setMovementSelectedIndividualIds([]);
+    setMovementNotes("");
+  }
+
+  function updateAdjustIndividualEntry<K extends keyof AdjustIndividualEntryDraft>(
+    index: number,
+    key: K,
+    value: AdjustIndividualEntryDraft[K],
+  ) {
+    setAdjustIndividualEntries((previous) =>
+      previous.map((entry, currentIndex) => (currentIndex === index ? { ...entry, [key]: value } : entry)),
+    );
+  }
+
+  function parseOptionalInteger(value: string, label: string) {
+    const trimmedValue = value.trim();
+    if (!trimmedValue) {
+      return null;
+    }
+    const parsedValue = Number(trimmedValue);
+    if (!Number.isInteger(parsedValue)) {
+      throw new Error(`${label} debe ser un numero entero.`);
+    }
+    return parsedValue;
+  }
+
+  function buildIndividualEntryPayloads(quantity: number): StockEntryIndividualPayload[] {
+    const selectedEntries = adjustIndividualEntries.slice(0, quantity);
+    if (selectedEntries.length !== quantity) {
+      throw new Error("Debes completar la informacion de cada activo del lote.");
+    }
+
+    const duplicates = new Set<string>();
+    return selectedEntries.map((entry, index) => {
+      const assetCode = entry.assetCode.trim();
+      if (!assetCode) {
+        throw new Error("Completa un codigo de activo por cada activo que vas a ingresar.");
+      }
+      const duplicateKey = assetCode.toLowerCase();
+      if (duplicates.has(duplicateKey)) {
+        throw new Error("Los codigos individuales no pueden repetirse dentro del mismo ingreso.");
+      }
+      duplicates.add(duplicateKey);
+
+      return {
+        asset_code: assetCode,
+        status: shouldApplySharedState ? undefined : entry.status,
+        condition: shouldApplySharedState ? undefined : entry.condition,
+        current_location_uuid: shouldApplySharedState
+          ? undefined
+          : (entry.currentLocationUuid.trim() ? entry.currentLocationUuid : null),
+        remaining_life: shouldApplySharedState
+          ? undefined
+          : parseOptionalInteger(entry.remainingLifeRaw, `La vida restante del activo #${index + 1}`),
+        asset_code_reprint_required: shouldApplySharedState ? undefined : entry.assetCodeReprintRequired,
+      };
+    });
+  }
+
+  function startAdjustFlow(operation: AdjustOperation) {
+    setStockError(null);
+    setAdjustOperation(operation);
+    setAdjustStep(2);
+  }
+
+  async function registerInventoryTrace(action: ManualMovementType, quantity: number, notes: string) {
+    try {
+      await registerManualMovement(implementUuid, {
+        action,
+        quantity,
+        notes: notes.trim() ? notes.trim() : null,
+      });
+    } catch {
+      // El ajuste de stock es exitoso aunque falle el registro complementario de trazabilidad.
+    }
+  }
+
+  async function handleAdjustStockSave() {
+    if (!implement) return;
+    setStockBusy(true);
+    setStockError(null);
+
+    try {
+      if (adjustOperation === "increase") {
+        const entryNotes = adjustNotes.trim() ? adjustNotes.trim() : null;
+        if (implement.item_type === "individual") {
+          const quantity = Number(entryQuantity);
+          if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isInteger(quantity)) {
+            setStockError("La cantidad debe ser un entero positivo.");
+            setStockBusy(false);
+            return;
+          }
+
+          let individualEntries: StockEntryIndividualPayload[];
+          let sharedRemainingLife: number | null = null;
+          try {
+            individualEntries = buildIndividualEntryPayloads(quantity);
+            sharedRemainingLife = shouldApplySharedState
+              ? parseOptionalInteger(adjustRemainingLifeRaw, "La vida restante compartida")
+              : null;
+          } catch (validationError) {
+            setStockError(
+              validationError instanceof Error ? validationError.message : "Debes completar los codigos individuales.",
+            );
+            setStockBusy(false);
+            return;
+          }
+
+          let nextDetail = await addStockEntry(implementUuid, {
+            quantity,
+            asset_codes: individualEntries.map((entry) => entry.asset_code),
+            status: shouldApplySharedState ? adjustStatus : undefined,
+            condition: shouldApplySharedState ? adjustCondition : undefined,
+            current_location_uuid: shouldApplySharedState
+              ? (adjustLocationId.trim() ? adjustLocationId : null)
+              : undefined,
+            remaining_life: shouldApplySharedState ? sharedRemainingLife : undefined,
+            asset_code_reprint_required: shouldApplySharedState ? adjustAssetCodeReprintRequired : undefined,
+            individual_entries: shouldApplySharedState ? undefined : individualEntries,
+            notes: entryNotes,
+          });
+
+          setStockDetail(nextDetail);
+          await refreshImplement();
+        } else {
+          const quantity = Number(entryQuantity);
+          if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isInteger(quantity)) {
+            setStockError("La cantidad debe ser un entero positivo.");
+            setStockBusy(false);
+            return;
+          }
+          setStockDetail(await addStockEntry(implementUuid, { quantity, notes: entryNotes }));
+          await refreshImplement();
+        }
+      } else {
+        if (implement.item_type === "individual") {
+          if (adjustReduceIndividualIds.length === 0) {
+            setStockError("Selecciona al menos un activo para reducir.");
+            setStockBusy(false);
+            return;
+          }
+          setStockDetail(
+            await applyStockMovement(implementUuid, {
+              movement_type: "stock_out",
+              individual_uuids: adjustReduceIndividualIds,
+              condition: adjustCondition,
+            }),
+          );
+          await registerInventoryTrace("stock_out", adjustReduceIndividualIds.length, adjustNotes);
+          await refreshImplement();
+        } else {
+          const quantity = Number(adjustReduceQuantity);
+          if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isInteger(quantity)) {
+            setStockError("La cantidad debe ser un entero positivo.");
+            setStockBusy(false);
+            return;
+          }
+          setStockDetail(
+            await applyStockMovement(implementUuid, {
+              movement_type: "stock_out",
+              quantity,
+            }),
+          );
+          await registerInventoryTrace("stock_out", quantity, adjustNotes);
+          await refreshImplement();
+        }
+      }
+      setSuccess("Ajuste de stock registrado.");
+      setIsStockAdjustModalOpen(false);
+      resetAdjustStockState();
+    } catch (requestError) {
+      setStockError(getErrorMessage(requestError, "No se pudo guardar el ajuste de stock."));
+    } finally {
+      setStockBusy(false);
+    }
+  }
+
+  async function handleMovementSave() {
+    if (implement?.item_type === "individual" && movementSelectedIndividualIds.length === 0) {
+      setStockError("Debes seleccionar al menos un activo.");
+      return;
+    }
+    if (implement?.item_type !== "individual") {
+      const quantity = Number(movementQuantity);
+      if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isInteger(quantity)) {
+        setStockError("La cantidad del movimiento debe ser un entero positivo.");
+        return;
+      }
+    }
+    setStockBusy(true);
+    setStockError(null);
+    try {
+      const payload: StockMovementPayload = { movement_type: movementType };
+      let qtyForTrace = 0;
+      if (implement?.item_type === "individual") {
+        payload.individual_uuids = movementSelectedIndividualIds;
+        qtyForTrace = movementSelectedIndividualIds.length;
+      } else {
+        payload.quantity = Number(movementQuantity);
+        qtyForTrace = Number(movementQuantity);
+      }
+      setStockDetail(await applyStockMovement(implementUuid, payload));
+      await registerInventoryTrace(movementType as ManualMovementType, qtyForTrace, movementNotes);
+      await refreshImplement();
+      setSuccess("Movimiento interno aplicado.");
+      setIsMovementModalOpen(false);
+      setMovementSelectedIndividualIds([]);
+      setMovementNotes("");
+    } catch (requestError) {
+      setStockError(getErrorMessage(requestError, "No se pudo aplicar el movimiento interno."));
+    } finally {
+      setStockBusy(false);
+    }
+  }
+
+  function toggleMovementIndividual(individualUuid: string) {
+    setMovementSelectedIndividualIds((prev) =>
+      prev.includes(individualUuid) ? prev.filter((id) => id !== individualUuid) : [...prev, individualUuid],
+    );
+  }
+
+  function openIndividualEditor(individual: IndividualItem) {
+    setEditingIndividual(individual);
+    setIndividualStatus(individual.status);
+    setIndividualCondition(individual.condition);
+    setIndividualNotes(individual.notes ?? "");
+    setIndividualLocationId(individual.current_location_uuid == null ? "" : String(individual.current_location_uuid));
+    setIndividualActive(individual.active);
+    setIndividualRemainingLifeRaw(individual.remaining_life == null ? "" : String(individual.remaining_life));
+    setIndividualAssetCodeReprintRequired(individual.asset_code_reprint_required);
+  }
+
+  function closeIndividualEditor() {
+    setEditingIndividual(null);
+    setIndividualNotes("");
+    setIndividualRemainingLifeRaw("");
+    setIndividualAssetCodeReprintRequired(false);
+  }
+
+  async function handleSaveIndividual() {
+    if (!editingIndividual) return;
+    const normalizedRemainingLife = individualRemainingLifeRaw.trim();
+    const parsedRemainingLife =
+      normalizedRemainingLife.length === 0 ? null : Number(normalizedRemainingLife);
+
+    if (
+      normalizedRemainingLife.length > 0 &&
+      (!Number.isFinite(parsedRemainingLife) || !Number.isInteger(parsedRemainingLife))
+    ) {
+      setStockError("La vida restante debe ser un numero entero.");
+      return;
+    }
+
+    setStockBusy(true);
+    setStockError(null);
+    try {
+      const payload = {
+        status: individualStatus,
+        condition: individualCondition,
+        notes: individualNotes.trim() ? individualNotes.trim() : null,
+        current_location_uuid: individualLocationId.trim() ? individualLocationId : null,
+        active: individualActive,
+        remaining_life: parsedRemainingLife,
+        asset_code_reprint_required: individualAssetCodeReprintRequired,
+      };
+      setStockDetail(await updateIndividualState(implementUuid, editingIndividual.uuid, payload));
+      await refreshImplement();
+      setSuccess(`Unidad ${editingIndividual.asset_code} actualizada.`);
+      closeIndividualEditor();
+    } catch (requestError) {
+      setStockError(getErrorMessage(requestError, "No se pudo actualizar la unidad."));
+    } finally {
+      setStockBusy(false);
+    }
+  }
+
+  function openLabelsModal(scope: LabelScope, individualUuid: string | null = null) {
+    setLabelScope(scope);
+    setLabelIndividualUuid(individualUuid);
+    setLabelPreviewUrl(null);
+    setIsLabelModalOpen(true);
+    if (resolveLabelDisplayCode(scope, individualUuid)) {
+      void handleGenerateLabelsPdf(scope, individualUuid);
+    }
+  }
+
+  async function handleGenerateLabelsPdf(scopeArg: LabelScope, individualUuidArg: string | null) {
+    if (!implement) return;
+    setLabelBusy(true);
+    setStockError(null);
+    try {
+      const blob = await fetchLabelsPdfBlob(implement.uuid, scopeArg, 1, individualUuidArg == null ? undefined : individualUuidArg);
+      if (labelPreviewUrl) {
+        window.URL.revokeObjectURL(labelPreviewUrl);
+      }
+      setLabelPreviewUrl(window.URL.createObjectURL(blob));
+    } catch (requestError) {
+      setStockError(getErrorMessage(requestError, "No se pudo generar el PDF de etiquetas."));
+    } finally {
+      setLabelBusy(false);
+    }
+  }
+
+  function closeLabelModal() {
+    setIsLabelModalOpen(false);
+    if (labelPreviewUrl) {
+      window.URL.revokeObjectURL(labelPreviewUrl);
+    }
+    setLabelPreviewUrl(null);
+    setLabelIndividualUuid(null);
+  }
+
+  function printLabelPreview() {
+    if (!labelPreviewUrl) return;
+    const popup = window.open(labelPreviewUrl, "_blank", "noopener,noreferrer");
+    if (!popup) return;
+    popup.focus();
+    window.setTimeout(() => popup.print(), 450);
+  }
+
+  function openImagePreviewModal() {
+    if (!implementImageUrl) {
+      return;
+    }
+    setIsImagePreviewOpen(true);
+  }
+
+  function closeImagePreviewModal() {
+    setIsImagePreviewOpen(false);
+  }
+
+  const latestMovementRows = implement?.recent_movements ?? [];
+  const allMovementsHref = implement
+    ? `#/inventory/moves?implementUuid=${encodeURIComponent(implement.uuid)}&implementName=${encodeURIComponent(implement.name)}`
+    : "#/inventory/moves";
+
+  const content = (
+    <>
+      <section className="content-header detail-header">
+        <div>
+          <h1>Detalle de implemento</h1>
+          <p>Ficha completa</p>
+        </div>
+        <div className="content-header__actions">
+          <a className="button button--ghost" href="#/inventory/implementos"><ArrowLeft size={16} />Volver al listado</a>
+          {!isDocente && (
+            <>
+              {isCoordinator ? (
+                <button
+                  type="button"
+                  className="button"
+                  onClick={() => {
+                    window.location.hash = `#/inventory/implementos/${implementUuid}/editar`;
+                  }}
+                  disabled={loading || !implement}
+                >
+                  <Edit3 size={16} />
+                  Editar implemento
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="button button--ghost"
+                onClick={openAdjustStockModal}
+                disabled={loading || !implement}
+              >
+                <Boxes size={16} />
+                Ajustar stock
+              </button>
+              <button
+                type="button"
+                className="button button--ghost"
+                onClick={openMovementModal}
+                disabled={loading || !implement}
+              >
+                <CircleMinus size={16} />
+                Movimiento
+              </button>
+            </>
+          )}
+        </div>
+      </section>
+
+      <section className="panel">
+        {loading ? (
+          <div className="detail-skeleton-layout">
+            <div className="detail-skeleton-left">
+              <div className="skeleton skeleton-hero" />
+              <div className="detail-skeleton-kpis">
+                {Array.from({ length: 5 }).map((_, idx) => (
+                  <div key={`detail-kpi-skeleton-${idx}`} className="skeleton skeleton-kpi-card" />
+                ))}
+              </div>
+            </div>
+            <div className="detail-skeleton-right">
+              <div className="skeleton skeleton-side-card" />
+              <div className="skeleton skeleton-side-card" />
+              <div className="skeleton skeleton-side-card" />
+            </div>
+          </div>
+        ) : null}
+        {error ? <div className="error-banner">{error}</div> : null}
+        {success ? <div className="success-banner">{success}</div> : null}
+        {stockError ? <div className="error-banner">{stockError}</div> : null}
+
+        {implement && !loading ? (
+          <div className="implement-detail-layout implement-detail-layout--inspired">
+            <div className="implement-left-column">
+              <article className="detail-card detail-card--hero">
+                <div className="implement-hero-detail">
+                  <div className="implement-hero">
+                    <img src={implementImagePreviewSrc} alt={implement.name} className="implement-hero__img" />
+                    <button
+                      type="button"
+                      className="button button--ghost button--sm implement-hero__preview-btn"
+                      onClick={openImagePreviewModal}
+                      disabled={!implementImageUrl}
+                    >
+                      <ImageIcon size={14} />
+                      Ver imagen
+                    </button>
+                  </div>
+                  <div>
+                    <h2>{implement.name}</h2>
+                    <div className="meta-rows">
+                      <p><Tag size={16} /><strong>Categoría</strong><span>{implement.category?.name ?? "Sin categoría"}</span></p>
+                      <p><CircleCheck size={16} /><strong>Estado</strong><span className={`badge ${implement.active ? "badge--active" : "badge--inactive"}`}>{implement.active ? "Activo" : "Inactivo"}</span></p>
+                      <p><ClipboardList size={16} /><strong>Fecha de ingreso</strong><span>{implement.createdAt ? new Date(implement.createdAt).toLocaleDateString() : "-"}</span></p>
+                      <p><Package size={16} /><strong>Tipo</strong><span>{implement.item_type ? ITEM_TYPE_LABELS[implement.item_type] : "Sin tipo"}</span></p>
+                      <p><Barcode size={16} /><strong>Código de barras</strong><span>{implement.barcode ?? "No informado"}</span></p>
+                      <p><Info size={16} /><strong>Ce.coste</strong><span>{implement.cost_center ?? "No informado"}</span></p>
+                      <p><Info size={16} /><strong>Valor neto</strong><span>{formatOptionalCurrency(implement.net_value)}</span></p>
+                      <p><MapPin size={16} /><strong>Ubicación principal</strong>
+                        <span>{implement.display_location ?? implement.location?.name ?? "Sin ubicación"}</span>
+                      </p>
+                      <p className="meta-row-full"><Info size={16} /><strong>Observaciones</strong><span>{implement.observations ?? "Sin observaciones"}</span></p>
+                    </div>
+                    {locationsError ? <p className="field-error">{locationsError}</p> : null}
+                  </div>
+                </div>
+              </article>
+
+              {isDocente ? (
+                <section className="stock-kpi-grid stock-kpi-grid--detail">
+                  <article className="stock-kpi stock-kpi--available">
+                    <span>Disponibilidad</span>
+                    <strong style={{ fontSize: "1.5rem" }}>
+                      {implement.stock?.available_display ?? (implement.stock?.available && implement.stock.available > 0 ? "Disponible" : "No disponible")}
+                    </strong>
+                    <small>Estado actual</small>
+                  </article>
+                </section>
+              ) : (
+                <>
+                  {stockLoading ? <p className="field-hint">Cargando stock...</p> : null}
+                  {stockDetail ? (
+                    <section className="stock-kpi-grid stock-kpi-grid--detail inspired-kpis">
+                      {STOCK_KPI_META.map((meta) => {
+                        const Icon = meta.icon;
+                        const value = stockDetail.stock[meta.key];
+                        return (
+                          <article key={meta.key} className={`stock-kpi stock-kpi--${meta.tone}`}>
+                            <div className="stock-kpi__head">
+                              <span className={`stock-kpi__icon stock-kpi__icon--${meta.tone}`}>
+                                <Icon size={16} />
+                              </span>
+                              <span>{meta.label}</span>
+                            </div>
+                            <strong>{value}</strong>
+                            <small>{meta.helper}</small>
+                          </article>
+                        );
+                      })}
+                    </section>
+                  ) : null}
+                </>
+              )}
+
+              {!isDocente && implement.item_type === "individual" ? (
+                <article className="detail-card units-card">
+                  <h3>Unidades asociadas</h3>
+                  <div className="table-wrapper">
+                    <table className="category-table">
+                      <thead>
+                        <tr><th>Código</th><th>Estado</th><th>Condición</th><th>Vida restante</th><th>Reimpresión</th><th>Ubicación</th><th>Acciones</th></tr>
+                      </thead>
+                      <tbody>
+                        {(stockDetail?.individuals ?? []).map((individual: IndividualItem) => (
+                          <tr key={individual.uuid}>
+                            <td>{individual.asset_code || "-"}</td>
+                            <td>
+                              <span className={`badge ${individual.status === "available" ? "badge--active" : individual.status === "damaged" ? "badge--danger" : "badge--inactive"}`}>
+                                {statusLabel(individual.status)}
+                              </span>
+                            </td>
+                            <td><span className="badge badge--active">{conditionLabel(individual.condition)}</span></td>
+                            <td>{individual.remaining_life == null ? "No informada" : individual.remaining_life}</td>
+                            <td>{booleanLabel(individual.asset_code_reprint_required)}</td>
+                            <td>{resolveLocationName(individual.current_location_uuid)}</td>
+                            <td className="table-actions">
+                              <button type="button" className="button button--table button--ghost" disabled={stockBusy} onClick={() => openIndividualEditor(individual)}><Edit3 size={14} />Editar</button>
+                              <button type="button" className="button button--table button--ghost" disabled={stockBusy} onClick={() => openLabelsModal("INDIVIDUAL", individual.uuid)}><Barcode size={14} />Código de barras</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </article>
+              ) : null}
+            </div>
+
+            <aside className="implement-right-column">
+              <article className="detail-card side-info-card">
+                <h3 className="side-card-title"><span className="side-card-icon"><ClipboardList size={16} /></span>Descripción</h3>
+                <p>{implement.description ?? "Sin descripción"}</p>
+              </article>
+              <article className="detail-card side-info-card">
+                <h3 className="side-card-title"><span className="side-card-icon"><Info size={16} /></span>Información de inventario</h3>
+                <p><strong>Observaciones:</strong> {implement.observations ?? "Sin observaciones"}</p>
+                <p><strong>Ce.coste:</strong> {implement.cost_center ?? "No informado"}</p>
+                <p><strong>Valor neto:</strong> {formatOptionalCurrency(implement.net_value)}</p>
+                <p><strong>Total stock:</strong> {stockDetail?.stock?.total_stock ?? 0}</p>
+                <p><strong>Última actualización:</strong> {implement.updatedAt ? new Date(implement.updatedAt).toLocaleString() : "-"}</p>
+                {implement.item_type !== "individual" && !isDocente ? (
+                  <div style={{ marginTop: 10 }}>
+                    <button type="button" className="button button--ghost button--sm" onClick={() => openLabelsModal("GENERAL")}><Barcode size={14} />Código de barras general</button>
+                  </div>
+                ) : null}
+              </article>
+
+              {!isDocente && (
+                <article className="detail-card side-info-card">
+                  <h3 className="side-card-title"><span className="side-card-icon"><CircleCheck size={16} /></span>Últimos movimientos</h3>
+                  <div className="table-wrapper">
+                    <table className="category-table category-table--compact movements-compact-table">
+                      <thead><tr><th>Fecha</th><th>Acción</th><th>Cantidad</th><th>Usuario</th></tr></thead>
+                      <tbody>
+                        {latestMovementRows.length === 0 ? (
+                          <tr><td colSpan={4} style={{ textAlign: "center" }}>No hay movimientos recientes registrados</td></tr>
+                        ) : (
+                          latestMovementRows.map((mov, index) => (
+                            <tr key={movementRowKey(mov, index)}>
+                              <td>{new Date(mov.timestamp).toLocaleString()}</td>
+                              <td><span className="badge badge--inactive">{movementActionLabel(mov.action)}</span></td>
+                              <td>{mov.quantity}</td>
+                              <td>{mov.performed_by ?? "Usuario no identificado"}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  <a className="side-link" href={allMovementsHref}>Ver todos los movimientos</a>
+                </article>
+              )}
+            </aside>
+          </div>
+        ) : null}
+      </section>
+
+      {isImagePreviewOpen && implement ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-label={`Imagen de ${implement.name}`}>
+          <div className="modal image-preview-modal">
+            <div className="image-preview-modal__header">
+              <div>
+                <h3>{implement.name}</h3>
+                <p>Vista ampliada del implemento seleccionado.</p>
+              </div>
+              <div className="image-preview-modal__actions">
+                <a
+                  className="button button--ghost button--sm"
+                  href={implementImageUrl ?? "#"}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Abrir original
+                </a>
+                <button
+                  type="button"
+                  className="button button--ghost button--sm"
+                  onClick={closeImagePreviewModal}
+                >
+                  <X size={14} />
+                  Cerrar
+                </button>
+              </div>
+            </div>
+            <div className="image-preview-modal__frame">
+              <img
+                src={implementImagePreviewSrc}
+                alt={`Vista ampliada de ${implement.name}`}
+                className="image-preview-modal__img"
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isStockAdjustModalOpen && implement ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal modal--wide modal--wizard">
+            <div className="wizard-progress">
+              <span className="wizard-progress__fill" style={{ width: `${adjustStep === 1 ? 50 : 100}%` }} />
+            </div>
+            <div className="wizard-head">
+              {adjustStep === 2 ? (
+                <button
+                  type="button"
+                  className="button button--ghost button--sm"
+                  onClick={() => setAdjustStep(1)}
+                  disabled={stockBusy}
+                >
+                  <ArrowLeft size={14} />
+                  Volver
+                </button>
+              ) : (
+                <div className="wizard-head__spacer" aria-hidden="true" />
+              )}
+              <button
+                type="button"
+                className="button button--ghost button--sm"
+                onClick={closeAdjustStockModal}
+                disabled={stockBusy}
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <h3><CircleArrowUp size={18} style={{ marginRight: 8, verticalAlign: "text-bottom" }} />Ajustar stock</h3>
+            <p>
+              {adjustStep === 1
+                ? "Selecciona si vas a aumentar o reducir stock."
+                : adjustOperation === "increase"
+                  ? "Completa la informacion del ingreso para guardar el ajuste."
+                  : "Selecciona que stock vas a retirar y registra el ajuste."}
+            </p>
+
+            {adjustStep === 1 ? (
+              <div className="stock-adjust-operation-grid">
+                <button
+                  type="button"
+                  className="stock-adjust-option stock-adjust-option--increase"
+                  onClick={() => startAdjustFlow("increase")}
+                >
+                  <span className="stock-adjust-option__icon" aria-hidden="true">
+                    <ArrowUp size={18} />
+                  </span>
+                  <span className="stock-adjust-option__content">
+                    <strong>Aumentar stock</strong>
+                    <span>Registrar nuevas unidades o cantidades disponibles.</span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="stock-adjust-option stock-adjust-option--decrease"
+                  onClick={() => startAdjustFlow("decrease")}
+                >
+                  <span className="stock-adjust-option__icon" aria-hidden="true">
+                    <ArrowDown size={18} />
+                  </span>
+                  <span className="stock-adjust-option__content">
+                    <strong>Reducir stock</strong>
+                    <span>Descontar unidades existentes del inventario.</span>
+                  </span>
+                </button>
+              </div>
+            ) : (
+              <>
+                {adjustOperation === "increase" ? (
+                  <>
+                    <label htmlFor="entry-quantity">Cantidad a ingresar</label>
+                    <input
+                      id="entry-quantity"
+                      type="number"
+                      min={0}
+                      value={entryQuantity}
+                      onChange={(event) => setEntryQuantity(event.target.value)}
+                      placeholder="Cantidad"
+                    />
+
+                    {implement.item_type === "individual" ? (
+                      <>
+                        <div className="stock-adjust-individual-fields">
+                          <div className="stock-adjust-individual-fields__header">
+                            <div>
+                              <label htmlFor="entry-asset-code-0">
+                                {shouldApplySharedState
+                                  ? normalizedEntryQuantity <= 1
+                                    ? "Codigo de activo"
+                                    : "Codigos de activos"
+                                  : "Configuracion por activo"}
+                              </label>
+                              <p className="field-hint">
+                                {shouldApplySharedState
+                                  ? "Ingresa un codigo por activo. Si aumentas la cantidad, apareceran mas campos."
+                                  : "Cada activo del lote puede tener su propia ubicacion, vida restante, estado y reimpresion."}
+                              </p>
+                            </div>
+                          </div>
+                          {normalizedEntryQuantity > 0 ? (
+                            shouldApplySharedState ? (
+                              <div className="stock-adjust-code-grid">
+                                {adjustIndividualEntries.slice(0, normalizedEntryQuantity).map((entry, index) => (
+                                  <div key={`adjust-asset-code-${index}`} className="stock-adjust-code-row">
+                                    <span className="stock-adjust-code-row__index">#{index + 1}</span>
+                                    <input
+                                      id={`entry-asset-code-${index}`}
+                                      type="text"
+                                      value={entry.assetCode}
+                                      onChange={(event) => updateAdjustIndividualEntry(index, "assetCode", event.target.value)}
+                                      placeholder={`Ej: ACT-${index + 1}`}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null
+                          ) : (
+                            <p className="field-hint">Debes ingresar una cantidad mayor a 0 para habilitar los codigos de activo.</p>
+                          )}
+                        </div>
+
+                        {shouldShowSameStateToggle ? (
+                          <label className="modal-checkbox">
+                            <input
+                              type="checkbox"
+                              checked={adjustUseSameState}
+                              onChange={(event) => {
+                                const nextChecked = event.target.checked;
+                                if (!nextChecked) {
+                                  setAdjustIndividualEntries((previous) =>
+                                    previous.map((entry) => ({
+                                      ...entry,
+                                      status: adjustStatus,
+                                      condition: adjustCondition,
+                                      currentLocationUuid: adjustLocationId,
+                                      remainingLifeRaw: adjustRemainingLifeRaw,
+                                      assetCodeReprintRequired: adjustAssetCodeReprintRequired,
+                                    })),
+                                  );
+                                }
+                                setAdjustUseSameState(nextChecked);
+                              }}
+                            />
+                            Todos con el mismo estado/condicion
+                          </label>
+                        ) : null}
+
+                        {shouldApplySharedState ? (
+                          <section className="stock-adjust-shared-section" aria-labelledby="stock-adjust-shared-title">
+                            <div className="stock-adjust-shared-section__divider">
+                              <span id="stock-adjust-shared-title">Configuracion del lote</span>
+                            </div>
+                            <div className="stock-adjust-entry-card stock-adjust-entry-card--shared">
+                              <div className="stock-adjust-entry-card__header">
+                                <span>Se aplicara a todos los activos de este ingreso.</span>
+                              </div>
+                              <div className="stock-adjust-entry-card__fields">
+                                <div>
+                                  <div className="field-label-with-help">
+                                    <label htmlFor="adjust-status">Estado inicial</label>
+                                    <HelpTooltip
+                                      text={getStatusHelpMessage(adjustStatus)}
+                                      ariaLabel="Ayuda sobre el estado inicial"
+                                    />
+                                  </div>
+                                  <select
+                                    id="adjust-status"
+                                    value={adjustStatus}
+                                    onChange={(event) => setAdjustStatus(event.target.value as IndividualItem["status"])}
+                                  >
+                                    {INDIVIDUAL_STATUS_OPTIONS.map((status) => (
+                                      <option key={`adjust-status-${status}`} value={status}>
+                                        {status === "available" ? "Nuevo (disponible)" : statusLabel(status)}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                <div>
+                                  <div className="field-label-with-help">
+                                    <label htmlFor="adjust-condition">Condicion inicial</label>
+                                    <HelpTooltip
+                                      text={getConditionHelp(adjustCondition)}
+                                      ariaLabel="Ayuda sobre la condicion inicial"
+                                    />
+                                  </div>
+                                  <select
+                                    id="adjust-condition"
+                                    value={adjustCondition}
+                                    onChange={(event) => setAdjustCondition(event.target.value as IndividualItem["condition"])}
+                                  >
+                                    {INDIVIDUAL_CONDITION_OPTIONS.map((condition) => (
+                                      <option key={`adjust-cond-${condition}`} value={condition}>
+                                        {conditionLabel(condition)}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                <div>
+                                  <div className="field-label-with-help">
+                                    <label htmlFor="adjust-location">Ubicacion inicial</label>
+                                    <HelpTooltip
+                                      text={getLocationSelectionHelp()}
+                                      ariaLabel="Ayuda sobre la ubicacion inicial"
+                                    />
+                                  </div>
+                                  <select
+                                    id="adjust-location"
+                                    value={adjustLocationId}
+                                    onChange={(event) => setAdjustLocationId(event.target.value)}
+                                  >
+                                    <option value="">Ubicacion principal del implemento</option>
+                                    {locations.map((location) => (
+                                      <option key={`adjust-location-${location.uuid}`} value={location.uuid}>
+                                        {location.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                <div>
+                                  <div className="field-label-with-help">
+                                    <label htmlFor="adjust-remaining-life">Vida restante</label>
+                                    <HelpTooltip
+                                      text={getRemainingLifeHelp()}
+                                      ariaLabel="Ayuda sobre la vida restante"
+                                    />
+                                  </div>
+                                  <input
+                                    id="adjust-remaining-life"
+                                    type="number"
+                                    step={1}
+                                    value={adjustRemainingLifeRaw}
+                                    onChange={(event) => setAdjustRemainingLifeRaw(event.target.value)}
+                                    placeholder="Ej. 38 o -13"
+                                  />
+                                </div>
+
+                                <div className="stock-adjust-entry-card__field stock-adjust-entry-card__field--full">
+                                  <div className="field-label-with-help">
+                                    <label htmlFor="adjust-reprint-required">Reimpresion codigo de activo</label>
+                                    <HelpTooltip
+                                      text={getAssetCodeReprintHelp(adjustAssetCodeReprintRequired)}
+                                      ariaLabel="Ayuda sobre reimpresion de codigo de activo"
+                                    />
+                                  </div>
+                                  <select
+                                    id="adjust-reprint-required"
+                                    value={adjustAssetCodeReprintRequired ? "true" : "false"}
+                                    onChange={(event) => setAdjustAssetCodeReprintRequired(event.target.value === "true")}
+                                  >
+                                    <option value="false">No</option>
+                                    <option value="true">Si</option>
+                                  </select>
+                                </div>
+                              </div>
+                            </div>
+                          </section>
+                        ) : (
+                          <div className="stock-adjust-entry-card-grid">
+                            {adjustIndividualEntries.slice(0, normalizedEntryQuantity).map((entry, index) => (
+                              <article key={`adjust-entry-${index}`} className="stock-adjust-entry-card">
+                                <div className="stock-adjust-entry-card__header">
+                                  <strong>Activo #{index + 1}</strong>
+                                  <span>Configura sus datos individualmente.</span>
+                                </div>
+
+                                <div className="stock-adjust-entry-card__fields">
+                                  <div className="stock-adjust-entry-card__field stock-adjust-entry-card__field--full">
+                                    <div className="field-label-with-help">
+                                      <label htmlFor={`entry-asset-code-${index}`}>Codigo de activo</label>
+                                      <HelpTooltip
+                                        text="Codigo unico del activo dentro de este ingreso. En el flujo actual no se autogenera: debes informarlo para cada activo."
+                                        ariaLabel={`Ayuda sobre el codigo de activo ${index + 1}`}
+                                      />
+                                    </div>
+                                    <div className="stock-adjust-code-row">
+                                      <span className="stock-adjust-code-row__index">#{index + 1}</span>
+                                      <input
+                                        id={`entry-asset-code-${index}`}
+                                        type="text"
+                                        value={entry.assetCode}
+                                        onChange={(event) => updateAdjustIndividualEntry(index, "assetCode", event.target.value)}
+                                        placeholder={`Ej: ACT-${index + 1}`}
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    <div className="field-label-with-help">
+                                      <label htmlFor={`entry-status-${index}`}>Estado inicial</label>
+                                      <HelpTooltip
+                                        text={getStatusHelpMessage(entry.status)}
+                                        ariaLabel={`Ayuda sobre el estado inicial del activo ${index + 1}`}
+                                      />
+                                    </div>
+                                    <select
+                                      id={`entry-status-${index}`}
+                                      value={entry.status}
+                                      onChange={(event) => updateAdjustIndividualEntry(index, "status", event.target.value as IndividualItem["status"])}
+                                    >
+                                      {INDIVIDUAL_STATUS_OPTIONS.map((status) => (
+                                        <option key={`entry-status-${index}-${status}`} value={status}>
+                                          {status === "available" ? "Nuevo (disponible)" : statusLabel(status)}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+
+                                  <div>
+                                    <div className="field-label-with-help">
+                                      <label htmlFor={`entry-condition-${index}`}>Condicion inicial</label>
+                                      <HelpTooltip
+                                        text={getConditionHelp(entry.condition)}
+                                        ariaLabel={`Ayuda sobre la condicion inicial del activo ${index + 1}`}
+                                      />
+                                    </div>
+                                    <select
+                                      id={`entry-condition-${index}`}
+                                      value={entry.condition}
+                                      onChange={(event) => updateAdjustIndividualEntry(index, "condition", event.target.value as IndividualItem["condition"])}
+                                    >
+                                      {INDIVIDUAL_CONDITION_OPTIONS.map((condition) => (
+                                        <option key={`entry-condition-${index}-${condition}`} value={condition}>
+                                          {conditionLabel(condition)}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+
+                                  <div>
+                                    <div className="field-label-with-help">
+                                      <label htmlFor={`entry-location-${index}`}>Ubicacion inicial</label>
+                                      <HelpTooltip
+                                        text={getLocationSelectionHelp()}
+                                        ariaLabel={`Ayuda sobre la ubicacion inicial del activo ${index + 1}`}
+                                      />
+                                    </div>
+                                    <select
+                                      id={`entry-location-${index}`}
+                                      value={entry.currentLocationUuid}
+                                      onChange={(event) => updateAdjustIndividualEntry(index, "currentLocationUuid", event.target.value)}
+                                    >
+                                      <option value="">Ubicacion principal del implemento</option>
+                                      {locations.map((location) => (
+                                        <option key={`entry-location-${index}-${location.uuid}`} value={location.uuid}>
+                                          {location.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+
+                                  <div>
+                                    <div className="field-label-with-help">
+                                      <label htmlFor={`entry-remaining-life-${index}`}>Vida restante</label>
+                                      <HelpTooltip
+                                        text={getRemainingLifeHelp()}
+                                        ariaLabel={`Ayuda sobre la vida restante del activo ${index + 1}`}
+                                      />
+                                    </div>
+                                    <input
+                                      id={`entry-remaining-life-${index}`}
+                                      type="number"
+                                      step={1}
+                                      value={entry.remainingLifeRaw}
+                                      onChange={(event) => updateAdjustIndividualEntry(index, "remainingLifeRaw", event.target.value)}
+                                      placeholder="Ej. 38 o -13"
+                                    />
+                                  </div>
+
+                                  <div className="stock-adjust-entry-card__field stock-adjust-entry-card__field--full">
+                                    <div className="field-label-with-help">
+                                      <label htmlFor={`entry-reprint-required-${index}`}>Reimpresion codigo de activo</label>
+                                      <HelpTooltip
+                                        text={getAssetCodeReprintHelp(entry.assetCodeReprintRequired)}
+                                        ariaLabel={`Ayuda sobre reimpresion del activo ${index + 1}`}
+                                      />
+                                    </div>
+                                    <select
+                                      id={`entry-reprint-required-${index}`}
+                                      value={entry.assetCodeReprintRequired ? "true" : "false"}
+                                      onChange={(event) => updateAdjustIndividualEntry(index, "assetCodeReprintRequired", event.target.value === "true")}
+                                    >
+                                      <option value="false">No</option>
+                                      <option value="true">Si</option>
+                                    </select>
+                                  </div>
+                                </div>
+                              </article>
+                            ))}
+                          </div>
+                        )}
+
+                        {locationsError ? <p className="field-error">{locationsError}</p> : null}
+                      </>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    {implement.item_type === "individual" ? (
+                      <>
+                        <label>Selecciona activos a retirar (borrado logico)</label>
+                        <div className="table-wrapper wizard-table-select">
+                          <table className="category-table category-table--compact">
+                            <thead>
+                              <tr>
+                                <th />
+                                <th>Codigo</th>
+                                <th>Estado</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(stockDetail?.individuals ?? []).map((individual: IndividualItem) => (
+                                <tr key={`reduce-${individual.uuid}`}>
+                                  <td>
+                                    <input
+                                      type="checkbox"
+                                      checked={adjustReduceIndividualIds.includes(individual.uuid)}
+                                      onChange={() =>
+                                        setAdjustReduceIndividualIds((prev) =>
+                                          prev.includes(individual.uuid)
+                                            ? prev.filter((id) => id !== individual.uuid)
+                                            : [...prev, individual.uuid],
+                                        )
+                                      }
+                                    />
+                                  </td>
+                                  <td>{individual.asset_code || "-"}</td>
+                                  <td>{statusLabel(individual.status)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        <p className="field-hint">Seleccionados: {adjustReduceIndividualIds.length}</p>
+                        <label htmlFor="reduce-condition">Condicion de retiro</label>
+                        <select
+                          id="reduce-condition"
+                          value={adjustCondition}
+                          onChange={(event) => setAdjustCondition(event.target.value as IndividualItem["condition"])}
+                        >
+                          {INDIVIDUAL_CONDITION_OPTIONS.map((condition) => (
+                            <option key={`reduce-cond-${condition}`} value={condition}>
+                              {conditionLabel(condition)}
+                            </option>
+                          ))}
+                        </select>
+                      </>
+                    ) : (
+                      <>
+                        <label htmlFor="reduce-quantity">Cantidad a reducir</label>
+                        <input
+                          id="reduce-quantity"
+                          type="number"
+                          min={1}
+                          value={adjustReduceQuantity}
+                          onChange={(event) => setAdjustReduceQuantity(event.target.value)}
+                          placeholder="Cantidad"
+                        />
+                      </>
+                    )}
+                  </>
+                )}
+
+                <label htmlFor="adjust-notes">Nota del ajuste (opcional)</label>
+                <textarea
+                  id="adjust-notes"
+                  value={adjustNotes}
+                  onChange={(event) => setAdjustNotes(event.target.value)}
+                  placeholder="Describe motivo del lote o ajuste."
+                />
+              </>
+            )}
+
+            {adjustStep === 2 ? (
+              <div className="modal-actions modal-actions--spacious">
+                <button type="button" className="button button--ghost" onClick={closeAdjustStockModal} disabled={stockBusy}>
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="button"
+                  onClick={() => void handleAdjustStockSave()}
+                  disabled={stockBusy || (adjustOperation === "increase" && Number(entryQuantity) <= 0)}
+                >
+                  {stockBusy ? "Guardando..." : "Guardar"}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {isMovementModalOpen && implement ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal modal--wide modal--wizard">
+            <div className="wizard-progress">
+              <span className="wizard-progress__fill" style={{ width: "100%" }} />
+            </div>
+            <div className="wizard-head">
+              <button type="button" className="button button--ghost button--sm" onClick={closeMovementModal} disabled={stockBusy}>
+                <ArrowLeft size={14} />
+                Cerrar
+              </button>
+              <button type="button" className="button button--ghost button--sm" onClick={closeMovementModal} disabled={stockBusy}>
+                <X size={14} />
+              </button>
+            </div>
+            <h3><CircleMinus size={18} style={{ marginRight: 8, verticalAlign: "text-bottom" }} />Movimiento interno</h3>
+            <p>Gestiona disponibles, prestados, reservados o dañados con el stock actual.</p>
+
+            <div className="field-label-with-help">
+              <label htmlFor="movement-type">Tipo de movimiento</label>
+              <HelpTooltip
+                text={getMovementHelpMessage(movementType, implement.item_type)}
+                ariaLabel="Ayuda sobre el tipo de movimiento"
+              />
+            </div>
+            <select
+              id="movement-type"
+              value={movementType}
+              onChange={(event) => setMovementType(event.target.value as StockMovementType)}
+            >
+              {availableMovementOptions.map((option: { value: StockMovementType; label: string }) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+
+            {implement.item_type === "individual" ? (
+              <>
+                <div className="field-label-with-help">
+                  <label>Selecciona unidades</label>
+                  <HelpTooltip
+                    text="Marca los activos que participaran en este movimiento."
+                    ariaLabel="Ayuda sobre la seleccion de unidades"
+                  />
+                </div>
+                <div className="table-wrapper" style={{ maxHeight: 260, border: "1px solid var(--line)", borderRadius: 10 }}>
+                  <table className="category-table category-table--compact">
+                    <thead>
+                      <tr>
+                        <th />
+                        <th>Código</th>
+                        <th>Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(stockDetail?.individuals ?? []).map((individual: IndividualItem) => (
+                        <tr key={`move-${individual.uuid}`}>
+                          <td>
+                            <input
+                              type="checkbox"
+                              checked={movementSelectedIndividualIds.includes(individual.uuid)}
+                              onChange={() => toggleMovementIndividual(individual.uuid)}
+                            />
+                          </td>
+                          <td>{individual.asset_code || "-"}</td>
+                          <td>{statusLabel(individual.status)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="field-hint">Seleccionadas: {movementSelectedIndividualIds.length}</p>
+              </>
+            ) : (
+              <>
+                <div className="field-label-with-help">
+                  <label htmlFor="movement-quantity">Cantidad</label>
+                  <HelpTooltip
+                    text="Cantidad de unidades que deseas mover en esta operacion."
+                    ariaLabel="Ayuda sobre la cantidad del movimiento"
+                  />
+                </div>
+                <input
+                  id="movement-quantity"
+                  type="number"
+                  min={1}
+                  value={movementQuantity}
+                  onChange={(event) => setMovementQuantity(event.target.value)}
+                  placeholder="Cantidad"
+                />
+              </>
+            )}
+
+            <div className="field-label-with-help">
+              <label htmlFor="movement-notes">Nota del movimiento (opcional)</label>
+              <HelpTooltip
+                text="Usa este campo para dejar el motivo o contexto del movimiento."
+                ariaLabel="Ayuda sobre las notas del movimiento"
+              />
+            </div>
+            <textarea
+              id="movement-notes"
+              value={movementNotes}
+              onChange={(event) => setMovementNotes(event.target.value)}
+              placeholder="Motivo o contexto del movimiento interno."
+            />
+
+            <div className="modal-actions">
+              <button type="button" className="button button--ghost" onClick={closeMovementModal} disabled={stockBusy}>
+                Cancelar
+              </button>
+              <button type="button" className="button" onClick={() => void handleMovementSave()} disabled={stockBusy}>
+                {stockBusy ? "Guardando..." : "Guardar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {editingIndividual ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal">
+            <h3>Editar activo {editingIndividual.asset_code}</h3>
+            <p>Ajusta estado, condición, ubicación y vigencia operativa de la unidad.</p>
+
+            <div className="field-label-with-help">
+              <label htmlFor="individual-status">Estado</label>
+              <HelpTooltip
+                text={getStatusHelpMessage(individualStatus)}
+                ariaLabel="Ayuda sobre el estado de la unidad"
+              />
+            </div>
+            <select id="individual-status" value={individualStatus} onChange={(e) => setIndividualStatus(e.target.value as IndividualItem["status"])}>
+              {INDIVIDUAL_STATUS_OPTIONS.map((status) => (<option key={status} value={status}>{statusLabel(status)}</option>))}
+            </select>
+
+            <div className="field-label-with-help">
+              <label htmlFor="individual-condition">Condición</label>
+              <HelpTooltip
+                text={getConditionHelp(individualCondition)}
+                ariaLabel="Ayuda sobre la condición de la unidad"
+              />
+            </div>
+            <select id="individual-condition" value={individualCondition} onChange={(e) => setIndividualCondition(e.target.value as IndividualItem["condition"])}>
+              {INDIVIDUAL_CONDITION_OPTIONS.map((condition) => (<option key={condition} value={condition}>{conditionLabel(condition)}</option>))}
+            </select>
+
+            <div className="field-label-with-help">
+              <label htmlFor="individual-location">Ubicación actual</label>
+              <HelpTooltip
+                text="Ubicación operativa actual del activo. Si no aplica, puedes dejarla vacía."
+                ariaLabel="Ayuda sobre la ubicación actual"
+              />
+            </div>
+            <select id="individual-location" value={individualLocationId} onChange={(e) => setIndividualLocationId(e.target.value)}>
+              <option value="">Sin ubicación</option>
+              {locations.map((location) => (<option key={location.uuid} value={location.uuid}>{location.name}</option>))}
+            </select>
+
+            <div className="field-label-with-help">
+              <label htmlFor="individual-remaining-life">Vida restante</label>
+              <HelpTooltip
+                text="Vida útil restante del activo. Puede ser positiva, cero o negativa según el registro contable."
+                ariaLabel="Ayuda sobre la vida restante"
+              />
+            </div>
+            <input
+              id="individual-remaining-life"
+              type="number"
+              step={1}
+              value={individualRemainingLifeRaw}
+              onChange={(e) => setIndividualRemainingLifeRaw(e.target.value)}
+              placeholder="Ej. 38 o -13"
+            />
+
+            <div className="field-label-with-help">
+              <label htmlFor="individual-reprint-required">Reimpresión código de activo</label>
+              <HelpTooltip
+                text="Indica si este activo necesita reimprimir su identificación o etiqueta."
+                ariaLabel="Ayuda sobre la reimpresión del código"
+              />
+            </div>
+            <select
+              id="individual-reprint-required"
+              value={individualAssetCodeReprintRequired ? "true" : "false"}
+              onChange={(e) => setIndividualAssetCodeReprintRequired(e.target.value === "true")}
+            >
+              <option value="false">No</option>
+              <option value="true">Sí</option>
+            </select>
+
+            <div className="field-label-with-help">
+              <label htmlFor="individual-notes">Notas</label>
+              <HelpTooltip
+                text="Observaciones particulares de este activo."
+                ariaLabel="Ayuda sobre las notas de la unidad"
+              />
+            </div>
+            <textarea
+              id="individual-notes"
+              value={individualNotes}
+              onChange={(e) => setIndividualNotes(e.target.value)}
+              placeholder="Observaciones de la unidad"
+            />
+
+            <div className="field-label-with-help">
+              <label htmlFor="individual-active">Activo</label>
+              <HelpTooltip
+                text="Define si la unidad sigue operativamente vigente dentro del inventario."
+                ariaLabel="Ayuda sobre la vigencia del activo"
+              />
+            </div>
+            <select id="individual-active" value={individualActive ? "true" : "false"} onChange={(e) => setIndividualActive(e.target.value === "true")}>
+              <option value="true">Sí</option>
+              <option value="false">No</option>
+            </select>
+
+            <div className="modal-actions">
+              <button type="button" className="button button--ghost" onClick={closeIndividualEditor} disabled={stockBusy}>Cancelar</button>
+              <button type="button" className="button" onClick={() => void handleSaveIndividual()} disabled={stockBusy}>{stockBusy ? "Guardando..." : "Guardar cambios"}</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isLabelModalOpen && implement ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal" style={{ width: "min(100%, 820px)" }}>
+            <h3>Vista previa código de barras</h3>
+            <p>{labelScope === "INDIVIDUAL" ? (labelDisplayCode ? `Unidad individual ${labelDisplayCode}` : "Unidad individual") : "Código general del implemento"}</p>
+            <div className="barcode-preview-surface">
+              {labelBusy ? (
+                <div className="field-hint" style={{ padding: 12 }}>Cargando vista previa...</div>
+              ) : (
+                <div className="barcode-preview-label">
+                  <strong>{implement.name}</strong>
+                  <small>{labelScope === "INDIVIDUAL" ? "Unidad individual" : "Código general"}</small>
+                  {labelDisplayCode ? (
+                    <>
+                      <svg
+                        viewBox={`0 0 ${buildPseudoBarcodeBars(labelDisplayCode).width} 36`}
+                        preserveAspectRatio="none"
+                        className="barcode-preview-svg"
+                      >
+                        {buildPseudoBarcodeBars(labelDisplayCode).bars.map((bar, idx) => (
+                          <rect key={`bar-${idx}`} x={bar.x} y={2} width={bar.w} height={30} fill="#1b1b1b" />
+                        ))}
+                      </svg>
+                      <span className="barcode-preview-code">{labelDisplayCode}</span>
+                    </>
+                  ) : (
+                    <div className="field-hint" style={{ paddingTop: 12 }}>
+                      No hay un código visible configurado para esta etiqueta.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="modal-actions">
+              <button type="button" className="button button--ghost" onClick={closeLabelModal} disabled={labelBusy}>Cancelar</button>
+              <button type="button" className="button" onClick={printLabelPreview} disabled={labelBusy || !labelPreviewUrl}>Imprimir</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+
+  if (embedded) {
+    return content;
+  }
+
+  return <InventoryLayout activeSection="items">{content}</InventoryLayout>;
+}
