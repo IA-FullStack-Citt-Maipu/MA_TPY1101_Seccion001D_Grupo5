@@ -121,12 +121,12 @@ module "backend_service" {
   env_vars                         = local.backend_env
   secret_env_vars = {
     DB_CLOUDSQL_PASSWORD = {
-      secret  = module.secret_manager.secret_ids["DB_CLOUDSQL_PASSWORD"]
+      secret  = "projects/${var.gcp_project_id}/secrets/DB_CLOUDSQL_PASSWORD"
       version = "latest"
     }
     APP_AUTH_JWT_SECRET = {
-      secret  = module.secret_manager.secret_ids["APP_AUTH_JWT_SECRET"]
-      version = try(module.secret_manager.secret_versions["APP_AUTH_JWT_SECRET"], "latest")
+      secret  = "projects/${var.gcp_project_id}/secrets/APP_AUTH_JWT_SECRET"
+      version = "latest"
     }
   }
   custom_domain = var.backend_domain
