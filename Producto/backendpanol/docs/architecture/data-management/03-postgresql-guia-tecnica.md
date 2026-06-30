@@ -1,8 +1,8 @@
 ﻿# 03 - PostgreSQL: Guia Tecnica Vigente
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-06-28
-- Fuente de verdad: `Producto/databasepanol/migrations/v25/V25..V47` + `migrations/README.md`
+- Ultima verificacion: 2026-06-29
+- Fuente de verdad: `Producto/databasepanol/migrations/v25/V25..V51` + `migrations/README.md`
 
 ## Rol de PostgreSQL
 
@@ -61,7 +61,7 @@ Reglas relevantes:
 - `loan_detail.returned_quantity` solo cuenta retorno util/bueno; `damaged_quantity`, `lost_quantity`, `consumed_quantity` y `discarded_quantity` mantienen el resto del cierre.
 - `loan_detail.reserved_quantity` puede preservarse con valor historico en `cancelled` y `expired` sin entrega, aunque la reserva operativa ya haya sido liberada.
 - Para `individual`, `return_condition_enum` mapea a `individual.status` asi: `good -> available`, `damaged -> damaged`, `lost -> blocked`, `discarded -> retired`.
-- Los triggers de notificacion deben omitir avisos al docente cuando `to_status = approved`.
+- Los triggers de notificacion del docente deben cubrir `approved` y los estados operativos posteriores definidos por la cadena vigente.
 
 Trazabilidad:
 

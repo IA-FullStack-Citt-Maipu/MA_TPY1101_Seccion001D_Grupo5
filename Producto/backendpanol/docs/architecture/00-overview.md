@@ -1,8 +1,8 @@
 ﻿# Arquitectura Overview
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-06-28
-- Fuente de verdad: `ArchitectureTest`, estructura de paquetes en `src/main/java`, `Producto/databasepanol/migrations/v25/V25..V47` y `docs/architecture/data-management/03-postgresql-guia-tecnica.md`
+- Ultima verificacion: 2026-06-29
+- Fuente de verdad: `ArchitectureTest`, estructura de paquetes en `src/main/java`, `Producto/databasepanol/migrations/v25/V25..V51` y `docs/architecture/data-management/03-postgresql-guia-tecnica.md`
 
 Nota operativa: PostgreSQL es la base canónica y única del sistema en este tramo.
 

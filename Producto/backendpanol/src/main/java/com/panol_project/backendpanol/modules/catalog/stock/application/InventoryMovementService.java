@@ -3,6 +3,9 @@ package com.panol_project.backendpanol.modules.catalog.stock.application;
 import com.panol_project.backendpanol.modules.catalog.stock.application.contract.InventoryMovementQueryContract;
 import com.panol_project.backendpanol.modules.catalog.stock.application.contract.InventoryMovementQueryContract.InventoryMovementView;
 import com.panol_project.backendpanol.modules.catalog.stock.domain.InventoryMovement;
+import com.panol_project.backendpanol.modules.catalog.stock.domain.InventoryMovementDashboardSummary;
+import com.panol_project.backendpanol.modules.catalog.stock.domain.InventoryMovementHistoryFilter;
+import com.panol_project.backendpanol.modules.catalog.stock.domain.InventoryMovementHistoryPage;
 import com.panol_project.backendpanol.modules.catalog.stock.domain.InventoryMovementRepository;
 import com.panol_project.backendpanol.modules.catalog.stock.domain.MovementAction;
 import com.panol_project.backendpanol.modules.catalog.stock.domain.StockRepository;
@@ -65,6 +68,16 @@ public class InventoryMovementService implements InventoryMovementQueryContract 
             return repository.findAllByOrderByTimestampDesc();
         }
         return repository.findByOrderByTimestampDesc(limit);
+    }
+
+    @Transactional(readOnly = true)
+    public InventoryMovementHistoryPage obtenerHistorial(InventoryMovementHistoryFilter filter, int page, int size) {
+        return repository.findHistory(filter, page, size);
+    }
+
+    @Transactional(readOnly = true)
+    public InventoryMovementDashboardSummary obtenerResumenDashboard() {
+        return repository.findDashboardSummary();
     }
 
     @Override

@@ -87,7 +87,7 @@ class AuthServiceTest {
                 null
         );
 
-        when(userAuthPort.findAuthUserByRut("12345678")).thenReturn(Optional.of(authUser));
+        when(userAuthPort.findAuthUserByRut("123456789")).thenReturn(Optional.of(authUser));
         when(jwtEncoder.encode(any())).thenReturn(Jwt.withTokenValue("token-123")
                 .header("alg", "HS256")
                 .subject(userUuid.toString())
@@ -109,8 +109,40 @@ class AuthServiceTest {
         assertEquals(true, result.persistentLogin());
         verify(userAuthPort).resetLoginAttempts(eq(userUuid), any(OffsetDateTime.class));
         verify(refreshSessionPort).createSession(eq(userUuid), anyString(), any(OffsetDateTime.class), eq("JUnit"), eq(true), anyString(), any(OffsetDateTime.class));
-        verify(auditLogPort).log("user_logged_in", userUuid, userUuid, Map.of("rut", "12345678", "role", "DIRECTOR"));
-        verify(outboxService).enqueue("user", userUuid, "UserLoggedIn", userUuid, Map.of("rut", "12345678", "role", "DIRECTOR"));
+        verify(auditLogPort).log("user_logged_in", userUuid, userUuid, Map.of("rut", "123456789", "role", "DIRECTOR"));
+        verify(outboxService).enqueue("user", userUuid, "UserLoggedIn", userUuid, Map.of("rut", "123456789", "role", "DIRECTOR"));
+    }
+
+    @Test
+    void loginConRutSinDvNoDebeRecortarElUltimoDigito() {
+        UUID userUuid = UUID.randomUUID();
+        String hash = BCrypt.hashpw("secret", BCrypt.gensalt());
+        AuthUser authUser = new AuthUser(
+                userUuid,
+                "11111111",
+                "Coordinador QA",
+                "qa@panol.test",
+                hash,
+                "COORDINADOR",
+                0,
+                null
+        );
+
+        when(userAuthPort.findAuthUserByRut("11111111")).thenReturn(Optional.of(authUser));
+        when(jwtEncoder.encode(any())).thenReturn(Jwt.withTokenValue("token-qa")
+                .header("alg", "HS256")
+                .subject(userUuid.toString())
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(3600))
+                .build());
+
+        AuthService service = buildService();
+
+        LoginResult result = service.login(new LoginCommand("11111111", "secret", true, "JUnit"));
+
+        assertEquals("token-qa", result.accessToken());
+        verify(userAuthPort).findAuthUserByRut("11111111");
+        verify(userAuthPort).resetLoginAttempts(eq(userUuid), any(OffsetDateTime.class));
     }
 
     @Test
@@ -128,7 +160,7 @@ class AuthServiceTest {
                 null
         );
 
-        when(userAuthPort.findAuthUserByRut("12345678")).thenReturn(Optional.of(authUser));
+        when(userAuthPort.findAuthUserByRut("123456789")).thenReturn(Optional.of(authUser));
         when(jwtEncoder.encode(any())).thenReturn(Jwt.withTokenValue("token-123")
                 .header("alg", "HS256")
                 .subject(userUuid.toString())
@@ -176,7 +208,7 @@ class AuthServiceTest {
                 null
         );
 
-        when(userAuthPort.findAuthUserByRut("12345678")).thenReturn(Optional.of(authUser));
+        when(userAuthPort.findAuthUserByRut("123456789")).thenReturn(Optional.of(authUser));
 
         AuthService service = buildService();
 
@@ -188,8 +220,8 @@ class AuthServiceTest {
         assertEquals("AUTH_INVALID_CREDENTIALS", ex.getCode());
         verify(userAuthPort).registerFailedAttempt(eq(userUuid), eq(1), eq(null));
         verify(refreshSessionPort, never()).createSession(any(), anyString(), any(), any(), anyBoolean(), anyString(), any(OffsetDateTime.class));
-        verify(auditLogPort).log("login_failed", null, null, Map.of("rut", "12345678"));
-        verify(outboxService).enqueue("auth", null, "LoginFailed", null, Map.of("rut", "12345678"));
+        verify(auditLogPort).log("login_failed", null, null, Map.of("rut", "123456789"));
+        verify(outboxService).enqueue("auth", null, "LoginFailed", null, Map.of("rut", "123456789"));
     }
 
     @Test

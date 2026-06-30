@@ -67,6 +67,7 @@ const teacherMenu: MenuItem[] = [
 
 const directorMenu: MenuItem[] = [
   { label: "Panel", icon: LayoutDashboard, href: "#/director/dashboard", activeSections: ["director-dashboard"] },
+  { label: "Movimientos", icon: ClipboardList, href: "#/director/movimientos", activeSections: ["director-moves"] },
   { label: "Usuarios", icon: Users, href: "#/director/users/create", activeSections: ["director-users"] },
 ];
 
@@ -112,6 +113,7 @@ export type InventorySection =
   | "support"
   | "settings"
   | "director-dashboard"
+  | "director-moves"
   | "director-users";
 
 export type NavigationMode = "inventory" | "director";

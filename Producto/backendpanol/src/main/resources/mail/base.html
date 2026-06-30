@@ -1,34 +1,135 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<body th:fragment="layout(content)">
-<div style="margin:0;padding:24px;background-color:#f3f6fb;font-family:Arial,sans-serif;color:#10213a;">
-    <div style="display:none;max-height:0;overflow:hidden;opacity:0;" th:text="${previewText}">Notificacion Panol</div>
+<body style="margin:0;padding:0;background-color:#eef3fb;">
+<th:block th:fragment="layout(content)">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;" th:text="${previewText}">Notificacion Panol</div>
+
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
-           style="max-width:640px;margin:0 auto;background-color:#ffffff;border-radius:18px;border:1px solid #d7e2f2;">
+           style="width:100%;margin:0;padding:0;border-collapse:collapse;background-color:#eef3fb;">
         <tr>
-            <td style="padding:28px 32px;background:linear-gradient(135deg,#0f1d35 0%,#1d3f7a 100%);border-radius:18px 18px 0 0;color:#ffffff;">
-                <div style="font-size:13px;letter-spacing:1.2px;text-transform:uppercase;opacity:0.8;">Panol Salud</div>
-                <div style="margin-top:10px;font-size:28px;font-weight:700;" th:text="${title}">Notificacion</div>
-            </td>
-        </tr>
-        <tr>
-            <td style="padding:28px 32px 20px 32px;">
-                <th:block th:replace="${content}"></th:block>
-            </td>
-        </tr>
-        <tr th:if="${actionUrl != null}">
-            <td style="padding:0 32px 28px 32px;">
-                <a th:href="${actionUrl}"
-                   style="display:inline-block;padding:14px 22px;border-radius:12px;background-color:#2563eb;color:#ffffff;text-decoration:none;font-weight:700;"
-                   th:text="${actionLabel}">Ver detalle</a>
-            </td>
-        </tr>
-        <tr>
-            <td style="padding:0 32px 28px 32px;color:#5b6f8f;font-size:12px;">
-                Este correo fue generado automaticamente por Panol Salud.
+            <td align="center"
+                style="padding:24px 12px;background-color:#eef3fb;background-image:radial-gradient(circle at top right,#d8e6ff 0%,#eef3fb 42%,#f4f7fc 100%);">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                       style="width:100%;max-width:760px;border-collapse:separate;border-spacing:0;background-color:#ffffff;border:1px solid #dce6f5;border-radius:28px;overflow:hidden;box-shadow:0 24px 40px rgba(15,45,101,0.10);"
+                       th:attr="data-email-variant=${emailVariant}">
+                    <tr>
+                        <td style="padding:0;">
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                                   style="width:100%;border-collapse:separate;border-spacing:0;background-color:#0c2f75;background-image:linear-gradient(135deg,#0c2f75 0%,#001b50 62%,#0bb8d9 165%);">
+                                <tr>
+                                    <td style="padding:30px 36px 28px 36px;">
+                                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                                               style="width:100%;border-collapse:collapse;">
+                                            <tr>
+                                                <td align="left" style="vertical-align:top;">
+                                                    <table role="presentation" cellpadding="0" cellspacing="0" border="0"
+                                                           style="border-collapse:collapse;">
+                                                        <tr>
+                                                            <td width="52" height="52"
+                                                                style="width:52px;height:52px;border-radius:16px;background-color:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.20);font-family:'Poppins','Inter','Segoe UI',Arial,sans-serif;font-size:20px;font-weight:700;color:#ffffff;text-align:center;">
+                                                                PS
+                                                            </td>
+                                                            <td style="padding-left:12px;">
+                                                                <div style="font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#8ce2ff;">
+                                                                    Gestion operativa
+                                                                </div>
+                                                                <div style="margin-top:6px;font-family:'Poppins','Inter','Segoe UI',Arial,sans-serif;font-size:24px;line-height:1.1;font-weight:700;color:#ffffff;">
+                                                                    Panol Salud
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    </table>
+                                                </td>
+                                                <td align="right" style="vertical-align:top;">
+                                                    <span th:if="${statusLabel != null}"
+                                                          th:style="${badgeStyle}"
+                                                          th:text="${statusLabel}">Estado</span>
+                                                </td>
+                                            </tr>
+                                        </table>
+
+                                        <div th:if="${headerEyebrow != null}"
+                                             style="margin-top:22px;font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:0.10em;text-transform:uppercase;color:#8ce2ff;"
+                                             th:text="${headerEyebrow}">
+                                            Actualizacion automatica
+                                        </div>
+                                        <div style="margin-top:10px;font-family:'Poppins','Inter','Segoe UI',Arial,sans-serif;font-size:30px;line-height:1.15;font-weight:700;color:#ffffff;"
+                                             th:text="${title}">
+                                            Notificacion
+                                        </div>
+                                        <div th:if="${headerSubtitle != null}"
+                                             style="margin-top:12px;max-width:620px;font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:15px;line-height:1.7;color:#d7e8ff;"
+                                             th:text="${headerSubtitle}">
+                                            Resumen operativo del sistema.
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="height:4px;font-size:0;line-height:0;background-color:#0bb8d9;">&nbsp;</td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <tr th:if="${sectionTitle != null}">
+                        <td style="padding:28px 36px 0 36px;">
+                            <div style="font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#0b5b8f;">
+                                Resumen principal
+                            </div>
+                            <div style="margin-top:8px;font-family:'Poppins','Inter','Segoe UI',Arial,sans-serif;font-size:22px;line-height:1.25;font-weight:700;color:#132f65;"
+                                 th:text="${sectionTitle}">
+                                Resumen operativo
+                            </div>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td style="padding:20px 36px 0 36px;">
+                            <th:block th:replace="${content}"></th:block>
+                        </td>
+                    </tr>
+
+                    <tr th:if="${actionUrl != null}">
+                        <td style="padding:28px 36px 0 36px;">
+                            <a th:href="${actionUrl}"
+                               style="display:inline-block;padding:14px 22px;border-radius:12px;background-color:#001b50;background-image:linear-gradient(135deg,#001b50 0%,#0bb8d9 140%);font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;"
+                               th:text="${actionLabel}">
+                                Ver detalle
+                            </a>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td style="padding:28px 36px 32px 36px;">
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                                   style="width:100%;border-collapse:collapse;border-top:1px solid #dce6f5;">
+                                <tr>
+                                    <td style="padding-top:18px;font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:12px;line-height:1.7;color:#6b7ea3;">
+                                        Este correo transaccional fue generado automaticamente por Panol Salud para mantener trazabilidad entre inventario, prestamos y alertas.
+                                    </td>
+                                </tr>
+                                <tr th:if="${supportEmail != null}">
+                                    <td style="padding-top:8px;font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:12px;line-height:1.7;color:#6b7ea3;">
+                                        Canal transaccional:
+                                        <span style="font-weight:700;color:#132f65;" th:text="${supportEmail}">notificaciones@panol.cl</span>
+                                        <span th:if="${currentYear != null}"> · <span th:text="${currentYear}">2026</span></span>
+                                    </td>
+                                </tr>
+                                <tr th:if="${actionUrl != null}">
+                                    <td style="padding-top:10px;font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:12px;line-height:1.7;">
+                                        <a th:href="${actionUrl}"
+                                           style="color:#0c2f75;font-weight:700;text-decoration:none;">
+                                            Abrir en Panol Salud
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
             </td>
         </tr>
     </table>
-</div>
+</th:block>
 </body>
 </html>

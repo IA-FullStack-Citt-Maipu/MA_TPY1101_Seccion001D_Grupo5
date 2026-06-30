@@ -1,8 +1,8 @@
 ﻿# 00 - Matriz Canonica Vigente
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-06-28
-- Fuente de verdad: controllers V2, `SecurityConfig`, `application.yaml`, compose files, `ArchitectureTest`, `Producto/databasepanol/migrations/v25/V25..V47`,
+- Ultima verificacion: 2026-06-29
+- Fuente de verdad: controllers V2, `SecurityConfig`, `application.yaml`, compose files, `ArchitectureTest`, `Producto/databasepanol/migrations/v25/V25..V51`,
   `docs/architecture/data-management/03-postgresql-guia-tecnica.md`
 
 ## Rutas publicas vigentes

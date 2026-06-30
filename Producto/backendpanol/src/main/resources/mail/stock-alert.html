@@ -3,34 +3,84 @@
 <body>
 <th:block th:replace="~{base :: layout(~{::section})}">
     <section>
-        <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#334e68;" th:text="${message}">
-            Un implemento quedo bajo el stock minimo.
-        </p>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+               th:style="${statusTone == 'danger'} ? 'width:100%;border-collapse:separate;border-spacing:0;border-radius:18px;background-color:#fff4f6;border:1px solid #f0b4c0;' : 'width:100%;border-collapse:separate;border-spacing:0;border-radius:18px;background-color:#fff8e9;border:1px solid #f1d49a;'">
+            <tr>
+                <td style="padding:20px 22px;">
+                    <div style="font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:14px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;"
+                         th:style="${statusTone == 'danger'} ? 'color:#9f2940;' : 'color:#9f6503;'">
+                        Seguimiento de stock
+                    </div>
+                    <div style="margin-top:10px;font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:16px;line-height:1.7;color:#334e68;"
+                         th:text="${message}">
+                        Un implemento quedo bajo el stock minimo.
+                    </div>
+                </td>
+            </tr>
+        </table>
 
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
-               style="border-collapse:separate;border-spacing:0;background-color:#f8fbff;border:1px solid #d9e6f7;border-radius:14px;overflow:hidden;">
+               style="width:100%;margin-top:20px;border-collapse:collapse;">
             <tr>
-                <td style="padding:16px 18px;border-bottom:1px solid #d9e6f7;">
-                    <strong>Implemento</strong><br>
-                    <span th:text="${implement_name}">Implemento</span>
+                <td style="padding-right:8px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                           style="width:100%;border-collapse:separate;border-spacing:0;background-color:#ffffff;border:1px solid #dce6f5;border-radius:16px;">
+                        <tr>
+                            <td style="padding:16px 18px;">
+                                <div style="font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#6b7ea3;">Disponible</div>
+                                <div style="margin-top:8px;font-family:'Poppins','Inter','Segoe UI',Arial,sans-serif;font-size:24px;font-weight:700;color:#132f65;" th:text="${available}">0</div>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+                <td style="padding-left:8px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                           style="width:100%;border-collapse:separate;border-spacing:0;background-color:#ffffff;border:1px solid #dce6f5;border-radius:16px;">
+                        <tr>
+                            <td style="padding:16px 18px;">
+                                <div style="font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#6b7ea3;">Stock minimo</div>
+                                <div style="margin-top:8px;font-family:'Poppins','Inter','Segoe UI',Arial,sans-serif;font-size:24px;font-weight:700;color:#132f65;" th:text="${min_stock}">0</div>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+               style="width:100%;margin-top:20px;border-collapse:separate;border-spacing:0;background-color:#ffffff;border:1px solid #dce6f5;border-radius:18px;">
+            <tr>
+                <td style="padding:18px 20px;border-bottom:1px solid #dce6f5;font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#0b5b8f;">
+                    Detalle de la alerta
                 </td>
             </tr>
             <tr>
-                <td style="padding:16px 18px;border-bottom:1px solid #d9e6f7;">
-                    <strong>Estado de stock</strong><br>
-                    <span th:text="${stock_status}">low_stock</span>
-                </td>
-            </tr>
-            <tr>
-                <td style="padding:16px 18px;border-bottom:1px solid #d9e6f7;">
-                    <strong>Disponible</strong><br>
-                    <span th:text="${available}">0</span>
-                </td>
-            </tr>
-            <tr>
-                <td style="padding:16px 18px;">
-                    <strong>Stock minimo</strong><br>
-                    <span th:text="${min_stock}">0</span>
+                <td style="padding:0 20px 18px 20px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                           style="width:100%;border-collapse:collapse;">
+                        <tr>
+                            <td style="padding:16px 0;border-bottom:1px solid #edf2fb;vertical-align:top;">
+                                <div style="font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#6b7ea3;">Implemento</div>
+                                <div style="margin-top:6px;font-family:'Poppins','Inter','Segoe UI',Arial,sans-serif;font-size:16px;font-weight:700;color:#132f65;" th:text="${implement_name}">Implemento</div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding:16px 0;border-bottom:1px solid #edf2fb;vertical-align:top;">
+                                <div style="font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#6b7ea3;">Estado de stock</div>
+                                <div style="margin-top:6px;font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:15px;line-height:1.6;color:#132f65;" th:text="${statusLabel}">Stock bajo</div>
+                            </td>
+                        </tr>
+                        <tr th:if="${stockGap != null}">
+                            <td style="padding:16px 0 0 0;vertical-align:top;">
+                                <div style="font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#6b7ea3;">Brecha para normalizar</div>
+                                <div style="margin-top:6px;font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:15px;line-height:1.6;color:#132f65;">
+                                    Faltan
+                                    <span style="font-weight:700;" th:text="${stockGap}">0</span>
+                                    unidades para recuperar el minimo configurado.
+                                </div>
+                            </td>
+                        </tr>
+                    </table>
                 </td>
             </tr>
         </table>

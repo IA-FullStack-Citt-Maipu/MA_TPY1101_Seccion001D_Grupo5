@@ -1,7 +1,7 @@
 # Backend Docs
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-06-28
+- Ultima verificacion: 2026-06-29
 - Fuente de verdad: controllers V2, SecurityConfig, application.yaml
 
 ## Alcance
@@ -90,6 +90,8 @@ Base publica: `/api/v2/**`
 
 ### Stock y movimientos
 - `GET /api/v2/implements/movements`
+- `GET /api/v2/implements/movements/history`
+- `GET /api/v2/implements/movements/summary`
 - `POST /api/v2/implements/{implementUuid}/movements`
 - `GET /api/v2/implements/{implementUuid}/stock`
 - `POST /api/v2/implements/{implementUuid}/stock/entries`
@@ -109,6 +111,11 @@ Base publica: `/api/v2/**`
   - `individual_entries[]`
   - cada item puede traer `asset_code`, `status`, `condition`, `current_location_uuid`, `remaining_life` y `asset_code_reprint_required`
 
+Reglas de acceso vigentes:
+
+- `GET /api/v2/implements/movements`, `GET /api/v2/implements/movements/history` y `GET /api/v2/implements/movements/summary` permiten lectura a `COORDINADOR` y `DIRECTOR`.
+- `POST /api/v2/implements/{implementUuid}/movements` es solo para `COORDINADOR`.
+
 Valores canonicos de `movement_type`/`action`:
 - `STOCK_IN`
 - `STOCK_OUT`
@@ -116,6 +123,9 @@ Valores canonicos de `movement_type`/`action`:
 - `LOAN_RETURN`
 - `DAMAGE_REPORT`
 - `MANUAL_ADJUSTMENT`
+- `CONSUMPTION`
+- `DISCARD`
+- `LOSS`
 
 ## Flujo operativo actual de prestamos
 
@@ -147,7 +157,9 @@ Valores canonicos de `movement_type`/`action`:
 - Las transiciones se auditan en `loan_status_history`.
 - La auto-reserva inicial se registra con el usuario de sistema configurado para lifecycle/outbox.
 - Aunque el usuario no envie `notes`, el backend persiste una nota operativa por defecto para cada transicion relevante.
-- El solicitante no recibe notificacion cuando el prestamo entra en `approved`; las notificaciones visibles parten desde estados operativos posteriores.
+- El docente recibe correo de seguimiento tanto en `approved` como en cambios posteriores relevantes (`prepared`, `delivered`, `completed`, `rejected`, `cancelled`, `expired`, `overdue`).
+- En correo al docente, `approved` se comunica como reserva confirmada y `prepared` como implementos listos para retiro.
+- El director no recibe notificaciones de prestamo; solo alertas de stock.
 
 ## Seguridad vigente
 

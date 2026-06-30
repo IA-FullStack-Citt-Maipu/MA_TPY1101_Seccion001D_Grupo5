@@ -375,16 +375,22 @@ public class AuthService {
     }
 
     private String normalizeRut(String rutRaw) {
-        String compactRut = rutRaw == null ? "" : rutRaw.replaceAll("[.\\-\\s]", "").trim();
+        String compactRut = rutRaw == null ? "" : rutRaw.replaceAll("[.\\-\\s]", "").trim().toUpperCase();
         if (compactRut.length() < 2) {
             return "";
         }
 
-        String rutWithoutVerifier = compactRut.substring(0, compactRut.length() - 1);
-        if (rutWithoutVerifier.isBlank() || !rutWithoutVerifier.chars().allMatch(Character::isDigit)) {
+        if (!compactRut.chars().allMatch(ch -> Character.isDigit(ch) || ch == 'K')) {
             return "";
         }
-        return rutWithoutVerifier;
+
+        String body = compactRut.substring(0, compactRut.length() - 1);
+        char verifier = compactRut.charAt(compactRut.length() - 1);
+        if (!body.isBlank() && body.chars().allMatch(Character::isDigit) && (Character.isDigit(verifier) || verifier == 'K')) {
+            return compactRut;
+        }
+
+        return compactRut.chars().allMatch(Character::isDigit) ? compactRut : "";
     }
 
     private String normalizeEmail(String emailRaw) {

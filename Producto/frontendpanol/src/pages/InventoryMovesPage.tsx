@@ -20,30 +20,7 @@ import { Input } from "../components/ui/Input";
 import { Badge } from "../components/ui/Badge";
 import { HelpTooltip } from "../components/ui/HelpTooltip";
 import { Table } from "../components/ui/Table";
-
-const ACTION_LABELS: Record<string, string> = {
-  stock_in: "Ingreso de stock",
-  stock_out: "Salida de stock",
-  loan_delivery: "Entrega de prestamo",
-  loan_return: "Devolucion de prestamo",
-  damage_report: "Reporte de dano",
-  manual_adjustment: "Ajuste manual",
-  consumption: "Consumo",
-  discard: "Descarte",
-  loss: "Perdida",
-};
-
-const MANUAL_MOVEMENT_ACTION_OPTIONS: Array<{ value: ManualMovementType; label: string }> = [
-  { value: "stock_in", label: "Ingreso de stock" },
-  { value: "stock_out", label: "Salida de stock" },
-  { value: "loan_delivery", label: "Entrega de prestamo" },
-  { value: "loan_return", label: "Devolucion de prestamo" },
-  { value: "damage_report", label: "Reporte de dano" },
-  { value: "manual_adjustment", label: "Ajuste manual" },
-  { value: "consumption", label: "Consumo" },
-  { value: "discard", label: "Descarte" },
-  { value: "loss", label: "Perdida" },
-];
+import { getMovementActionLabel, getMovementBadgeTone, MOVEMENT_ACTION_OPTIONS } from "../utils/movementPresentation";
 
 const PAGE_SIZE = 10;
 
@@ -753,8 +730,8 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
                     <td>{implementInfo?.category?.name ?? "Sin categoria"}</td>
                     <td>{new Date(movement.timestamp).toLocaleString()}</td>
                     <td>
-                      <Badge tone={movement.action === "stock_in" ? "active" : movement.action === "manual_adjustment" ? "warn" : "inactive"}>
-                        {ACTION_LABELS[movement.action] ?? movement.action}
+                      <Badge tone={getMovementBadgeTone(movement.action)}>
+                        {getMovementActionLabel(movement.action)}
                       </Badge>
                     </td>
                     <td>{movement.quantity}</td>

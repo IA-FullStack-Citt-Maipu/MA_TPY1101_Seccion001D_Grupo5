@@ -1,7 +1,7 @@
 ﻿# Modulo: catalog/stock
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-05-17
+- Ultima verificacion: 2026-06-29
 - Fuente de verdad: `StockV2Controller`, `InventoryMovementV2Controller`, `BarcodeLabelV2Controller`
 
 ## Responsabilidad
@@ -15,6 +15,8 @@ Gestion de stock por implemento, movimientos de inventario y generacion de etiqu
 - `POST /api/v2/implements/{implementUuid}/stock/movements`
 - `PUT /api/v2/implements/{implementUuid}/stock/individuals/{individualUuid}`
 - `GET /api/v2/implements/movements`
+- `GET /api/v2/implements/movements/history`
+- `GET /api/v2/implements/movements/summary`
 - `POST /api/v2/implements/{implementUuid}/movements`
 - `GET /api/v2/implements/{implementUuid}/labels/pdf`
 
@@ -37,6 +39,22 @@ Gestion de stock por implemento, movimientos de inventario y generacion de etiqu
   - `asset_code_reprint_required`
 - Si `individual_entries` no viene, el backend conserva compatibilidad con `asset_codes` y los campos compartidos del request.
 
+### Lectura ejecutiva
+
+- `GET /api/v2/implements/movements/history`
+  - lectura paginada para `COORDINADOR` y `DIRECTOR`
+  - filtros vigentes: `page`, `size`, `search`, `action`, `from`, `to`
+  - devuelve contexto enriquecido del movimiento, implemento y actor
+- `GET /api/v2/implements/movements/summary`
+  - lectura agregada para `COORDINADOR` y `DIRECTOR`
+  - expone `total_movements`, `top_users` y `top_implements`
+
+### Operacion manual
+
+- `POST /api/v2/implements/{implementUuid}/movements`
+  - registra un movimiento manual
+  - solo disponible para `COORDINADOR`
+
 ## Fronteras
 
 - Colaboracion con `implement` via contratos cross-modulo.
@@ -53,3 +71,6 @@ Gestion de stock por implemento, movimientos de inventario y generacion de etiqu
   - `LOAN_RETURN`
   - `DAMAGE_REPORT`
   - `MANUAL_ADJUSTMENT`
+  - `CONSUMPTION`
+  - `DISCARD`
+  - `LOSS`

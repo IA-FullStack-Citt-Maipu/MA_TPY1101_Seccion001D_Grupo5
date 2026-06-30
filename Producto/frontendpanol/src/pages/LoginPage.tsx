@@ -3,21 +3,7 @@ import { useMemo, useState } from "react";
 import { getErrorMessage } from "../services/apiClient";
 import { login } from "../services/authService";
 import { getDefaultHashByRole } from "../utils/auth";
-
-const MAX_RUT_LENGTH = 9;
-
-export function cleanRut(value: string): string {
-  return value.replace(/\D/g, "").slice(0, MAX_RUT_LENGTH);
-}
-
-export function formatRut(value: string): string {
-  const cleaned = cleanRut(value);
-  if (!cleaned) return "";
-  const body = cleaned.slice(0, -1);
-  const verifier = cleaned.slice(-1);
-  const withDots = body.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-  return body.length > 0 ? `${withDots}-${verifier}` : verifier;
-}
+import { cleanRut, formatRut } from "../utils/rut";
 
 export function LoginPage() {
   const [rutRaw, setRutRaw] = useState("");
@@ -96,7 +82,7 @@ export function LoginPage() {
                 name="rut"
                 type="text"
                 autoComplete="username"
-                inputMode="numeric"
+                inputMode="text"
                 placeholder="22.307.980-1"
                 value={rutFormatted}
                 onChange={(event) => {

@@ -8,4 +8,6 @@ public interface InventoryMovementRepository {
     List<InventoryMovement> findTop10ByImplementUuidOrderByTimestampDesc(UUID implementUuid);
     List<InventoryMovement> findByOrderByTimestampDesc(int limit);
     List<InventoryMovement> findAllByOrderByTimestampDesc();
+    InventoryMovementHistoryPage findHistory(InventoryMovementHistoryFilter filter, int page, int size);
+    InventoryMovementDashboardSummary findDashboardSummary();
 }
