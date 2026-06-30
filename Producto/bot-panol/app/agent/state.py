@@ -7,5 +7,7 @@ from langgraph.graph.message import add_messages
 class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
     user_role: str
+    user_uuid: str
     conversation_id: str
+    query_intent: str
     tools_used: list[str]

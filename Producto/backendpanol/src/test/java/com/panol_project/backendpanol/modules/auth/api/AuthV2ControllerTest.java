@@ -20,6 +20,10 @@ import com.panol_project.backendpanol.modules.auth.application.dto.BotAccessToke
 import com.panol_project.backendpanol.modules.auth.application.dto.ChangeCurrentPasswordCommand;
 import com.panol_project.backendpanol.modules.auth.application.dto.CurrentUserSessionSummary;
 import com.panol_project.backendpanol.modules.auth.application.dto.LoginResult;
+import com.panol_project.backendpanol.modules.auth.application.dto.PasswordRecoveryRequestCommand;
+import com.panol_project.backendpanol.modules.auth.application.dto.PasswordRecoveryResetCommand;
+import com.panol_project.backendpanol.modules.auth.application.dto.PasswordRecoveryVerificationResult;
+import com.panol_project.backendpanol.modules.auth.application.dto.PasswordRecoveryVerifyCommand;
 import com.panol_project.backendpanol.modules.auth.application.dto.RefreshResult;
 import com.panol_project.backendpanol.modules.auth.application.dto.RevokeCurrentUserSessionResult;
 import com.panol_project.backendpanol.modules.auth.application.dto.UpdateCurrentEmailCommand;
@@ -117,6 +121,60 @@ class AuthV2ControllerTest {
     }
 
     @Test
+    void requestPasswordRecoveryDebeResponder202SinAutenticacion() throws Exception {
+        PasswordRecoveryRequestCommand command = new PasswordRecoveryRequestCommand("12345678K");
+
+        mockMvc.perform(post("/api/v2/auth/password-recovery/request")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "rut": "12345678K"
+                                }
+                                """))
+                .andExpect(status().isAccepted());
+
+        verify(authService).requestPasswordRecovery(eq(command));
+    }
+
+    @Test
+    void verifyPasswordRecoveryDebeRetornarResetToken() throws Exception {
+        PasswordRecoveryVerifyCommand command = new PasswordRecoveryVerifyCommand("12345678K", "AB12CD34");
+        when(authService.verifyPasswordRecoveryCode(eq(command)))
+                .thenReturn(new PasswordRecoveryVerificationResult("opaque-reset-token", 600));
+
+        mockMvc.perform(post("/api/v2/auth/password-recovery/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "rut": "12345678K",
+                                  "code": "AB12CD34"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reset_token").value("opaque-reset-token"))
+                .andExpect(jsonPath("$.expires_in_seconds").value(600));
+
+        verify(authService).verifyPasswordRecoveryCode(eq(command));
+    }
+
+    @Test
+    void resetPasswordRecoveryDebeRetornar204() throws Exception {
+        PasswordRecoveryResetCommand command = new PasswordRecoveryResetCommand("opaque-reset-token", "Nueva1234");
+
+        mockMvc.perform(post("/api/v2/auth/password-recovery/reset")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reset_token": "opaque-reset-token",
+                                  "new_password": "Nueva1234"
+                                }
+                                """))
+                .andExpect(status().isNoContent());
+
+        verify(authService).resetPasswordFromRecovery(eq(command));
+    }
+
+    @Test
     void logoutDebeExpirarCookiesYDelegarTokensCrudos() throws Exception {
         mockMvc.perform(post("/api/v2/auth/logout")
                         .cookie(
@@ -190,6 +248,7 @@ class AuthV2ControllerTest {
                         true,
                         "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
                         OffsetDateTime.parse("2026-06-13T15:00:00Z"),
+                        OffsetDateTime.parse("2026-06-13T16:00:00Z"),
                         OffsetDateTime.parse("2026-06-20T15:00:00Z")
                 )
         ));
@@ -201,7 +260,9 @@ class AuthV2ControllerTest {
                 .andExpect(jsonPath("$[0].id").value("41"))
                 .andExpect(jsonPath("$[0].current").value(true))
                 .andExpect(jsonPath("$[0].persistentLogin").value(true))
-                .andExpect(jsonPath("$[0].userAgent").value("Mozilla/5.0 (Windows NT 10.0; Win64; x64)"));
+                .andExpect(jsonPath("$[0].userAgent").value("Mozilla/5.0 (Windows NT 10.0; Win64; x64)"))
+                .andExpect(jsonPath("$[0].accessExpiresAt").value("2026-06-13T16:00:00Z"))
+                .andExpect(jsonPath("$[0].sessionExpiresAt").value("2026-06-20T15:00:00Z"));
 
         verify(authService).getCurrentUserSessions(userUuid, "refresh-cookie");
     }
@@ -325,7 +386,14 @@ class AuthV2ControllerTest {
             return http
                     .csrf(AbstractHttpConfigurer::disable)
                     .authorizeHttpRequests(auth -> auth
-                            .requestMatchers("/api/v2/auth/login", "/api/v2/auth/logout", "/api/v2/auth/refresh").permitAll()
+                            .requestMatchers(
+                                    "/api/v2/auth/login",
+                                    "/api/v2/auth/logout",
+                                    "/api/v2/auth/refresh",
+                                    "/api/v2/auth/password-recovery/request",
+                                    "/api/v2/auth/password-recovery/verify",
+                                    "/api/v2/auth/password-recovery/reset"
+                            ).permitAll()
                             .anyRequest().authenticated())
                     .exceptionHandling(ex -> ex
                             .authenticationEntryPoint(authenticationEntryPoint)

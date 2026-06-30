@@ -3,21 +3,9 @@ import { useMemo, useState } from "react";
 import { getErrorMessage } from "../services/apiClient";
 import { login } from "../services/authService";
 import { getDefaultHashByRole } from "../utils/auth";
+import { cleanRut, formatRut } from "../utils/rut";
 
-const MAX_RUT_LENGTH = 9;
-
-export function cleanRut(value: string): string {
-  return value.replace(/\D/g, "").slice(0, MAX_RUT_LENGTH);
-}
-
-export function formatRut(value: string): string {
-  const cleaned = cleanRut(value);
-  if (!cleaned) return "";
-  const body = cleaned.slice(0, -1);
-  const verifier = cleaned.slice(-1);
-  const withDots = body.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-  return body.length > 0 ? `${withDots}-${verifier}` : verifier;
-}
+const PASSWORD_RECOVERY_SUCCESS_STORAGE_KEY = "panol.passwordRecovery.success";
 
 export function LoginPage() {
   const [rutRaw, setRutRaw] = useState("");
@@ -28,6 +16,13 @@ export function LoginPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [rutError, setRutError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [successMessage] = useState(() => {
+    const stored = sessionStorage.getItem(PASSWORD_RECOVERY_SUCCESS_STORAGE_KEY);
+    if (stored) {
+      sessionStorage.removeItem(PASSWORD_RECOVERY_SUCCESS_STORAGE_KEY);
+    }
+    return stored;
+  });
 
   const rutClean = useMemo(() => cleanRut(rutRaw), [rutRaw]);
   const rutFormatted = useMemo(() => formatRut(rutRaw), [rutRaw]);
@@ -96,7 +91,7 @@ export function LoginPage() {
                 name="rut"
                 type="text"
                 autoComplete="username"
-                inputMode="numeric"
+                inputMode="text"
                 placeholder="22.307.980-1"
                 value={rutFormatted}
                 onChange={(event) => {
@@ -150,11 +145,12 @@ export function LoginPage() {
                 />
                 <span>Recordarme</span>
               </label>
-              <a href="#/login" className="login-form__link" onClick={(e) => e.preventDefault()}>
+              <a href="#/recuperar-contrasena" className="login-form__link">
                 ¿Olvidaste tu contraseña?
               </a>
             </div>
 
+            {successMessage ? <div className="success-banner">{successMessage}</div> : null}
             {formError ? <div className="error-banner">{formError}</div> : null}
 
             <button className="button login-form__submit" type="submit" disabled={submitting}>

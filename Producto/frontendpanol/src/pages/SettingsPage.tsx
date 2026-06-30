@@ -37,7 +37,10 @@ const sessionDateTimeFormatter = new Intl.DateTimeFormat("es-CL", {
   timeStyle: "short",
 });
 
-function formatSessionTimestamp(value: string): string {
+function formatSessionTimestamp(value: string | null | undefined): string {
+  if (!value || !value.trim()) {
+    return "Sin dato";
+  }
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
     return value;
@@ -135,7 +138,7 @@ export function SettingsPage({
   onThemeModeChange,
 }: SettingsPageProps) {
   const [profile, setProfile] = useState<SessionUserSummary | null>(sessionUser);
-  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [loadingProfile, setLoadingProfile] = useState(sessionUser == null);
   const [profileError, setProfileError] = useState<string | null>(null);
 
   const [emailDraft, setEmailDraft] = useState(sessionUser?.email ?? "");
@@ -157,6 +160,21 @@ export function SettingsPage({
   const [closingSessionId, setClosingSessionId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!sessionUser) {
+      return;
+    }
+
+    setProfile(sessionUser);
+    setEmailDraft(sessionUser.email ?? "");
+    setProfileError(null);
+    setLoadingProfile(false);
+  }, [sessionUser]);
+
+  useEffect(() => {
+    if (sessionUser) {
+      return;
+    }
+
     let cancelled = false;
     setLoadingProfile(true);
     setProfileError(null);
@@ -180,7 +198,7 @@ export function SettingsPage({
     return () => {
       cancelled = true;
     };
-  }, [onSessionUserChange]);
+  }, [onSessionUserChange, sessionUser]);
 
   useEffect(() => {
     let cancelled = false;
@@ -335,10 +353,6 @@ export function SettingsPage({
               <dt>Rol asignado</dt>
               <dd>{roleLabel}</dd>
             </div>
-            <div className="settings-summary-list__row">
-              <dt>ID de usuario</dt>
-              <dd className="settings-summary-list__mono">{profile?.id ?? sessionUser?.id ?? "-"}</dd>
-            </div>
           </dl>
         </article>
 
@@ -444,14 +458,13 @@ export function SettingsPage({
             </div>
             <div>
               <h2>Preferencias visuales</h2>
-              <p>Activa o desactiva el modo oscuro y guarda la preferencia localmente.</p>
+              <p>Activa o desactiva el modo oscuro.</p>
             </div>
           </div>
 
           <div className="settings-theme-row">
             <div className="settings-theme-copy">
               <strong>Modo oscuro</strong>
-              <span>La preferencia queda guardada en este navegador usando localStorage.</span>
             </div>
 
             <button
@@ -532,8 +545,8 @@ export function SettingsPage({
                           <strong>{formatSessionTimestamp(session.createdAt)}</strong>
                         </span>
                         <span>
-                          Expira
-                          <strong>{formatSessionTimestamp(session.expiresAt)}</strong>
+                          Sesion hasta
+                          <strong>{formatSessionTimestamp(session.sessionExpiresAt)}</strong>
                         </span>
                       </div>
                     </div>

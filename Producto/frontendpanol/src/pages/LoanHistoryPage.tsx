@@ -11,19 +11,22 @@ import {
   Search,
   Trash2,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LoanDetailModalFrame } from "../components/loans/LoanDetailModalFrame";
 import { PresencePollingModal } from "../components/ui/PresencePollingModal";
 import { useInactivityPollingGate } from "../hooks/useInactivityPollingGate";
 import { getErrorMessage } from "../services/apiClient";
 import { cancelLoan, fetchLoansPage } from "../services/loanService";
 import type { LoanSummary } from "../types/loan";
+import { buildLoanDetailHash, stripLoanDetailFromHash } from "../utils/loanDetailRouting";
+import { canRequesterCancelLoan } from "../utils/loanStatus";
+import { LoanDetailPage } from "./LoanDetailPage";
 
 const CLIENT_PAGE_SIZE = 4;
 const DELETE_CONFIRM_TEXT = "eliminar";
 
 type LoanStatusFilter =
   | "all"
-  | "pending"
   | "approved"
   | "prepared"
   | "delivered"
@@ -87,18 +90,14 @@ function formatKpiDate(value: string | null): string {
     .replace(".", "");
 }
 
-function buildLoanCode(uuid: string): string {
-  return `#PS-${uuid.slice(0, 6).toUpperCase()}`;
-}
-
 function normalizeStatusLabel(status: string): string {
   const labels: Record<string, string> = {
-    pending: "Pendiente",
-    approved: "Aprobado",
+    pending: "Reservado",
+    approved: "Reservado",
     prepared: "Preparado",
     delivered: "En uso",
     overdue: "Atrasado",
-    completed: "Completado",
+    completed: "Finalizado",
     cancelled: "Cancelado",
     rejected: "Rechazado",
     expired: "Expirado",
@@ -107,10 +106,7 @@ function normalizeStatusLabel(status: string): string {
 }
 
 function statusClassName(status: string): string {
-  if (status === "pending") {
-    return "teacher-loans-status teacher-loans-status--pending";
-  }
-  if (status === "approved") {
+  if (status === "pending" || status === "approved") {
     return "teacher-loans-status teacher-loans-status--approved";
   }
   if (status === "prepared") {
@@ -133,7 +129,6 @@ function statusClassName(status: string): string {
 
 function isActiveLoanStatus(status: string): boolean {
   return (
-    status === "pending" ||
     status === "approved" ||
     status === "prepared" ||
     status === "delivered" ||
@@ -143,10 +138,6 @@ function isActiveLoanStatus(status: string): boolean {
 
 function isPendingReturnStatus(status: string): boolean {
   return status === "delivered" || status === "overdue";
-}
-
-function canCancelLoan(status: string): boolean {
-  return status === "pending" || status === "approved" || status === "prepared";
 }
 
 function summarizeItems(items: LoanSummary["items"]): string {
@@ -161,11 +152,19 @@ function summarizeItems(items: LoanSummary["items"]): string {
   return items.length > 3 ? `${summary}, ...` : summary;
 }
 
-export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
+export function LoanHistoryPage({
+  embedded = false,
+  activeDetailLoanUuid = null,
+}: {
+  embedded?: boolean;
+  activeDetailLoanUuid?: string | null;
+}) {
   const [allLoans, setAllLoans] = useState<LoanSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [processingLoanUuid, setProcessingLoanUuid] = useState<string | null>(null);
+  const hasLoadedOnceRef = useRef(false);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<LoanStatusFilter>("all");
@@ -178,10 +177,15 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
   const [deleteConfirmationInput, setDeleteConfirmationInput] = useState("");
   const [deleteNotes, setDeleteNotes] = useState("");
 
-  const loadHistory = useCallback(async (showLoading = true) => {
-    if (showLoading) {
-      setLoading(true);
+  const loadHistory = useCallback(async (mode: "initial" | "refresh" = "initial") => {
+    const shouldShowInitialLoading = mode === "initial" && !hasLoadedOnceRef.current;
+
+    if (shouldShowInitialLoading) {
+      setInitialLoading(true);
+    } else {
+      setRefreshing(true);
     }
+
     setError(null);
     try {
       const firstPage = await fetchLoansPage({ page: 1, size: 50, mine: true });
@@ -201,15 +205,15 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
     } catch (requestError) {
       setError(getErrorMessage(requestError, "No se pudo cargar tu historial de prestamos."));
     } finally {
-      if (showLoading) {
-        setLoading(false);
-      }
+      hasLoadedOnceRef.current = true;
+      setInitialLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
   const { promptVisible, pollingPaused, countdownSeconds, resumePolling } = useInactivityPollingGate({
     onContinue: async () => {
-      await loadHistory(false);
+      await loadHistory("refresh");
     },
   });
 
@@ -217,7 +221,7 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
     let cancelled = false;
 
     async function bootstrap() {
-      await loadHistory(true);
+      await loadHistory("initial");
       if (cancelled) {
         return;
       }
@@ -236,7 +240,7 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
     }
 
     const intervalId = window.setInterval(() => {
-      void loadHistory(false);
+      void loadHistory("refresh");
     }, 180000);
 
     return () => window.clearInterval(intervalId);
@@ -275,8 +279,6 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
       }
 
       const searchableText = [
-        loan.uuid,
-        buildLoanCode(loan.uuid),
         loan.room?.name ?? "",
         loan.subject?.name ?? "",
         ...loan.items.map((item) => item.implement_name),
@@ -338,7 +340,11 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
   }
 
   function goToLoanDetail(loanUuid: string) {
-    window.location.assign(`#/inventory/prestamos/${loanUuid}`);
+    window.location.assign(buildLoanDetailHash(loanUuid, "list"));
+  }
+
+  function closeLoanDetail() {
+    window.location.replace(stripLoanDetailFromHash(window.location.hash));
   }
 
   function requestDeletion(loan: LoanSummary) {
@@ -373,6 +379,12 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
       setProcessingLoanUuid(null);
     }
   }
+
+  const handleDetailLoanChanged = useCallback((updatedLoan: LoanSummary) => {
+    setAllLoans((previous) =>
+      previous.map((loan) => (loan.uuid === updatedLoan.uuid ? updatedLoan : loan)),
+    );
+  }, []);
 
   const content = (
     <div className="teacher-loans-page">
@@ -416,7 +428,7 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
         </article>
       </section>
 
-      <section className="teacher-loans-card">
+      <section className="teacher-loans-card" aria-busy={refreshing}>
         <div className="teacher-loans-toolbar">
           <div className="teacher-loans-toolbar__filters">
             <label className="teacher-loans-toolbar__search">
@@ -442,12 +454,11 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
                 }}
               >
                 <option value="all">Todos</option>
-                <option value="pending">Pendiente</option>
-                <option value="approved">Aprobado</option>
+                <option value="approved">Reservado</option>
                 <option value="prepared">Preparado</option>
                 <option value="delivered">En uso</option>
                 <option value="overdue">Atrasado</option>
-                <option value="completed">Completado</option>
+                <option value="completed">Finalizado</option>
                 <option value="cancelled">Cancelado</option>
                 <option value="rejected">Rechazado</option>
                 <option value="expired">Expirado</option>
@@ -491,7 +502,6 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
           <table className="teacher-loans-table">
             <thead>
               <tr>
-                <th>ID / UUID</th>
                 <th>Fecha y hora</th>
                 <th>Sala / Lab</th>
                 <th>Resumen de implementos</th>
@@ -500,27 +510,21 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {initialLoading ? (
                 <tr>
-                  <td colSpan={6} className="teacher-loans-table__empty">
+                  <td colSpan={5} className="teacher-loans-table__empty">
                     Cargando historial de prestamos...
                   </td>
                 </tr>
               ) : pagedLoans.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="teacher-loans-table__empty">
+                  <td colSpan={5} className="teacher-loans-table__empty">
                     No hay prestamos que coincidan con los filtros seleccionados.
                   </td>
                 </tr>
               ) : (
                 pagedLoans.map((loan) => (
                   <tr key={loan.uuid}>
-                    <td>
-                      <div className="teacher-loans-id-cell">
-                        <strong>{buildLoanCode(loan.uuid)}</strong>
-                        <span>{loan.uuid}</span>
-                      </div>
-                    </td>
                     <td>{formatLoanDate(loan.scheduled_at)}</td>
                     <td>{loan.room?.name ?? "Sin sala"}</td>
                     <td className="teacher-loans-summary-cell">{summarizeItems(loan.items)}</td>
@@ -547,7 +551,7 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
                         >
                           <Download size={16} />
                         </button>
-                        {canCancelLoan(loan.status) ? (
+                        {canRequesterCancelLoan(loan.status) ? (
                           <button
                             type="button"
                             className="teacher-loans-icon-btn teacher-loans-icon-btn--danger"
@@ -620,8 +624,7 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
           <div className="modal teacher-loans-delete-modal">
             <h3>Eliminar prestamo</h3>
             <p>
-              Seguro que quieres eliminar la solicitud {buildLoanCode(loanToDelete.uuid)}? Escribe{" "}
-              <strong>"{DELETE_CONFIRM_TEXT}"</strong> para confirmar.
+              Seguro que quieres eliminar esta solicitud? Escribe <strong>"{DELETE_CONFIRM_TEXT}"</strong> para confirmar.
             </p>
             <label htmlFor="loan-delete-confirmation">Confirmacion</label>
             <input
@@ -655,6 +658,16 @@ export function LoanHistoryPage({ embedded = false }: { embedded?: boolean }) {
             </div>
           </div>
         </div>
+      ) : null}
+      {activeDetailLoanUuid ? (
+        <LoanDetailModalFrame onClose={closeLoanDetail}>
+          <LoanDetailPage
+            loanUuid={activeDetailLoanUuid}
+            embedded
+            hideBackNav
+            onLoanChanged={handleDetailLoanChanged}
+          />
+        </LoanDetailModalFrame>
       ) : null}
       <PresencePollingModal
         visible={promptVisible}

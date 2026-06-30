@@ -1,7 +1,7 @@
 # Frontend Docs
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-06-10
+- Ultima verificacion: 2026-06-30
 - Fuente de verdad: `src/pages/*`, `src/services/*`, controllers backend V2
 
 ## Objetivo
@@ -36,6 +36,11 @@ Frontend para gestion operativa de inventario consumiendo API v2 del backend.
   `Authorization: Bearer <token>` al bot.
 - La base del bot se configura con `VITE_BOT_API_BASE_URL`.
 - Si `VITE_BOT_API_BASE_URL` no existe, el cliente usa `VITE_API_BASE_URL` como fallback.
+- La respuesta del bot mantiene `response` como texto Markdown y puede incluir
+  `ui_blocks` opcional para renderizar listas compactas y metricas del asistente.
+- El frontend no debe mostrar UUIDs por defecto en el chat; si el backend
+  entrega un identificador tecnico permitido, debe presentarlo solo como dato
+  tecnico explicito y no como parte visual principal de las tarjetas.
 
 ### CRUD de categorias
 
@@ -63,6 +68,30 @@ Frontend para gestion operativa de inventario consumiendo API v2 del backend.
 - Si el usuario cierra su sesion actual desde Configuracion, el frontend limpia
   `auth_user` y redirige a `#/login`.
 
+### Recuperacion de contrasena
+
+- Rutas publicas:
+  - `#/recuperar-contrasena`
+  - `#/recuperar-contrasena/codigo`
+  - `#/recuperar-contrasena/nueva`
+- El flujo reutiliza el lenguaje visual del login mediante
+  `components/auth/PasswordRecoveryLayout.tsx`.
+- Paso 1:
+  - solicita RUT limpio completo con DV
+  - llama `POST /api/v2/auth/password-recovery/request`
+  - redirige a la pantalla de codigo sin enumerar cuentas existentes
+- Paso 2:
+  - valida un codigo de 8 caracteres en mayuscula
+  - permite reenviar codigo con cooldown visual
+  - guarda el `reset_token` temporal en `sessionStorage`
+- Paso 3:
+  - solicita nueva contrasena y confirmacion
+  - llama `POST /api/v2/auth/password-recovery/reset`
+  - al exito limpia el estado temporal y vuelve a `#/login` con banner
+    de confirmacion
+- Si el usuario intenta abrir `#/recuperar-contrasena/nueva` sin
+  `reset_token`, el frontend lo devuelve al paso inicial.
+
 ### Sesion web
 
 - El frontend ya no guarda JWT en `localStorage` ni `sessionStorage`.
@@ -71,8 +100,26 @@ Frontend para gestion operativa de inventario consumiendo API v2 del backend.
 - `utils/auth.ts` conserva solo `auth_user` como snapshot no sensible.
 - `services/apiClient.ts` usa `withCredentials: true` y hace refresh silencioso
   ante `401`.
+- El flujo de recuperacion usa `sessionStorage` solo para guardar el
+  `reset_token` opaco y el banner de exito post-reset; no guarda cookies ni JWT.
 - El token puente del bot no se persiste; si expira, el frontend pide uno nuevo
   al backend y reintenta la llamada al asistente una vez.
+- Login y administracion de usuarios trabajan con RUT limpio completo con DV;
+  en UI puede mostrarse formateado, pero al backend se envia compacto.
+
+### Area director
+
+- Rutas activas:
+  - `#/director/dashboard`
+  - `#/director/users/create`
+  - `#/director/movimientos`
+- La alerta de "movimientos registrados" en el dashboard del director redirige
+  a `#/director/movimientos`.
+- `DirectorMovementHistoryPage.tsx` usa una experiencia tipo master-detail:
+  - lista resumida y paginada
+  - panel de detalle al seleccionar fila
+  - drawer fullscreen en mobile
+- La vista evita scroll infinito y usa paginacion real de 15 filas por pagina.
 
 ### Implementos
 

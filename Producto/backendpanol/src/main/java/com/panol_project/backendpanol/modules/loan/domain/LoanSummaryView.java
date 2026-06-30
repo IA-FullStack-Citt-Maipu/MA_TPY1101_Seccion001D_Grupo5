@@ -11,6 +11,7 @@ public record LoanSummaryView(
         OffsetDateTime scheduledAt,
         OffsetDateTime expectedReturnAt,
         OffsetDateTime createdAt,
+        OffsetDateTime completedAt,
         RoomView room,
         SubjectView subject,
         List<ItemView> items
@@ -31,9 +32,31 @@ public record LoanSummaryView(
     public record ItemView(
             UUID implementUuid,
             String implementName,
+            String itemType,
             Integer requestedQuantity,
             Integer reservedQuantity,
-            Integer deliveredQuantity
+            Integer deliveredQuantity,
+            Integer returnedQuantity
     ) {
+        public ItemView(
+                UUID implementUuid,
+                String implementName,
+                Integer requestedQuantity,
+                Integer reservedQuantity,
+                Integer deliveredQuantity
+        ) {
+            this(implementUuid, implementName, null, requestedQuantity, reservedQuantity, deliveredQuantity, 0);
+        }
+
+        public ItemView(
+                UUID implementUuid,
+                String implementName,
+                Integer requestedQuantity,
+                Integer reservedQuantity,
+                Integer deliveredQuantity,
+                Integer returnedQuantity
+        ) {
+            this(implementUuid, implementName, null, requestedQuantity, reservedQuantity, deliveredQuantity, returnedQuantity);
+        }
     }
 }

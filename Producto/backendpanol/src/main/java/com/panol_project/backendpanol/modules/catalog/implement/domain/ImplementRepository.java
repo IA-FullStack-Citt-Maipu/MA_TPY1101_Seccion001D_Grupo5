@@ -1,6 +1,7 @@
 package com.panol_project.backendpanol.modules.catalog.implement.domain;
 
 import java.util.List;
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
@@ -32,7 +33,9 @@ public interface ImplementRepository {
             ImplementItemType itemType,
             String barcode,
             String imgUrl,
-            String observations
+            String observations,
+            String costCenter,
+            BigDecimal netValue
     );
 
     Implemento update(
@@ -44,7 +47,9 @@ public interface ImplementRepository {
             ImplementItemType itemType,
             String barcode,
             String imgUrl,
-            String observations
+            String observations,
+            String costCenter,
+            BigDecimal netValue
     );
 
     int updateActive(UUID uuid, boolean active);

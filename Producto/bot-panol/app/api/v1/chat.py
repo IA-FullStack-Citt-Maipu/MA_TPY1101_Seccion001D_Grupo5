@@ -1,4 +1,6 @@
-from typing import Literal
+import ast
+import json
+from typing import Any, Literal
 from uuid import uuid4
 
 from fastapi import APIRouter, Header
@@ -8,6 +10,8 @@ from pydantic import BaseModel, Field
 
 from app.agent.graph import get_graph
 from app.agent.nodes import LLMServiceUnavailableError, extract_text_content
+from app.agent.response_sanitizer import sanitize_response_text
+from app.agent.policy import evaluate_message_policy
 from app.agent.prompts import build_system_prompt
 from app.auth.jwt_auth import (
     TokenValidationError,
@@ -15,7 +19,7 @@ from app.auth.jwt_auth import (
     extract_role_from_claims,
     verify_and_decode_jwt,
 )
-from app.client.context import get_request_id, set_token
+from app.client.context import get_request_id, set_query_intent, set_token, set_user_role, set_user_uuid
 from app.config import settings
 from app.observability.logger import log_event
 
@@ -38,6 +42,7 @@ class ChatResponse(BaseModel):
     response: str
     conversation_id: str
     tools_used: list[str]
+    ui_blocks: list[dict[str, Any]] = Field(default_factory=list)
 
 
 def _unauthorized(detail: str) -> JSONResponse:
@@ -83,6 +88,59 @@ def _extract_executed_tools(messages: list[BaseMessage]) -> list[str]:
     return tools_used
 
 
+def _build_policy_source_text(payload: ChatRequest) -> str:
+    relevant_history = [item.content for item in payload.history[-5:] if item.role == "user"]
+    relevant_history.append(payload.message)
+    return " ".join(relevant_history)
+
+
+def _parse_tool_payload(message: ToolMessage) -> dict[str, Any] | None:
+    content = message.content
+    if isinstance(content, list):
+        content = extract_text_content(content)
+    if isinstance(content, dict):
+        return content
+    if not isinstance(content, str):
+        return None
+
+    for parser in (json.loads, ast.literal_eval):
+        try:
+            payload = parser(content)
+        except (ValueError, SyntaxError, json.JSONDecodeError):
+            continue
+        if isinstance(payload, dict):
+            return payload
+    return None
+
+
+def _collect_ui_blocks(messages: list[BaseMessage]) -> list[dict[str, Any]]:
+    ui_blocks: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    for message in messages:
+        if not isinstance(message, ToolMessage):
+            continue
+        payload = _parse_tool_payload(message)
+        if not isinstance(payload, dict):
+            continue
+        presentation = payload.get("presentation")
+        if not isinstance(presentation, dict):
+            continue
+        blocks = presentation.get("ui_blocks")
+        if not isinstance(blocks, list):
+            continue
+        for block in blocks:
+            if not isinstance(block, dict):
+                continue
+            serialized = json.dumps(block, sort_keys=True, ensure_ascii=True)
+            if serialized in seen:
+                continue
+            seen.add(serialized)
+            ui_blocks.append(block)
+
+    return ui_blocks
+
+
 @router.post("/chat", response_model=ChatResponse)
 def chat(payload: ChatRequest, authorization: str | None = Header(default=None)) -> ChatResponse | JSONResponse:
     request_id = get_request_id()
@@ -108,12 +166,34 @@ def chat(payload: ChatRequest, authorization: str | None = Header(default=None))
         return _forbidden("ROLE_NOT_ALLOWED")
 
     conversation_id = payload.conversation_id or str(uuid4())
+    user_uuid = str(claims.get("sub") or "").strip()
     set_token(token)
+    set_user_role(role)
+    set_user_uuid(user_uuid)
+
+    policy_decision = evaluate_message_policy(role, _build_policy_source_text(payload))
+    set_query_intent(policy_decision.intent)
+    if not policy_decision.allowed:
+        log_event(
+            "chat_policy_blocked",
+            request_id=request_id,
+            conversation_id=conversation_id,
+            user_role=role,
+            policy_code=policy_decision.code,
+        )
+        return ChatResponse(
+            response=policy_decision.message or "No puedo responder esa solicitud dentro del alcance permitido.",
+            conversation_id=conversation_id,
+            tools_used=[],
+            ui_blocks=[],
+        )
 
     initial_state = {
         "messages": _build_messages(role, payload),
         "user_role": role,
+        "user_uuid": user_uuid,
         "conversation_id": conversation_id,
+        "query_intent": policy_decision.intent,
         "tools_used": [],
     }
 
@@ -124,20 +204,23 @@ def chat(payload: ChatRequest, authorization: str | None = Header(default=None))
         user_role=role,
     )
     try:
-        graph = get_graph()
+        graph = get_graph(role)
         result = graph.invoke(
             initial_state,
             config={"recursion_limit": settings.MAX_ITERATIONS},
         )
         result_messages: list[BaseMessage] = result["messages"]
         last_message = result_messages[-1]
-        text = extract_text_content(last_message.content)
+        allow_identifiers = policy_decision.intent == "identifier_request" and role == "COORDINADOR"
+        text = sanitize_response_text(extract_text_content(last_message.content), allow_identifiers=allow_identifiers)
         tools_used = _extract_executed_tools(result_messages)
+        ui_blocks = _collect_ui_blocks(result_messages)
 
         response = ChatResponse(
             response=text,
             conversation_id=result.get("conversation_id", conversation_id),
             tools_used=tools_used,
+            ui_blocks=ui_blocks,
         )
         log_event(
             "chat_processing_completed",

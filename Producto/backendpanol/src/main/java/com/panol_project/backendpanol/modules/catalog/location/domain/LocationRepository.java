@@ -23,5 +23,9 @@ public interface LocationRepository {
 
     int updateActive(UUID uuid, boolean active);
 
-    int softDelete(UUID uuid);
+    int countImplementAssociationsByLocationUuid(UUID uuid);
+
+    int countIndividualAssociationsByLocationUuid(UUID uuid);
+
+    int deleteByUuid(UUID uuid);
 }

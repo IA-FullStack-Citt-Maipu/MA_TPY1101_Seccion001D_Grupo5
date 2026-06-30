@@ -5,6 +5,7 @@ import static com.panol_project.backendpanol.jooq.tables.Role.ROLE;
 import static com.panol_project.backendpanol.jooq.tables.User.USER;
 
 import com.panol_project.backendpanol.modules.auth.domain.AuthUser;
+import com.panol_project.backendpanol.modules.auth.domain.PasswordRecoveryRequestRecord;
 import com.panol_project.backendpanol.modules.auth.domain.TokenRevocationPort;
 import com.panol_project.backendpanol.modules.auth.domain.UserAuthPort;
 import java.time.OffsetDateTime;
@@ -12,6 +13,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jooq.DSLContext;
+import org.jooq.Record;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -69,6 +71,140 @@ public class AuthJooqRepository implements UserAuthPort, TokenRevocationPort {
                         record.get(USER.FAILED_LOGIN_ATTEMPTS) == null ? 0 : record.get(USER.FAILED_LOGIN_ATTEMPTS),
                         record.get(USER.BLOCKED_UNTIL)
                 ));
+    }
+
+    @Override
+    public Optional<PasswordRecoveryRequestRecord> findLatestPasswordRecoveryRequestByUserUuid(UUID userUuid) {
+        if (userUuid == null) {
+            return Optional.empty();
+        }
+
+        return dsl.resultQuery("""
+                        select
+                            prr.id,
+                            prr.code_hash,
+                            prr.reset_token_hash,
+                            prr.expires_at,
+                            prr.verified_at,
+                            prr.consumed_at,
+                            prr.last_sent_at,
+                            prr.attempt_count,
+                            prr.created_at,
+                            prr.updated_at,
+                            u.uuid as user_uuid,
+                            u.name as user_name,
+                            u.email as user_email,
+                            u.rut as user_rut,
+                            u.password_hash as user_password_hash
+                        from public.password_reset_request prr
+                        join public."user" u on u.id = prr.user_id
+                        where u.uuid = cast(? as uuid)
+                        order by prr.created_at desc, prr.id desc
+                        limit 1
+                        """, userUuid)
+                .fetchOptional(this::toPasswordRecoveryRequestRecord);
+    }
+
+    @Override
+    public Optional<PasswordRecoveryRequestRecord> findPasswordRecoveryRequestByResetTokenHash(String resetTokenHash) {
+        if (resetTokenHash == null || resetTokenHash.isBlank()) {
+            return Optional.empty();
+        }
+
+        return dsl.resultQuery("""
+                        select
+                            prr.id,
+                            prr.code_hash,
+                            prr.reset_token_hash,
+                            prr.expires_at,
+                            prr.verified_at,
+                            prr.consumed_at,
+                            prr.last_sent_at,
+                            prr.attempt_count,
+                            prr.created_at,
+                            prr.updated_at,
+                            u.uuid as user_uuid,
+                            u.name as user_name,
+                            u.email as user_email,
+                            u.rut as user_rut,
+                            u.password_hash as user_password_hash
+                        from public.password_reset_request prr
+                        join public."user" u on u.id = prr.user_id
+                        where prr.reset_token_hash = cast(? as text)
+                        order by prr.created_at desc, prr.id desc
+                        limit 1
+                        """, resetTokenHash)
+                .fetchOptional(this::toPasswordRecoveryRequestRecord);
+    }
+
+    @Override
+    public void invalidatePasswordRecoveryRequests(UUID userUuid, OffsetDateTime invalidatedAt) {
+        Long userId = findUserIdByUuid(userUuid);
+        if (userId == null || invalidatedAt == null) {
+            return;
+        }
+
+        dsl.execute("""
+                update public.password_reset_request
+                   set consumed_at = cast(? as timestamptz),
+                       updated_at = cast(? as timestamptz)
+                 where user_id = cast(? as bigint)
+                   and consumed_at is null
+                """, invalidatedAt, invalidatedAt, userId);
+    }
+
+    @Override
+    public void createPasswordRecoveryRequest(UUID userUuid, String codeHash, OffsetDateTime expiresAt, OffsetDateTime lastSentAt) {
+        Long userId = findUserIdByUuid(userUuid);
+        if (userId == null) {
+            throw new IllegalStateException("No existe user_id para password reset request");
+        }
+
+        dsl.execute("""
+                insert into public.password_reset_request (
+                    user_id,
+                    code_hash,
+                    expires_at,
+                    last_sent_at
+                )
+                values (
+                    cast(? as bigint),
+                    cast(? as text),
+                    cast(? as timestamptz),
+                    cast(? as timestamptz)
+                )
+                """, userId, codeHash, expiresAt, lastSentAt);
+    }
+
+    @Override
+    public void incrementPasswordRecoveryAttempt(long requestId, int nextAttemptCount, OffsetDateTime updatedAt) {
+        dsl.execute("""
+                update public.password_reset_request
+                   set attempt_count = cast(? as integer),
+                       updated_at = cast(? as timestamptz)
+                 where id = cast(? as bigint)
+                """, nextAttemptCount, updatedAt, requestId);
+    }
+
+    @Override
+    public void verifyPasswordRecoveryRequest(long requestId, String resetTokenHash, OffsetDateTime verifiedAt, OffsetDateTime updatedAt) {
+        dsl.execute("""
+                update public.password_reset_request
+                   set reset_token_hash = cast(? as text),
+                       verified_at = cast(? as timestamptz),
+                       updated_at = cast(? as timestamptz)
+                 where id = cast(? as bigint)
+                """, resetTokenHash, verifiedAt, updatedAt, requestId);
+    }
+
+    @Override
+    public void consumePasswordRecoveryRequest(long requestId, OffsetDateTime consumedAt) {
+        dsl.execute("""
+                update public.password_reset_request
+                   set consumed_at = cast(? as timestamptz),
+                       updated_at = cast(? as timestamptz)
+                 where id = cast(? as bigint)
+                """, consumedAt, consumedAt, requestId);
     }
 
     @Override
@@ -174,6 +310,26 @@ public class AuthJooqRepository implements UserAuthPort, TokenRevocationPort {
                 .from(USER)
                 .where(USER.UUID.eq(userUuid))
                 .fetchOne(USER.ID);
+    }
+
+    private PasswordRecoveryRequestRecord toPasswordRecoveryRequestRecord(Record record) {
+        return new PasswordRecoveryRequestRecord(
+                record.get("id", Long.class),
+                record.get("user_uuid", UUID.class),
+                record.get("user_name", String.class),
+                record.get("user_email", String.class),
+                record.get("user_rut", String.class),
+                record.get("user_password_hash", String.class),
+                record.get("code_hash", String.class),
+                record.get("reset_token_hash", String.class),
+                record.get("expires_at", OffsetDateTime.class),
+                record.get("verified_at", OffsetDateTime.class),
+                record.get("consumed_at", OffsetDateTime.class),
+                record.get("last_sent_at", OffsetDateTime.class),
+                record.get("attempt_count", Integer.class) == null ? 0 : record.get("attempt_count", Integer.class),
+                record.get("created_at", OffsetDateTime.class),
+                record.get("updated_at", OffsetDateTime.class)
+        );
     }
 
 }

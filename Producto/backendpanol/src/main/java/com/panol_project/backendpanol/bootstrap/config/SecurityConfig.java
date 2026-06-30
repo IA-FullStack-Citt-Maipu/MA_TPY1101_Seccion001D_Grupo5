@@ -1,6 +1,7 @@
 package com.panol_project.backendpanol.bootstrap.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.panol_project.backendpanol.modules.auth.infrastructure.BotTokenScopeValidator;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import com.panol_project.backendpanol.modules.auth.infrastructure.TokenRevocationValidator;
 import com.panol_project.backendpanol.shared.error.security.RestAccessDeniedHandler;
@@ -53,7 +54,14 @@ public class SecurityConfig {
                 .addFilterBefore(aiAgentRequestFilter, BearerTokenAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus").permitAll()
-                        .requestMatchers("/api/v2/auth/login", "/api/v2/auth/logout", "/api/v2/auth/refresh").permitAll()
+                        .requestMatchers(
+                                "/api/v2/auth/login",
+                                "/api/v2/auth/logout",
+                                "/api/v2/auth/refresh",
+                                "/api/v2/auth/password-recovery/request",
+                                "/api/v2/auth/password-recovery/verify",
+                                "/api/v2/auth/password-recovery/reset"
+                        ).permitAll()
                         .requestMatchers("/internal/**", "/api/v1/**").denyAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex
@@ -82,12 +90,17 @@ public class SecurityConfig {
     @Bean
     JwtDecoder jwtDecoder(
             @Value("${app.auth.jwt.secret}") String secret,
+            @Value("${app.auth.bot-token.audience:bot-panol}") String botTokenAudience,
             TokenRevocationValidator tokenRevocationValidator
     ) {
         SecretKeySpec key = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(key).build();
         OAuth2TokenValidator<Jwt> withDefaults = JwtValidators.createDefault();
-        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(withDefaults, tokenRevocationValidator));
+        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
+                withDefaults,
+                tokenRevocationValidator,
+                new BotTokenScopeValidator(botTokenAudience)
+        ));
         return decoder;
     }
 

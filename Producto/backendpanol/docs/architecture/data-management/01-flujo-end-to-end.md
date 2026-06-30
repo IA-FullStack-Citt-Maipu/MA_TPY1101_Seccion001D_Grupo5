@@ -1,8 +1,8 @@
 ﻿# 01 - Flujo End-to-End de Datos (Vigente)
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-05-31
-- Fuente de verdad: casos de uso V2 + `shared/outbox` + `Producto/databasepanol/migrations/v25/V25..V35` + `16-catalogo-bd-v31.md`
+- Ultima verificacion: 2026-06-30
+- Fuente de verdad: casos de uso V2 + `shared/outbox` + `Producto/databasepanol/migrations/v25/V25..V53` + `03-postgresql-guia-tecnica.md`
 
 ## Flujo operativo actual
 
@@ -13,6 +13,11 @@
 5. Si aplica integracion asincrona, se inserta evento en `outbox_event` en la misma transaccion.
 6. Commit: estado de negocio y outbox quedan consistentes.
 7. Worker procesa outbox con ciclo `PENDING -> PROCESSING -> SENT` o `FAILED`.
+
+Nota operativa de prestamos:
+
+- La solicitud nueva se persiste directamente en `approved` como reserva tecnica.
+- `pending` queda solo como compatibilidad legacy, no como estado normal del flujo V2.
 
 ## Regla de identidad
 

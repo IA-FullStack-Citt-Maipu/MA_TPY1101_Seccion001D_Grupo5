@@ -1,12 +1,14 @@
 package com.panol_project.backendpanol.modules.catalog.location.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.panol_project.backendpanol.modules.catalog.location.domain.LocationOption;
 import com.panol_project.backendpanol.modules.catalog.location.domain.LocationRepository;
+import com.panol_project.backendpanol.shared.error.BadRequestException;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -51,24 +53,28 @@ class LocationServiceTest {
     }
 
     @Test
-    void eliminarDebeAplicarSoftDeleteCuandoLaUbicacionEstaActiva() {
+    void eliminarDebeBorrarCuandoNoTieneAsociaciones() {
         UUID uuid = UUID.randomUUID();
         when(repository.findByUuid(uuid)).thenReturn(Optional.of(new LocationOption(uuid, "Lab 1", null, true)));
+        when(repository.countImplementAssociationsByLocationUuid(uuid)).thenReturn(0);
+        when(repository.countIndividualAssociationsByLocationUuid(uuid)).thenReturn(0);
 
         LocationService service = new LocationService(repository);
         service.eliminar(uuid);
 
-        verify(repository).softDelete(uuid);
+        verify(repository).deleteByUuid(uuid);
     }
 
     @Test
-    void eliminarNoDebeHacerNadaSiLaUbicacionYaEstaInactiva() {
+    void eliminarDebeFallarSiTieneAsociaciones() {
         UUID uuid = UUID.randomUUID();
         when(repository.findByUuid(uuid)).thenReturn(Optional.of(new LocationOption(uuid, "Lab 2", null, false)));
+        when(repository.countImplementAssociationsByLocationUuid(uuid)).thenReturn(1);
+        when(repository.countIndividualAssociationsByLocationUuid(uuid)).thenReturn(2);
 
         LocationService service = new LocationService(repository);
-        service.eliminar(uuid);
+        assertThrows(BadRequestException.class, () -> service.eliminar(uuid));
 
-        verify(repository, never()).softDelete(uuid);
+        verify(repository, never()).deleteByUuid(uuid);
     }
 }

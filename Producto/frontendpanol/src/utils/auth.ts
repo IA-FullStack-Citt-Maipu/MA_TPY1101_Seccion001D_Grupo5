@@ -12,6 +12,9 @@ export const AUTH_SESSION_CHANGED_EVENT = "panol:auth-session-changed";
 const ACCESS_TOKEN_KEY = "access_token";
 const LEGACY_TOKEN_KEY = "token";
 const AUTH_USER_KEY = "auth_user";
+const AUTH_USER_SYNC_AT_KEY = "auth_user_synced_at";
+
+export const SESSION_USER_CACHE_TTL_MS = 15 * 60 * 1000;
 
 function notifySessionChanged() {
   if (typeof window === "undefined") {
@@ -33,6 +36,16 @@ function removeLegacyTokenKeys() {
   localStorage.removeItem(LEGACY_TOKEN_KEY);
   sessionStorage.removeItem(ACCESS_TOKEN_KEY);
   sessionStorage.removeItem(LEGACY_TOKEN_KEY);
+}
+
+function persistSessionUserPayload(payload: string, persistInLocalStorage: boolean) {
+  const targetStorage = persistInLocalStorage ? localStorage : sessionStorage;
+  const fallbackStorage = persistInLocalStorage ? sessionStorage : localStorage;
+
+  targetStorage.setItem(AUTH_USER_KEY, payload);
+  targetStorage.setItem(AUTH_USER_SYNC_AT_KEY, String(Date.now()));
+  fallbackStorage.removeItem(AUTH_USER_KEY);
+  fallbackStorage.removeItem(AUTH_USER_SYNC_AT_KEY);
 }
 
 export function normalizeUserRole(roleRaw: string | null | undefined): UserRole {
@@ -67,13 +80,7 @@ function getStorageValue(key: string): string | null {
 
 export function setSessionUser(user: SessionUserSummary, rememberMe: boolean) {
   const payload = JSON.stringify(user);
-  if (rememberMe) {
-    localStorage.setItem(AUTH_USER_KEY, payload);
-    sessionStorage.removeItem(AUTH_USER_KEY);
-  } else {
-    sessionStorage.setItem(AUTH_USER_KEY, payload);
-    localStorage.removeItem(AUTH_USER_KEY);
-  }
+  persistSessionUserPayload(payload, rememberMe);
   removeLegacyTokenKeys();
   notifySessionChanged();
 }
@@ -102,20 +109,30 @@ export function getSessionUserRole(): UserRole {
 
 export function replaceSessionUser(user: SessionUserSummary) {
   const payload = JSON.stringify(user);
-  if (shouldPersistSessionInLocalStorage()) {
-    localStorage.setItem(AUTH_USER_KEY, payload);
-    sessionStorage.removeItem(AUTH_USER_KEY);
-  } else {
-    sessionStorage.setItem(AUTH_USER_KEY, payload);
-    localStorage.removeItem(AUTH_USER_KEY);
-  }
+  persistSessionUserPayload(payload, shouldPersistSessionInLocalStorage());
   removeLegacyTokenKeys();
   notifySessionChanged();
 }
 
+export function isSessionUserCacheFresh(maxAgeMs = SESSION_USER_CACHE_TTL_MS): boolean {
+  const raw = getStorageValue(AUTH_USER_SYNC_AT_KEY);
+  if (!raw) {
+    return false;
+  }
+
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return false;
+  }
+
+  return Date.now() - parsed <= maxAgeMs;
+}
+
 export function clearSession() {
   localStorage.removeItem(AUTH_USER_KEY);
+  localStorage.removeItem(AUTH_USER_SYNC_AT_KEY);
   sessionStorage.removeItem(AUTH_USER_KEY);
+  sessionStorage.removeItem(AUTH_USER_SYNC_AT_KEY);
   removeLegacyTokenKeys();
   notifySessionChanged();
 }

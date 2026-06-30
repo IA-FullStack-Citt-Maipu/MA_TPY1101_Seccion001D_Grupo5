@@ -8,16 +8,31 @@ import {
   Plus,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LoanDetailModalFrame } from "../components/loans/LoanDetailModalFrame";
 import { PresencePollingModal } from "../components/ui/PresencePollingModal";
 import { useInactivityPollingGate } from "../hooks/useInactivityPollingGate";
-import { LoanDetailPage } from "./LoanDetailPage";
 import { getErrorMessage } from "../services/apiClient";
-import { fetchLoansPage } from "../services/loanService";
+import { fetchAllLoansPages } from "../services/loanService";
 import type { LoanSummary } from "../types/loan";
 import { getSessionUserRole } from "../utils/auth";
+import {
+  buildLoanDetailHash,
+  replaceLoanDetailInHash,
+  stripLoanDetailFromHash,
+} from "../utils/loanDetailRouting";
+import { LoanDetailPage } from "./LoanDetailPage";
 
 const WEEKDAY_LABELS = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"] as const;
+const CALENDAR_PAGE_SIZE = 50;
+const MONTH_CACHE_TTL_MS = 180000;
+const INITIAL_CALENDAR_LOADER_MIN_MS = 450;
+
+type CalendarLoadMode = "initial" | "navigate" | "refresh";
+type CalendarMonthCacheEntry = {
+  items: LoanSummary[];
+  loadedAt: number;
+};
 
 function parseDate(value: string): Date | null {
   const date = new Date(value);
@@ -32,6 +47,34 @@ function toDateKey(date: Date): string {
   const month = `${date.getMonth() + 1}`.padStart(2, "0");
   const day = `${date.getDate()}`.padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function getMonthKey(date: Date): string {
+  return `${date.getFullYear()}-${`${date.getMonth() + 1}`.padStart(2, "0")}`;
+}
+
+function getMonthStart(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function shiftMonth(date: Date, delta: number): Date {
+  return new Date(date.getFullYear(), date.getMonth() + delta, 1);
+}
+
+function getMonthRange(date: Date): { from: string; to: string } {
+  const start = getMonthStart(date);
+  const nextMonthStart = shiftMonth(start, 1);
+  return {
+    from: start.toISOString(),
+    to: nextMonthStart.toISOString(),
+  };
+}
+
+function isMonthCacheFresh(entry: CalendarMonthCacheEntry | undefined): boolean {
+  if (!entry) {
+    return false;
+  }
+  return Date.now() - entry.loadedAt < MONTH_CACHE_TTL_MS;
 }
 
 function capitalizeLabel(value: string): string {
@@ -79,13 +122,19 @@ function formatDateTime(value: string): string {
     .replace(".", "");
 }
 
+function sortLoansByScheduledAt(left: LoanSummary, right: LoanSummary): number {
+  const leftDate = parseDate(left.scheduled_at)?.getTime() ?? 0;
+  const rightDate = parseDate(right.scheduled_at)?.getTime() ?? 0;
+  return leftDate - rightDate;
+}
+
 function normalizeStatus(status: LoanSummary["status"]): string {
   const labels: Record<LoanSummary["status"], string> = {
-    pending: "Pendiente",
-    approved: "Aprobado",
+    pending: "Reservado",
+    approved: "Reservado",
     prepared: "Preparado",
     delivered: "En uso",
-    completed: "Completado",
+    completed: "Finalizado",
     rejected: "Rechazado",
     cancelled: "Cancelado",
     expired: "Expirado",
@@ -95,8 +144,7 @@ function normalizeStatus(status: LoanSummary["status"]): string {
 }
 
 function statusChipClass(status: LoanSummary["status"]): string {
-  if (status === "pending") return "loan-calendar-chip loan-calendar-chip--pending";
-  if (status === "approved" || status === "prepared") return "loan-calendar-chip loan-calendar-chip--approved";
+  if (status === "pending" || status === "approved" || status === "prepared") return "loan-calendar-chip loan-calendar-chip--approved";
   if (status === "delivered") return "loan-calendar-chip loan-calendar-chip--delivered";
   if (status === "overdue") return "loan-calendar-chip loan-calendar-chip--danger";
   if (status === "cancelled" || status === "rejected" || status === "expired") return "loan-calendar-chip loan-calendar-chip--danger";
@@ -104,8 +152,7 @@ function statusChipClass(status: LoanSummary["status"]): string {
 }
 
 function statusBadgeClass(status: LoanSummary["status"]): string {
-  if (status === "pending") return "loan-calendar-status loan-calendar-status--pending";
-  if (status === "approved" || status === "prepared") return "loan-calendar-status loan-calendar-status--approved";
+  if (status === "pending" || status === "approved" || status === "prepared") return "loan-calendar-status loan-calendar-status--approved";
   if (status === "delivered") return "loan-calendar-status loan-calendar-status--delivered";
   if (status === "overdue") return "loan-calendar-status loan-calendar-status--danger";
   if (status === "cancelled" || status === "rejected" || status === "expired") return "loan-calendar-status loan-calendar-status--danger";
@@ -192,7 +239,6 @@ function LoanCalendarDayDrawer({
               </div>
               <strong>{loan.room?.name ?? "Sin sala"}</strong>
               <p>{loan.subject?.name ?? "Sin asignatura"}</p>
-              <p className="loan-calendar-loan-card__meta">{loan.requester_uuid}</p>
               <p className="loan-calendar-loan-card__items">
                 <Package2 size={14} />
                 {summarizeItems(loan)}
@@ -211,68 +257,250 @@ function LoanCalendarDayDrawer({
   );
 }
 
-export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
+function LoanCalendarInitialSkeleton({ mobile = false }: { mobile?: boolean }) {
+  return (
+    <section className="loan-calendar-layout loan-calendar-layout--loading" aria-hidden="true">
+      <article className="loan-calendar-card loan-calendar-card--loading">
+        <header className="loan-calendar-card__header">
+          <div className="loan-calendar-nav loan-calendar-nav--loading">
+            <div className="skeleton loan-calendar-skeleton__icon-btn" />
+            <div className="skeleton loan-calendar-skeleton__month-pill" />
+            <div className="skeleton loan-calendar-skeleton__icon-btn" />
+          </div>
+          <div className="loan-calendar-card__controls">
+            <div className="skeleton loan-calendar-skeleton__counter-pill" />
+          </div>
+        </header>
+
+        <div className="loan-calendar-grid loan-calendar-grid--weekday">
+          {WEEKDAY_LABELS.map((label) => (
+            <div key={label}>{label}</div>
+          ))}
+        </div>
+
+        <div className="loan-calendar-grid loan-calendar-grid--days">
+          {Array.from({ length: 42 }).map((_, index) => (
+            <div key={`calendar-skeleton-day-${index}`} className="loan-calendar-day loan-calendar-day--loading">
+              <div className="loan-calendar-day__top">
+                <span className="skeleton loan-calendar-skeleton__day-number" />
+                <small className="skeleton loan-calendar-skeleton__day-badge" />
+              </div>
+              <div className="loan-calendar-day__events">
+                <span className="skeleton loan-calendar-skeleton__chip" />
+                <span className="skeleton loan-calendar-skeleton__chip loan-calendar-skeleton__chip--alt" />
+                <span className="skeleton loan-calendar-skeleton__chip loan-calendar-skeleton__chip--sm" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </article>
+
+      {!mobile ? (
+        <aside className="loan-calendar-drawer loan-calendar-drawer--loading">
+          <header className="loan-calendar-drawer__header">
+            <div className="loan-calendar-skeleton__drawer-copy">
+              <div className="skeleton loan-calendar-skeleton__drawer-title" />
+              <div className="skeleton loan-calendar-skeleton__drawer-subtitle" />
+            </div>
+            <div className="skeleton loan-calendar-skeleton__icon-btn" />
+          </header>
+
+          <div className="loan-calendar-drawer__list">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div key={`calendar-skeleton-loan-${index}`} className="loan-calendar-loan-card">
+                <div className="loan-calendar-loan-card__head">
+                  <span className="skeleton loan-calendar-skeleton__status" />
+                  <span className="skeleton loan-calendar-skeleton__time" />
+                </div>
+                <div className="skeleton loan-calendar-skeleton__line loan-calendar-skeleton__line--md" />
+                <div className="skeleton loan-calendar-skeleton__line loan-calendar-skeleton__line--sm" />
+                <div className="skeleton loan-calendar-skeleton__line loan-calendar-skeleton__line--lg" />
+              </div>
+            ))}
+          </div>
+        </aside>
+      ) : null}
+    </section>
+  );
+}
+
+function LoanCalendarSummarySkeleton() {
+  return (
+    <section className="loan-calendar-summary loan-calendar-summary--loading" aria-hidden="true">
+      <div className="loan-calendar-summary__metrics">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <article key={`calendar-skeleton-metric-${index}`} className="loan-calendar-summary__metric">
+            <span className="loan-calendar-summary__dot" />
+            <div className="loan-calendar-summary__copy">
+              <div className="skeleton loan-calendar-skeleton__metric-value" />
+              <div className="skeleton loan-calendar-skeleton__metric-label" />
+            </div>
+          </article>
+        ))}
+      </div>
+      <div className="loan-calendar-summary__total">
+        <div className="skeleton loan-calendar-skeleton__metric-value" />
+        <div className="skeleton loan-calendar-skeleton__metric-label" />
+      </div>
+    </section>
+  );
+}
+
+export function LoanCalendarPage({
+  embedded = false,
+  activeDetailLoanUuid = null,
+}: {
+  embedded?: boolean;
+  activeDetailLoanUuid?: string | null;
+}) {
   const currentRole = getSessionUserRole();
-  const canCreateLoan = currentRole === "DOCENTE";
+  const isCoordinator = currentRole === "COORDINADOR";
+  const canCreateLoan = currentRole === "DOCENTE" || isCoordinator;
   const todayKey = useMemo(() => toDateKey(new Date()), []);
   const [monthAnchor, setMonthAnchor] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(todayKey);
-  const [allLoans, setAllLoans] = useState<LoanSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [monthLoanCache, setMonthLoanCache] = useState<Map<string, CalendarMonthCacheEntry>>(
+    () => new Map(),
+  );
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isMobileCalendar, setIsMobileCalendar] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth <= 820 : false,
   );
   const [isMobileDayDrawerOpen, setIsMobileDayDrawerOpen] = useState(false);
-  const [activeDetailLoanUuid, setActiveDetailLoanUuid] = useState<string | null>(null);
+  const hasLoadedOnceRef = useRef(false);
+  const monthLoanCacheRef = useRef<Map<string, CalendarMonthCacheEntry>>(new Map());
+  const inFlightMonthRequestsRef = useRef<Map<string, Promise<LoanSummary[]>>>(new Map());
+  const visibleLoadTokenRef = useRef(0);
 
-  const loadLoans = useCallback(async (showLoading = true) => {
-    if (showLoading) {
-      setLoading(true);
-    }
-    setError(null);
-    try {
+  const requestMonthLoans = useCallback(
+    async (targetMonth: Date, options: { force?: boolean } = {}): Promise<LoanSummary[]> => {
+      const normalizedMonth = getMonthStart(targetMonth);
+      const monthKey = getMonthKey(normalizedMonth);
+      const cachedEntry = monthLoanCacheRef.current.get(monthKey);
+      if (!options.force && isMonthCacheFresh(cachedEntry)) {
+        return cachedEntry?.items ?? [];
+      }
+
+      const inFlightRequest = inFlightMonthRequestsRef.current.get(monthKey);
+      if (inFlightRequest) {
+        return inFlightRequest;
+      }
+
       const mine = currentRole === "DOCENTE";
-      const firstPage = await fetchLoansPage({ page: 1, size: 50, mine });
-      const merged = [...firstPage.items];
-      for (let page = 2; page <= firstPage.total_pages; page += 1) {
-        const nextPage = await fetchLoansPage({ page, size: firstPage.size, mine });
-        merged.push(...nextPage.items);
+      const { from, to } = getMonthRange(normalizedMonth);
+      const request = fetchAllLoansPages({
+        page: 1,
+        size: CALENDAR_PAGE_SIZE,
+        mine,
+        from,
+        to,
+      })
+        .then((items) => {
+          const sortedItems = [...items].sort(sortLoansByScheduledAt);
+          setMonthLoanCache((current) => {
+            const next = new Map(current);
+            next.set(monthKey, {
+              items: sortedItems,
+              loadedAt: Date.now(),
+            });
+            monthLoanCacheRef.current = next;
+            return next;
+          });
+          return sortedItems;
+        })
+        .finally(() => {
+          inFlightMonthRequestsRef.current.delete(monthKey);
+        });
+
+      inFlightMonthRequestsRef.current.set(monthKey, request);
+      return request;
+    },
+    [currentRole],
+  );
+
+  const prefetchAdjacentMonths = useCallback(
+    async (targetMonth: Date) => {
+      await Promise.allSettled([
+        requestMonthLoans(shiftMonth(targetMonth, -1)),
+        requestMonthLoans(shiftMonth(targetMonth, 1)),
+      ]);
+    },
+    [requestMonthLoans],
+  );
+
+  const loadVisibleMonth = useCallback(
+    async (mode: CalendarLoadMode = "initial") => {
+      const normalizedMonth = getMonthStart(monthAnchor);
+      const monthKey = getMonthKey(normalizedMonth);
+      const cachedEntry = monthLoanCacheRef.current.get(monthKey);
+      const shouldFetchVisibleMonth =
+        mode === "refresh" || !cachedEntry || !isMonthCacheFresh(cachedEntry);
+      const shouldShowInitialLoading =
+        mode === "initial" && !hasLoadedOnceRef.current && !cachedEntry;
+      const loadToken = ++visibleLoadTokenRef.current;
+      const loadingStartedAt = shouldShowInitialLoading ? Date.now() : null;
+
+      if (shouldShowInitialLoading) {
+        setInitialLoading(true);
+      } else if (shouldFetchVisibleMonth) {
+        setRefreshing(true);
       }
-      setAllLoans(merged);
-    } catch (requestError) {
-      setError(getErrorMessage(requestError, "No se pudo cargar la agenda de prestamos."));
-    } finally {
-      if (showLoading) {
-        setLoading(false);
+
+      setError(null);
+
+      try {
+        if (shouldFetchVisibleMonth) {
+          await requestMonthLoans(normalizedMonth, { force: mode === "refresh" });
+        }
+
+        if (visibleLoadTokenRef.current !== loadToken) {
+          return;
+        }
+
+        hasLoadedOnceRef.current = true;
+        void prefetchAdjacentMonths(normalizedMonth);
+      } catch (requestError) {
+        if (visibleLoadTokenRef.current !== loadToken) {
+          return;
+        }
+        setError(getErrorMessage(requestError, "No se pudo cargar la agenda de prestamos."));
+      } finally {
+        if (visibleLoadTokenRef.current !== loadToken) {
+          return;
+        }
+
+        if (loadingStartedAt != null) {
+          const elapsed = Date.now() - loadingStartedAt;
+          const remaining = INITIAL_CALENDAR_LOADER_MIN_MS - elapsed;
+          if (remaining > 0) {
+            await new Promise((resolve) => window.setTimeout(resolve, remaining));
+          }
+          if (visibleLoadTokenRef.current !== loadToken) {
+            return;
+          }
+        }
+
+        setInitialLoading(false);
+        setRefreshing(false);
       }
-    }
-  }, [currentRole]);
+    },
+    [monthAnchor, prefetchAdjacentMonths, requestMonthLoans],
+  );
 
   const { promptVisible, pollingPaused, countdownSeconds, resumePolling } = useInactivityPollingGate({
     onContinue: async () => {
-      await loadLoans(false);
+      await loadVisibleMonth("refresh");
     },
   });
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function bootstrap() {
-      await loadLoans(true);
-      if (cancelled) {
-        return;
-      }
-    }
-
-    void bootstrap();
-    return () => {
-      cancelled = true;
-    };
-  }, [loadLoans]);
+    void loadVisibleMonth(hasLoadedOnceRef.current ? "navigate" : "initial");
+  }, [loadVisibleMonth]);
 
   useEffect(() => {
     if (pollingPaused) {
@@ -280,15 +508,19 @@ export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
     }
 
     const intervalId = window.setInterval(() => {
-      void loadLoans(false);
+      void loadVisibleMonth("refresh");
     }, 180000);
 
     return () => window.clearInterval(intervalId);
-  }, [loadLoans, pollingPaused]);
+  }, [loadVisibleMonth, pollingPaused]);
 
   useEffect(() => {
     function handleResize() {
-      setIsMobileCalendar(window.innerWidth <= 820);
+      const nextIsMobile = window.innerWidth <= 820;
+      setIsMobileCalendar(nextIsMobile);
+      if (!nextIsMobile) {
+        setIsMobileDayDrawerOpen(false);
+      }
     }
 
     handleResize();
@@ -297,14 +529,7 @@ export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
   }, []);
 
   useEffect(() => {
-    if (!isMobileCalendar) {
-      setIsMobileDayDrawerOpen(false);
-    }
-  }, [isMobileCalendar]);
-
-  useEffect(() => {
-    const hasOverlayOpen = Boolean(activeDetailLoanUuid) || (isMobileCalendar && isMobileDayDrawerOpen);
-    if (!hasOverlayOpen) {
+    if (!isMobileCalendar || !isMobileDayDrawerOpen) {
       return;
     }
 
@@ -312,13 +537,7 @@ export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
 
     function handleEscape(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        if (activeDetailLoanUuid) {
-          setActiveDetailLoanUuid(null);
-          return;
-        }
-        if (isMobileCalendar && isMobileDayDrawerOpen) {
-          setIsMobileDayDrawerOpen(false);
-        }
+        setIsMobileDayDrawerOpen(false);
       }
     }
 
@@ -327,22 +546,30 @@ export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
       document.body.classList.remove("modal-open");
       window.removeEventListener("keydown", handleEscape);
     };
-  }, [activeDetailLoanUuid, isMobileCalendar, isMobileDayDrawerOpen]);
+  }, [isMobileCalendar, isMobileDayDrawerOpen]);
 
   const monthGrid = useMemo(() => getMonthGrid(monthAnchor), [monthAnchor]);
-  const monthKey = useMemo(() => `${monthAnchor.getFullYear()}-${monthAnchor.getMonth()}`, [monthAnchor]);
+  const monthKey = useMemo(() => getMonthKey(monthAnchor), [monthAnchor]);
 
-  const visibleMonthLoans = useMemo(() => {
-    return allLoans.filter((loan) => {
-      const schedule = parseDate(loan.scheduled_at);
-      if (!schedule) return false;
-      return schedule.getFullYear() === monthAnchor.getFullYear() && schedule.getMonth() === monthAnchor.getMonth();
-    });
-  }, [allLoans, monthAnchor]);
+  const visibleMonthLoans = useMemo(
+    () => monthLoanCache.get(monthKey)?.items ?? [],
+    [monthKey, monthLoanCache],
+  );
+
+  const calendarWindowLoans = useMemo(() => {
+    const monthKeys = [
+      getMonthKey(shiftMonth(monthAnchor, -1)),
+      monthKey,
+      getMonthKey(shiftMonth(monthAnchor, 1)),
+    ];
+    return monthKeys
+      .flatMap((key) => monthLoanCache.get(key)?.items ?? [])
+      .sort(sortLoansByScheduledAt);
+  }, [monthAnchor, monthKey, monthLoanCache]);
 
   const loansByDay = useMemo(() => {
     const map = new Map<string, LoanSummary[]>();
-    allLoans.forEach((loan) => {
+    calendarWindowLoans.forEach((loan) => {
       const schedule = parseDate(loan.scheduled_at);
       if (!schedule) return;
       const key = toDateKey(schedule);
@@ -358,12 +585,24 @@ export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
       });
     });
     return map;
-  }, [allLoans]);
+  }, [calendarWindowLoans]);
+
+  const detailSelectedDateKey = useMemo(() => {
+    if (!activeDetailLoanUuid) {
+      return null;
+    }
+
+    const activeLoan = calendarWindowLoans.find((loan) => loan.uuid === activeDetailLoanUuid);
+    const scheduledDate = activeLoan ? parseDate(activeLoan.scheduled_at) : null;
+    return scheduledDate ? toDateKey(scheduledDate) : null;
+  }, [activeDetailLoanUuid, calendarWindowLoans]);
+
+  const effectiveSelectedDateKey = detailSelectedDateKey ?? selectedDateKey;
 
   const selectedDayLoans = useMemo(() => {
-    if (!selectedDateKey) return [];
-    return loansByDay.get(selectedDateKey) ?? [];
-  }, [loansByDay, selectedDateKey]);
+    if (!effectiveSelectedDateKey) return [];
+    return loansByDay.get(effectiveSelectedDateKey) ?? [];
+  }, [effectiveSelectedDateKey, loansByDay]);
 
   const activeDetailLoanIndex = useMemo(
     () => selectedDayLoans.findIndex((loan) => loan.uuid === activeDetailLoanUuid),
@@ -375,9 +614,9 @@ export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
     activeDetailLoanIndex >= 0 && activeDetailLoanIndex < selectedDayLoans.length - 1;
 
   const selectedDateLabel = useMemo(() => {
-    if (!selectedDateKey) return "Selecciona un dia";
-    const parsed = parseDate(`${selectedDateKey}T00:00:00`);
-    if (!parsed) return selectedDateKey;
+    if (!effectiveSelectedDateKey) return "Selecciona un dia";
+    const parsed = parseDate(`${effectiveSelectedDateKey}T00:00:00`);
+    if (!parsed) return effectiveSelectedDateKey;
     return capitalizeLabel(
       new Intl.DateTimeFormat("es-CL", {
         weekday: "long",
@@ -386,7 +625,7 @@ export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
         year: "numeric",
       }).format(parsed),
     );
-  }, [selectedDateKey]);
+  }, [effectiveSelectedDateKey]);
 
   const summaryMetrics = useMemo(() => {
     const counts = {
@@ -415,7 +654,7 @@ export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
     });
 
     return [
-      { key: "approved", label: "Aprobadas", value: counts.approved },
+      { key: "approved", label: "Reservadas", value: counts.approved },
       { key: "completed", label: "Completadas", value: counts.completed },
       { key: "cancelled", label: "Canceladas", value: counts.cancelled },
       { key: "rejected", label: "Rechazadas", value: counts.rejected },
@@ -423,23 +662,34 @@ export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
   }, [visibleMonthLoans]);
 
   const newLoanHref = useMemo(() => {
-    const selectedDate = selectedDateKey ?? todayKey;
+    const selectedDate = effectiveSelectedDateKey ?? todayKey;
     return `#/inventory/prestamos/nuevo?date=${selectedDate}`;
-  }, [selectedDateKey, todayKey]);
+  }, [effectiveSelectedDateKey, todayKey]);
 
   useEffect(() => {
     if (!activeDetailLoanUuid) {
       return;
     }
+    if (initialLoading || !hasLoadedOnceRef.current) {
+      return;
+    }
+    if (error && calendarWindowLoans.length === 0) {
+      return;
+    }
     if (selectedDayLoans.length === 0) {
-      setActiveDetailLoanUuid(null);
+      window.location.replace(stripLoanDetailFromHash(window.location.hash));
       return;
     }
     const stillExists = selectedDayLoans.some((loan) => loan.uuid === activeDetailLoanUuid);
     if (!stillExists) {
-      setActiveDetailLoanUuid(selectedDayLoans[0]?.uuid ?? null);
+      const fallbackLoanUuid = selectedDayLoans[0]?.uuid;
+      if (fallbackLoanUuid) {
+        window.location.replace(replaceLoanDetailInHash(window.location.hash, fallbackLoanUuid));
+      } else {
+        window.location.replace(stripLoanDetailFromHash(window.location.hash));
+      }
     }
-  }, [activeDetailLoanUuid, selectedDayLoans]);
+  }, [activeDetailLoanUuid, calendarWindowLoans.length, error, initialLoading, selectedDayLoans]);
 
   function goToPreviousMonth() {
     setMonthAnchor((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1));
@@ -457,31 +707,63 @@ export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
   }
 
   function handleOpenLoanDetail(loanUuid: string) {
-    setActiveDetailLoanUuid(loanUuid);
+    if (isMobileCalendar) {
+      setIsMobileDayDrawerOpen(false);
+    }
+    window.location.assign(buildLoanDetailHash(loanUuid, "calendar"));
   }
 
   function handleCloseLoanDetail() {
-    setActiveDetailLoanUuid(null);
+    window.location.replace(stripLoanDetailFromHash(window.location.hash));
   }
 
   function showPreviousDetailLoan() {
     if (!hasPreviousDetailLoan) {
       return;
     }
-    setActiveDetailLoanUuid(selectedDayLoans[activeDetailLoanIndex - 1]?.uuid ?? null);
+    const previousLoanUuid = selectedDayLoans[activeDetailLoanIndex - 1]?.uuid;
+    if (previousLoanUuid) {
+      window.location.replace(replaceLoanDetailInHash(window.location.hash, previousLoanUuid));
+    }
   }
 
   function showNextDetailLoan() {
     if (!hasNextDetailLoan) {
       return;
     }
-    setActiveDetailLoanUuid(selectedDayLoans[activeDetailLoanIndex + 1]?.uuid ?? null);
+    const nextLoanUuid = selectedDayLoans[activeDetailLoanIndex + 1]?.uuid;
+    if (nextLoanUuid) {
+      window.location.replace(replaceLoanDetailInHash(window.location.hash, nextLoanUuid));
+    }
   }
 
   const handleDetailLoanChanged = useCallback((updatedLoan: LoanSummary) => {
-    setAllLoans((current) =>
-      current.map((loan) => (loan.uuid === updatedLoan.uuid ? updatedLoan : loan)),
-    );
+    const scheduledDate = parseDate(updatedLoan.scheduled_at);
+    if (!scheduledDate) {
+      return;
+    }
+
+    const targetMonthKey = getMonthKey(scheduledDate);
+    setMonthLoanCache((current) => {
+      const next = new Map<string, CalendarMonthCacheEntry>();
+      current.forEach((entry, key) => {
+        next.set(key, {
+          items: entry.items.filter((loan) => loan.uuid !== updatedLoan.uuid),
+          loadedAt: entry.loadedAt,
+        });
+      });
+
+      const targetEntry = next.get(targetMonthKey);
+      if (targetEntry) {
+        next.set(targetMonthKey, {
+          items: [...targetEntry.items, updatedLoan].sort(sortLoansByScheduledAt),
+          loadedAt: Date.now(),
+        });
+      }
+
+      monthLoanCacheRef.current = next;
+      return next;
+    });
   }, []);
 
   const content = (
@@ -489,13 +771,13 @@ export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
       <div className="loan-calendar-page">
         <section className="loan-calendar-header">
           <div className="loan-calendar-header__copy">
-            <h1>Agenda de Prestamos</h1>
-            <p>
-              {canCreateLoan
-                ? "Calendario de tus solicitudes y devoluciones programadas."
-                : "Vista operacional del calendario de solicitudes y entregas programadas."}
-            </p>
-          </div>
+              <h1>Agenda de Prestamos</h1>
+              <p>
+                {isCoordinator
+                  ? "Vista operacional del calendario de solicitudes, entregas y nuevas reservas."
+                  : "Calendario de tus solicitudes y devoluciones programadas."}
+              </p>
+            </div>
           <div className="loan-calendar-header__actions">
             {canCreateLoan ? (
               <a href={newLoanHref} className="loan-calendar-link-btn loan-calendar-link-btn--primary">
@@ -508,96 +790,103 @@ export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
 
         {error ? <div className="error-banner">{error}</div> : null}
 
-        <section className="loan-calendar-layout">
-          <article className="loan-calendar-card">
-            <header className="loan-calendar-card__header">
-              <div className="loan-calendar-nav">
-                <button type="button" onClick={goToPreviousMonth} aria-label="Mes anterior">
-                  <ChevronLeft size={16} />
-                </button>
-                <div className="loan-calendar-nav__pill">
-                  <strong>{formatMonthLabel(monthAnchor)}</strong>
-                  <CalendarDays size={15} />
+        {initialLoading ? (
+          <>
+            <LoanCalendarInitialSkeleton mobile={isMobileCalendar} />
+            <LoanCalendarSummarySkeleton />
+          </>
+        ) : (
+          <>
+            <section className="loan-calendar-layout">
+              <article className="loan-calendar-card" aria-busy={refreshing}>
+                <header className="loan-calendar-card__header">
+                  <div className="loan-calendar-nav">
+                    <button type="button" onClick={goToPreviousMonth} aria-label="Mes anterior">
+                      <ChevronLeft size={16} />
+                    </button>
+                    <div className="loan-calendar-nav__pill">
+                      <strong>{formatMonthLabel(monthAnchor)}</strong>
+                      <CalendarDays size={15} />
+                    </div>
+                    <button type="button" onClick={goToNextMonth} aria-label="Mes siguiente">
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                  <div className="loan-calendar-card__controls">
+                    <span className="loan-calendar-counter-pill">
+                      <CalendarDays size={15} />
+                      {visibleMonthLoans.length} solicitudes
+                    </span>
+                  </div>
+                </header>
+
+                <div className="loan-calendar-grid loan-calendar-grid--weekday">
+                  {WEEKDAY_LABELS.map((label) => (
+                    <div key={label}>{label}</div>
+                  ))}
                 </div>
-                <button type="button" onClick={goToNextMonth} aria-label="Mes siguiente">
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-              <div className="loan-calendar-card__controls">
-                <span className="loan-calendar-counter-pill">
-                  <CalendarDays size={15} />
-                  {visibleMonthLoans.length} solicitudes
-                </span>
-              </div>
-            </header>
 
-            <div className="loan-calendar-grid loan-calendar-grid--weekday">
-              {WEEKDAY_LABELS.map((label) => (
-                <div key={label}>{label}</div>
-              ))}
-            </div>
-
-            <div className="loan-calendar-grid loan-calendar-grid--days">
-              {monthGrid.map((day) => {
-                const key = toDateKey(day);
-                const dayLoans = loansByDay.get(key) ?? [];
-                const isCurrentMonth = `${day.getFullYear()}-${day.getMonth()}` === monthKey;
-                const isSelected = key === selectedDateKey;
-                const isToday = key === todayKey;
-                return (
-                  <button
-                    type="button"
-                    key={key}
-                    className={`loan-calendar-day${isCurrentMonth ? "" : " is-faded"}${isSelected ? " is-selected" : ""}${isToday ? " is-today" : ""}`}
-                    onClick={() => handleSelectDay(key)}
-                  >
-                    <div className="loan-calendar-day__top">
-                      <span>{day.getDate()}</span>
-                      {dayLoans.length > 0 ? <small>{dayLoans.length}</small> : null}
-                    </div>
-                    <div className="loan-calendar-day__events">
-                      {dayLoans.slice(0, 3).map((loan) => (
-                        <span key={loan.uuid} className={statusChipClass(loan.status)}>
-                          {formatTime(loan.scheduled_at)} {normalizeStatus(loan.status)}
-                        </span>
-                      ))}
-                      {dayLoans.length > 3 ? <span className="loan-calendar-chip loan-calendar-chip--more">+{dayLoans.length - 3} mas</span> : null}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {loading ? <p className="loan-calendar-loading">Cargando agenda...</p> : null}
-          </article>
-
-          {!isMobileCalendar ? (
-            <LoanCalendarDayDrawer
-              selectedDateKey={selectedDateKey}
-              selectedDateLabel={selectedDateLabel}
-              selectedDayLoans={selectedDayLoans}
-              onOpenLoan={handleOpenLoanDetail}
-            />
-          ) : null}
-        </section>
-
-        <section className="loan-calendar-summary">
-          <div className="loan-calendar-summary__metrics">
-            {summaryMetrics.map((metric) => (
-              <article key={metric.key} className={`loan-calendar-summary__metric loan-calendar-summary__metric--${metric.key}`}>
-                <span className="loan-calendar-summary__dot" />
-                <div>
-                  <strong>{metric.value}</strong>
-                  <small>{metric.label}</small>
+                <div className="loan-calendar-grid loan-calendar-grid--days">
+                  {monthGrid.map((day) => {
+                    const key = toDateKey(day);
+                    const dayLoans = loansByDay.get(key) ?? [];
+                    const isCurrentMonth = getMonthKey(day) === monthKey;
+                    const isSelected = key === effectiveSelectedDateKey;
+                    const isToday = key === todayKey;
+                    return (
+                      <button
+                        type="button"
+                        key={key}
+                        className={`loan-calendar-day${isCurrentMonth ? "" : " is-faded"}${isSelected ? " is-selected" : ""}${isToday ? " is-today" : ""}`}
+                        onClick={() => handleSelectDay(key)}
+                      >
+                        <div className="loan-calendar-day__top">
+                          <span>{day.getDate()}</span>
+                          {dayLoans.length > 0 ? <small>{dayLoans.length}</small> : null}
+                        </div>
+                        <div className="loan-calendar-day__events">
+                          {dayLoans.slice(0, 3).map((loan) => (
+                            <span key={loan.uuid} className={statusChipClass(loan.status)}>
+                              {formatTime(loan.scheduled_at)} {normalizeStatus(loan.status)}
+                            </span>
+                          ))}
+                          {dayLoans.length > 3 ? <span className="loan-calendar-chip loan-calendar-chip--more">+{dayLoans.length - 3} mas</span> : null}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </article>
-            ))}
-          </div>
-          <div className="loan-calendar-summary__total">
-            <strong>{visibleMonthLoans.length}</strong>
-            <small>Total solicitudes</small>
-          </div>
-        </section>
+
+              {!isMobileCalendar ? (
+                <LoanCalendarDayDrawer
+                  selectedDateKey={effectiveSelectedDateKey}
+                  selectedDateLabel={selectedDateLabel}
+                  selectedDayLoans={selectedDayLoans}
+                  onOpenLoan={handleOpenLoanDetail}
+                />
+              ) : null}
+            </section>
+
+            <section className="loan-calendar-summary">
+              <div className="loan-calendar-summary__metrics">
+                {summaryMetrics.map((metric) => (
+                  <article key={metric.key} className={`loan-calendar-summary__metric loan-calendar-summary__metric--${metric.key}`}>
+                    <span className="loan-calendar-summary__dot" />
+                    <div>
+                      <strong>{metric.value}</strong>
+                      <small>{metric.label}</small>
+                    </div>
+                  </article>
+                ))}
+              </div>
+              <div className="loan-calendar-summary__total">
+                <strong>{visibleMonthLoans.length}</strong>
+                <small>Total solicitudes</small>
+              </div>
+            </section>
+          </>
+        )}
 
         <PresencePollingModal
           visible={promptVisible}
@@ -618,7 +907,7 @@ export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
             onClick={() => setIsMobileDayDrawerOpen(false)}
           />
           <LoanCalendarDayDrawer
-            selectedDateKey={selectedDateKey}
+            selectedDateKey={effectiveSelectedDateKey}
             selectedDateLabel={selectedDateLabel}
             selectedDayLoans={selectedDayLoans}
             onOpenLoan={handleOpenLoanDetail}
@@ -629,55 +918,20 @@ export function LoanCalendarPage({ embedded = false }: { embedded?: boolean }) {
       ) : null}
 
       {activeDetailLoanUuid ? (
-        <div className="loan-calendar-detail-modal" role="dialog" aria-modal="true" aria-label="Detalle de solicitud">
-          <button
-            type="button"
-            className="loan-calendar-detail-modal__backdrop"
-            aria-label="Cerrar detalle de solicitud"
-            onClick={handleCloseLoanDetail}
+        <LoanDetailModalFrame
+          onClose={handleCloseLoanDetail}
+          onPrevious={showPreviousDetailLoan}
+          onNext={showNextDetailLoan}
+          hasPrevious={hasPreviousDetailLoan}
+          hasNext={hasNextDetailLoan}
+        >
+          <LoanDetailPage
+            loanUuid={activeDetailLoanUuid}
+            embedded
+            hideBackNav
+            onLoanChanged={handleDetailLoanChanged}
           />
-          <div className="loan-calendar-detail-modal__shell">
-            <button
-              type="button"
-              className="loan-calendar-detail-modal__nav loan-calendar-detail-modal__nav--prev"
-              onClick={showPreviousDetailLoan}
-              disabled={!hasPreviousDetailLoan}
-              aria-label="Prestamo anterior"
-            >
-              <ChevronLeft size={20} />
-            </button>
-
-            <div className="loan-calendar-detail-modal__surface">
-              <button
-                type="button"
-                className="loan-calendar-detail-modal__close"
-                aria-label="Cerrar detalle de solicitud"
-                onClick={handleCloseLoanDetail}
-              >
-                <X size={18} />
-              </button>
-
-              <div className="loan-calendar-detail-modal__content">
-                <LoanDetailPage
-                  loanUuid={activeDetailLoanUuid}
-                  embedded
-                  hideBackNav
-                  onLoanChanged={handleDetailLoanChanged}
-                />
-              </div>
-            </div>
-
-            <button
-              type="button"
-              className="loan-calendar-detail-modal__nav loan-calendar-detail-modal__nav--next"
-              onClick={showNextDetailLoan}
-              disabled={!hasNextDetailLoan}
-              aria-label="Prestamo siguiente"
-            >
-              <ChevronRight size={20} />
-            </button>
-          </div>
-        </div>
+        </LoanDetailModalFrame>
       ) : null}
     </div>
   );

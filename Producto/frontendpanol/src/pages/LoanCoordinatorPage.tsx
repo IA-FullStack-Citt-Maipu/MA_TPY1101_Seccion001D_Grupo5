@@ -8,20 +8,21 @@ import {
   Search,
   XCircle,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { LoanApprovalModal, type LoanApprovalSubmission } from "../components/loans/LoanApprovalModal";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LoanDetailModalFrame } from "../components/loans/LoanDetailModalFrame";
 import { PresencePollingModal } from "../components/ui/PresencePollingModal";
 import { useInactivityPollingGate } from "../hooks/useInactivityPollingGate";
-import { getApiErrorPayload, getErrorMessage } from "../services/apiClient";
-import { completeLoan, fetchLoansPage, reviewLoan } from "../services/loanService";
+import { getErrorMessage } from "../services/apiClient";
+import { fetchLoansPage } from "../services/loanService";
 import type { LoanSummary } from "../types/loan";
-import { canStartDelivery } from "../utils/loanSchedule";
+import { buildLoanDetailHash, stripLoanDetailFromHash } from "../utils/loanDetailRouting";
+import { canStartDelivery, canStartPreparation } from "../utils/loanSchedule";
+import { LoanDetailPage } from "./LoanDetailPage";
 
 const PAGE_SIZE = 10;
 
 type LoanStatusFilter =
   | "all"
-  | "pending"
   | "approved"
   | "prepared"
   | "delivered"
@@ -31,7 +32,10 @@ type LoanStatusFilter =
   | "rejected"
   | "expired";
 
-function parseDate(value: string): Date | null {
+function parseDate(value: string | null | undefined): Date | null {
+  if (!value) {
+    return null;
+  }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return null;
@@ -45,10 +49,6 @@ function pad(value: number): string {
 
 function formatDateForInput(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-}
-
-function buildLoanCode(uuid: string): string {
-  return `#LN-${uuid.slice(0, 6).toUpperCase()}`;
 }
 
 function formatSchedule(value: string): string {
@@ -68,12 +68,12 @@ function formatSchedule(value: string): string {
 
 function normalizeStatusLabel(status: string): string {
   const labels: Record<string, string> = {
-    pending: "Pendiente",
-    approved: "Aprobado",
+    pending: "Reservado",
+    approved: "Reservado",
     prepared: "Preparado",
     delivered: "En uso",
     overdue: "Atrasado",
-    completed: "Completado",
+    completed: "Finalizado",
     cancelled: "Cancelado",
     rejected: "Rechazado",
     expired: "Expirado",
@@ -82,9 +82,9 @@ function normalizeStatusLabel(status: string): string {
 }
 
 function statusClassName(status: string): string {
-  if (status === "pending") return "teacher-loans-status teacher-loans-status--pending";
-  if (status === "approved") return "teacher-loans-status teacher-loans-status--approved";
-  if (status === "prepared") return "teacher-loans-status teacher-loans-status--approved";
+  if (status === "pending" || status === "approved" || status === "prepared") {
+    return "teacher-loans-status teacher-loans-status--approved";
+  }
   if (status === "delivered") return "teacher-loans-status teacher-loans-status--delivered";
   if (status === "overdue") return "teacher-loans-status teacher-loans-status--danger";
   if (status === "cancelled" || status === "rejected" || status === "expired")
@@ -103,11 +103,18 @@ function summarizeItems(items: LoanSummary["items"]): string {
   return items.length > 3 ? `${summary}, ...` : summary;
 }
 
-export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }) {
+export function LoanCoordinatorPage({
+  embedded = false,
+  activeDetailLoanUuid = null,
+}: {
+  embedded?: boolean;
+  activeDetailLoanUuid?: string | null;
+}) {
   const [allLoans, setAllLoans] = useState<LoanSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [processingLoanUuid, setProcessingLoanUuid] = useState<string | null>(null);
+  const hasLoadedOnceRef = useRef(false);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<LoanStatusFilter>("all");
@@ -116,16 +123,15 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
   const [roomFilter, setRoomFilter] = useState("");
   const [page, setPage] = useState(1);
 
-  const [rejectingLoan, setRejectingLoan] = useState<LoanSummary | null>(null);
-  const [rejectionReason, setRejectionReason] = useState("");
-  const [approvingLoan, setApprovingLoan] = useState<LoanSummary | null>(null);
-  const [completingLoan, setCompletingLoan] = useState<LoanSummary | null>(null);
-  const [completionNotes, setCompletionNotes] = useState("");
+  const loadLoans = useCallback(async (mode: "initial" | "refresh" = "initial") => {
+    const shouldShowInitialLoading = mode === "initial" && !hasLoadedOnceRef.current;
 
-  const loadLoans = useCallback(async (showLoading = true) => {
-    if (showLoading) {
-      setLoading(true);
+    if (shouldShowInitialLoading) {
+      setInitialLoading(true);
+    } else {
+      setRefreshing(true);
     }
+
     setError(null);
     try {
       const firstPage = await fetchLoansPage({ page: 1, size: 50, mine: false });
@@ -145,15 +151,15 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
     } catch (requestError) {
       setError(getErrorMessage(requestError, "No se pudo cargar el listado de prestamos."));
     } finally {
-      if (showLoading) {
-        setLoading(false);
-      }
+      hasLoadedOnceRef.current = true;
+      setInitialLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
   const { promptVisible, pollingPaused, countdownSeconds, resumePolling } = useInactivityPollingGate({
     onContinue: async () => {
-      await loadLoans(false);
+      await loadLoans("refresh");
     },
   });
 
@@ -161,7 +167,7 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
     let cancelled = false;
 
     async function bootstrap() {
-      await loadLoans(true);
+      await loadLoans("initial");
       if (cancelled) {
         return;
       }
@@ -179,7 +185,7 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
     }
 
     const intervalId = window.setInterval(() => {
-      void loadLoans(false);
+      void loadLoans("refresh");
     }, 180000);
 
     return () => window.clearInterval(intervalId);
@@ -220,8 +226,6 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
       }
 
       const rowText = [
-        loan.uuid,
-        loan.requester_uuid,
         loan.room?.name ?? "",
         loan.subject?.name ?? "",
         ...loan.items.map((item) => item.implement_name),
@@ -256,8 +260,8 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
     return Array.from({ length: end - start + 1 }, (_, index) => start + index);
   }, [safePage, totalPages]);
 
-  const pendingCount = useMemo(
-    () => allLoans.filter((loan) => loan.status === "pending").length,
+  const reservedCount = useMemo(
+    () => allLoans.filter((loan) => loan.status === "approved").length,
     [allLoans],
   );
   const inUseCount = useMemo(
@@ -269,7 +273,7 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
     const todayKey = formatDateForInput(now);
     return allLoans.filter((loan) => {
       if (loan.status !== "completed") return false;
-      const completedDate = parseDate(loan.created_at);
+      const completedDate = parseDate(loan.completed_at);
       if (!completedDate) return false;
       return formatDateForInput(completedDate) === todayKey;
     }).length;
@@ -281,7 +285,11 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
   );
 
   function goToLoanDetail(loanUuid: string) {
-    window.location.assign(`#/inventory/prestamos/${loanUuid}`);
+    window.location.assign(buildLoanDetailHash(loanUuid, "list"));
+  }
+
+  function closeLoanDetail() {
+    window.location.replace(stripLoanDetailFromHash(window.location.hash));
   }
 
   function updateLoanInState(updated: LoanSummary) {
@@ -290,96 +298,12 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
     );
   }
 
-  function openApproveModal(loan: LoanSummary) {
-    setApprovingLoan(loan);
-  }
-
-  function closeApproveModal() {
-    setApprovingLoan(null);
-  }
-
-  async function approveLoan(payload: LoanApprovalSubmission) {
-    if (!approvingLoan) {
-      return;
-    }
-    setProcessingLoanUuid(approvingLoan.uuid);
-    setError(null);
-    try {
-      const updated = await reviewLoan(approvingLoan.uuid, {
-        decision: "APPROVE",
-        notes: payload.notes,
-        items: payload.items,
-      });
-      updateLoanInState(updated);
-      closeApproveModal();
-    } catch (requestError) {
-      const payloadError = getApiErrorPayload(requestError);
-      if (payloadError?.code === "LOAN_STOCK_CONFLICT") {
-        setError("Esta solicitud excede el stock de algun implemento; no se puede aprobar.");
-      } else {
-        setError(getErrorMessage(requestError, "No se pudo aprobar el prestamo."));
-      }
-    } finally {
-      setProcessingLoanUuid(null);
-    }
-  }
-
-  async function markLoanCompleted(loan: LoanSummary) {
-    setProcessingLoanUuid(loan.uuid);
-    setError(null);
-    try {
-      const updated = await completeLoan(loan.uuid, { notes: completionNotes.trim() || null });
-      updateLoanInState(updated);
-      closeCompleteModal();
-    } catch (requestError) {
-      setError(getErrorMessage(requestError, "No se pudo completar el prestamo."));
-    } finally {
-      setProcessingLoanUuid(null);
-    }
+  function goToPreparation(loanUuid: string) {
+    window.location.assign(`#/inventory/prestamos/${loanUuid}/preparacion`);
   }
 
   function goToDelivery(loanUuid: string) {
     window.location.assign(`#/inventory/prestamos/${loanUuid}/entrega`);
-  }
-
-  function openRejectModal(loan: LoanSummary) {
-    setRejectingLoan(loan);
-    setRejectionReason("");
-  }
-
-  function openCompleteModal(loan: LoanSummary) {
-    setCompletingLoan(loan);
-    setCompletionNotes("");
-  }
-
-  function closeCompleteModal() {
-    setCompletingLoan(null);
-    setCompletionNotes("");
-  }
-
-  function closeRejectModal() {
-    setRejectingLoan(null);
-    setRejectionReason("");
-  }
-
-  async function rejectLoan() {
-    if (!rejectingLoan || rejectionReason.trim().length < 4) {
-      return;
-    }
-    setProcessingLoanUuid(rejectingLoan.uuid);
-    setError(null);
-    try {
-      const updated = await reviewLoan(rejectingLoan.uuid, {
-        decision: "REJECT",
-        notes: rejectionReason.trim(),
-      });
-      updateLoanInState(updated);
-      closeRejectModal();
-    } catch (requestError) {
-      setError(getErrorMessage(requestError, "No se pudo rechazar el prestamo."));
-    } finally {
-      setProcessingLoanUuid(null);
-    }
   }
 
   const content = (
@@ -394,8 +318,8 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
           <span className="coordinator-loans-kpi__strip" />
           <CircleAlert size={18} />
           <div>
-            <p>Pendientes</p>
-            <strong>{pendingCount}</strong>
+            <p>Reservados</p>
+            <strong>{reservedCount}</strong>
           </div>
         </article>
         <article className="coordinator-loans-kpi coordinator-loans-kpi--inuse">
@@ -410,7 +334,7 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
           <span className="coordinator-loans-kpi__strip" />
           <CheckCircle2 size={18} />
           <div>
-            <p>Completados hoy</p>
+            <p>Finalizados hoy</p>
             <strong>{completedToday}</strong>
           </div>
         </article>
@@ -424,13 +348,13 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
         </article>
       </section>
 
-      <section className="coordinator-loans-card">
+      <section className="coordinator-loans-card" aria-busy={refreshing}>
         <div className="coordinator-loans-filters">
           <label className="coordinator-loans-search">
             <Search size={16} />
             <input
               type="search"
-              placeholder="Buscar por UUID, solicitante o implemento..."
+              placeholder="Buscar por sala, asignatura o implemento..."
               value={searchTerm}
               onChange={(event) => {
                 setSearchTerm(event.target.value);
@@ -448,12 +372,11 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
               }}
             >
               <option value="all">Todos</option>
-              <option value="pending">Pendiente</option>
-              <option value="approved">Aprobado</option>
+              <option value="approved">Reservado</option>
               <option value="prepared">Preparado</option>
               <option value="delivered">En uso</option>
               <option value="overdue">Atrasado</option>
-              <option value="completed">Completado</option>
+              <option value="completed">Finalizado</option>
               <option value="cancelled">Cancelado</option>
               <option value="rejected">Rechazado</option>
               <option value="expired">Expirado</option>
@@ -502,7 +425,6 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
             <thead>
               <tr>
                 <th>Estado</th>
-                <th>UUID / Solicitante</th>
                 <th>Fecha y hora</th>
                 <th>Ubicacion / Materia</th>
                 <th>Detalle items</th>
@@ -510,32 +432,27 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {initialLoading ? (
                 <tr>
-                  <td colSpan={6} className="coordinator-loans-empty">
+                  <td colSpan={5} className="coordinator-loans-empty">
                     Cargando solicitudes...
                   </td>
                 </tr>
               ) : pagedLoans.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="coordinator-loans-empty">
+                  <td colSpan={5} className="coordinator-loans-empty">
                     No hay prestamos que coincidan con los filtros seleccionados.
                   </td>
                 </tr>
               ) : (
                 pagedLoans.map((loan) => {
-                  const isProcessing = processingLoanUuid === loan.uuid;
+                  const isProcessing = false;
+                  const preparationEnabled = canStartPreparation(loan);
                   const deliveryEnabled = canStartDelivery(loan);
                   return (
                     <tr key={loan.uuid}>
                       <td>
                         <span className={statusClassName(loan.status)}>{normalizeStatusLabel(loan.status)}</span>
-                      </td>
-                      <td>
-                        <div className="coordinator-loans-id-cell">
-                          <strong>{buildLoanCode(loan.uuid)}</strong>
-                          <span>{loan.requester_uuid}</span>
-                        </div>
                       </td>
                       <td>{formatSchedule(loan.scheduled_at)}</td>
                       <td>
@@ -555,26 +472,17 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
                           >
                             <Eye size={15} />
                           </button>
-                          {loan.status === "pending" ? (
-                            <>
-                              <button
-                                type="button"
-                                className="coordinator-loans-action-btn coordinator-loans-action-btn--approve"
-                                disabled={isProcessing}
-                                onClick={() => openApproveModal(loan)}
-                              >
-                                Aceptar
-                              </button>
-                              <button
-                                type="button"
-                                className="coordinator-loans-action-btn coordinator-loans-action-btn--reject"
-                                disabled={isProcessing}
-                                onClick={() => openRejectModal(loan)}
-                              >
-                                Rechazar
-                              </button>
-                            </>
-                          ) : loan.status === "approved" || loan.status === "prepared" ? (
+                          {loan.status === "approved" ? (
+                            <button
+                              type="button"
+                              className="coordinator-loans-action-btn coordinator-loans-action-btn--approve"
+                              disabled={isProcessing || !preparationEnabled}
+                              onClick={() => goToPreparation(loan.uuid)}
+                              title="Preparar implementos reservados"
+                            >
+                              Preparar implementos
+                            </button>
+                          ) : loan.status === "prepared" ? (
                             <button
                               type="button"
                               className="coordinator-loans-action-btn coordinator-loans-action-btn--approve"
@@ -589,9 +497,9 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
                               type="button"
                               className="coordinator-loans-action-btn coordinator-loans-action-btn--complete"
                               disabled={isProcessing}
-                              onClick={() => openCompleteModal(loan)}
+                              onClick={() => goToLoanDetail(loan.uuid)}
                             >
-                              Completar
+                              Registrar devolucion
                             </button>
                           ) : (
                             <button
@@ -647,76 +555,15 @@ export function LoanCoordinatorPage({ embedded = false }: { embedded?: boolean }
         </footer>
       </section>
 
-      {rejectingLoan ? (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h3>Rechazar prestamo</h3>
-            <p>
-              Escribe el motivo de rechazo para la solicitud <strong>{buildLoanCode(rejectingLoan.uuid)}</strong>.
-            </p>
-            <label htmlFor="rejection-reason">Motivo</label>
-            <textarea
-              id="rejection-reason"
-              rows={3}
-              value={rejectionReason}
-              onChange={(event) => setRejectionReason(event.target.value)}
-              placeholder="Motivo del rechazo..."
-            />
-            <div className="modal-actions">
-              <button type="button" className="button button--ghost" onClick={closeRejectModal}>
-                Cancelar
-              </button>
-              <button
-                type="button"
-                className="button button--danger"
-                onClick={() => void rejectLoan()}
-                disabled={rejectionReason.trim().length < 4 || processingLoanUuid === rejectingLoan.uuid}
-              >
-                Rechazar
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-      {approvingLoan ? (
-        <LoanApprovalModal
-          loan={approvingLoan}
-          processing={processingLoanUuid === approvingLoan.uuid}
-          onClose={closeApproveModal}
-          onSubmit={approveLoan}
-        />
-      ) : null}
-      {completingLoan ? (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h3>Completar prestamo</h3>
-            <p>
-              Puedes agregar una nota opcional antes de cerrar la solicitud <strong>{buildLoanCode(completingLoan.uuid)}</strong>.
-            </p>
-            <label htmlFor="completion-notes">Notas</label>
-            <textarea
-              id="completion-notes"
-              rows={3}
-              value={completionNotes}
-              maxLength={1000}
-              onChange={(event) => setCompletionNotes(event.target.value)}
-              placeholder="Observaciones de cierre..."
-            />
-            <div className="modal-actions">
-              <button type="button" className="button button--ghost" onClick={closeCompleteModal}>
-                Cancelar
-              </button>
-              <button
-                type="button"
-                className="coordinator-loans-action-btn coordinator-loans-action-btn--complete"
-                onClick={() => void markLoanCompleted(completingLoan)}
-                disabled={processingLoanUuid === completingLoan.uuid}
-              >
-                Completar
-              </button>
-            </div>
-          </div>
-        </div>
+      {activeDetailLoanUuid ? (
+        <LoanDetailModalFrame onClose={closeLoanDetail}>
+          <LoanDetailPage
+            loanUuid={activeDetailLoanUuid}
+            embedded
+            hideBackNav
+            onLoanChanged={updateLoanInState}
+          />
+        </LoanDetailModalFrame>
       ) : null}
       <PresencePollingModal
         visible={promptVisible}

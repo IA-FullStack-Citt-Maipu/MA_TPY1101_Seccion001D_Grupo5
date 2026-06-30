@@ -10,6 +10,9 @@ public record LoanItemV2Response(
         @JsonProperty("implement_name")
         String implementName,
 
+        @JsonProperty("item_type")
+        String itemType,
+
         @JsonProperty("requested_quantity")
         Integer requestedQuantity,
 
@@ -17,6 +20,9 @@ public record LoanItemV2Response(
         Integer reservedQuantity,
 
         @JsonProperty("delivered_quantity")
-        Integer deliveredQuantity
+        Integer deliveredQuantity,
+
+        @JsonProperty("returned_quantity")
+        Integer returnedQuantity
 ) {
 }

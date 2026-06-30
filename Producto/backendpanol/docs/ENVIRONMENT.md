@@ -1,7 +1,7 @@
 # Entorno y Secrets del Backend
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-06-13
+- Ultima verificacion: 2026-06-30
 - Fuente de verdad: `application.yaml`, `Producto/databasepanol/.env.example`, `.env`, `.env.local.example`, compose vigentes
 
 ## Selector de entorno de BD
@@ -44,8 +44,14 @@ Comunes:
 - `APP_AUTH_JWT_ISSUER`
 - `APP_AUTH_JWT_EXPIRATION_SECONDS`
 - `APP_AUTH_REFRESH_EXPIRATION_SECONDS`
+- `APP_AUTH_REFRESH_TEMPORARY_EXPIRATION_SECONDS`
 - `APP_AUTH_BOT_TOKEN_EXPIRATION_SECONDS`
 - `APP_AUTH_BOT_TOKEN_AUDIENCE`
+- `APP_AUTH_PASSWORD_RECOVERY_CODE_LENGTH`
+- `APP_AUTH_PASSWORD_RECOVERY_EXPIRATION_MINUTES`
+- `APP_AUTH_PASSWORD_RECOVERY_MAX_ATTEMPTS`
+- `APP_AUTH_PASSWORD_RECOVERY_RESEND_COOLDOWN_SECONDS`
+- `APP_AUTH_PASSWORD_RECOVERY_RESET_TOKEN_EXPIRATION_SECONDS`
 - `APP_AUTH_COOKIE_SECURE`
 - `APP_AUTH_COOKIE_SAME_SITE`
 - `APP_AUTH_JWT_SECRET`
@@ -53,6 +59,16 @@ Comunes:
 - `APP_AUTH_TOKEN_REVOCATION_CLEANUP_INITIAL_DELAY_MS`
 - `APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS`
 - `APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE`
+- `APP_EMAIL_ENABLED`
+- `APP_EMAIL_PROVIDER`
+- `APP_EMAIL_RESEND_API_KEY`
+- `APP_EMAIL_FROM_NAME`
+- `APP_EMAIL_FROM_ADDRESS`
+- `APP_EMAIL_WORKER_DELAY_MS`
+- `APP_EMAIL_BATCH_SIZE`
+- `APP_EMAIL_MAX_RETRIES`
+- `APP_EMAIL_CONNECT_TIMEOUT_MS`
+- `APP_EMAIL_READ_TIMEOUT_MS`
 
 Observabilidad local:
 - `PROMETHEUS_PORT`
@@ -106,12 +122,32 @@ jOOQ (build-time):
 - `APP_AUTH_REFRESH_EXPIRATION_SECONDS`
   - TTL de la sesion refresh y del `Max-Age` persistente de la cookie refresh.
   - Default: `604800` segundos.
+- `APP_AUTH_REFRESH_TEMPORARY_EXPIRATION_SECONDS`
+  - TTL server-side de la sesion temporal cuando `rememberMe=false`.
+  - La cookie sigue siendo de sesion del navegador, pero el backend ya no la
+    renueva por 7 dias.
+  - Default: `86400` segundos.
 - `APP_AUTH_BOT_TOKEN_EXPIRATION_SECONDS`
   - TTL del token puente emitido para `bot-panol`.
   - Default: `300` segundos.
 - `APP_AUTH_BOT_TOKEN_AUDIENCE`
   - Audience esperado por `bot-panol` para validar el token puente.
   - Default: `bot-panol`.
+- `APP_AUTH_PASSWORD_RECOVERY_CODE_LENGTH`
+  - Largo del codigo alfanumerico enviado por correo.
+  - Default: `8`.
+- `APP_AUTH_PASSWORD_RECOVERY_EXPIRATION_MINUTES`
+  - Vigencia total del codigo y de la solicitud de recuperacion.
+  - Default: `15`.
+- `APP_AUTH_PASSWORD_RECOVERY_MAX_ATTEMPTS`
+  - Maximo de intentos fallidos permitidos por solicitud.
+  - Default: `5`.
+- `APP_AUTH_PASSWORD_RECOVERY_RESEND_COOLDOWN_SECONDS`
+  - Cooldown minimo antes de reenviar un nuevo codigo para el mismo usuario.
+  - Default: `120`.
+- `APP_AUTH_PASSWORD_RECOVERY_RESET_TOKEN_EXPIRATION_SECONDS`
+  - Vigencia del `reset_token` opaco emitido despues de verificar el codigo.
+  - Default: `600`.
 - `APP_AUTH_COOKIE_SECURE`
   - Si `true`, el navegador solo enviara las cookies por HTTPS.
   - En localhost HTTP normalmente debe ser `false`.
@@ -136,6 +172,44 @@ jOOQ (build-time):
 - `APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE`
   - maximo de filas expiradas borradas por corrida.
   - Default: `500`.
+
+## Notificaciones por correo
+
+- `APP_EMAIL_ENABLED`
+  - habilita o deshabilita el pipeline de correo.
+  - Default: `false`.
+- `APP_EMAIL_PROVIDER`
+  - proveedor de entrega configurado.
+  - Default actual: `resend`.
+- `APP_EMAIL_RESEND_API_KEY`
+  - API key usada por el cliente `ResendEmailClient`.
+  - Obligatoria cuando `APP_EMAIL_ENABLED=true` y `APP_EMAIL_PROVIDER=resend`.
+- `APP_EMAIL_FROM_NAME`
+  - nombre visible del remitente.
+  - Default: `Panol`.
+- `APP_EMAIL_FROM_ADDRESS`
+  - direccion visible del remitente.
+  - Default: `notificaciones@panol.cl`.
+- `APP_EMAIL_WORKER_DELAY_MS`
+  - intervalo del worker que procesa la cola de correo.
+  - Default: `5000` ms.
+- `APP_EMAIL_BATCH_SIZE`
+  - maximo de correos procesados por ciclo.
+  - Default: `20`.
+- `APP_EMAIL_MAX_RETRIES`
+  - maximo de reintentos por correo fallido.
+  - Default: `5`.
+- `APP_EMAIL_CONNECT_TIMEOUT_MS`
+  - timeout de conexion al proveedor.
+  - Default: `5000` ms.
+- `APP_EMAIL_READ_TIMEOUT_MS`
+  - timeout de lectura de la respuesta del proveedor.
+  - Default: `10000` ms.
+- La recuperacion de contrasena depende de este bloque:
+  - `APP_EMAIL_ENABLED=true`
+  - `APP_EMAIL_PROVIDER=resend`
+  - `APP_EMAIL_RESEND_API_KEY` valido
+  - `frontend-base-url` efectivo para construir el CTA del correo
 
 ## Compose y entorno
 

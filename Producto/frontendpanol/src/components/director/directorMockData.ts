@@ -17,6 +17,7 @@ export interface AlertItem {
   uuid: string;
   severity: "critical" | "warning" | "info";
   text: string;
+  href?: string | null;
 }
 
 export interface SubjectRequest {
@@ -26,7 +27,7 @@ export interface SubjectRequest {
 
 export interface TopUserRow {
   name: string;
-  role: "Docente" | "Coordinador";
+  role: "Docente" | "Coordinador" | "Director";
   requests: number;
   delays: number;
 }

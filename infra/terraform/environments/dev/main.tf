@@ -19,12 +19,18 @@ locals {
     APP_AUTH_JWT_ISSUER                                = var.app_auth_jwt_issuer
     APP_AUTH_JWT_EXPIRATION_SECONDS                    = tostring(var.app_auth_jwt_expiration_seconds)
     APP_AUTH_REFRESH_EXPIRATION_SECONDS                = tostring(var.app_auth_refresh_expiration_seconds)
+    APP_AUTH_REFRESH_TEMPORARY_EXPIRATION_SECONDS      = tostring(var.app_auth_refresh_temporary_expiration_seconds)
     APP_AUTH_COOKIE_SECURE                             = tostring(var.app_auth_cookie_secure)
     APP_AUTH_COOKIE_SAME_SITE                          = var.app_auth_cookie_same_site
     APP_AUTH_TOKEN_REVOCATION_CLEANUP_ENABLED          = tostring(var.app_auth_token_revocation_cleanup_enabled)
     APP_AUTH_TOKEN_REVOCATION_CLEANUP_INITIAL_DELAY_MS = tostring(var.app_auth_token_revocation_cleanup_initial_delay_ms)
     APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS         = tostring(var.app_auth_token_revocation_cleanup_delay_ms)
     APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE       = tostring(var.app_auth_token_revocation_cleanup_batch_size)
+    APP_EMAIL_ENABLED                                  = tostring(var.app_email_enabled)
+    APP_EMAIL_PROVIDER                                 = var.app_email_provider
+    APP_EMAIL_FROM_NAME                                = var.app_email_from_name
+    APP_EMAIL_FROM_ADDRESS                             = var.app_email_from_address
+    APP_FRONTEND_BASE_URL                              = local.frontend_origin
     JWT_ISSUER_URI                                     = var.jwt_issuer_uri
     FRONTEND_ORIGIN                                    = local.frontend_origin
     CORS_ALLOWED_ORIGINS                               = local.frontend_origin
@@ -71,13 +77,15 @@ module "secret_manager" {
     "DB_SUPABASE_PASSWORD",
     "APP_AUTH_JWT_SECRET",
     "APP_SECURITY_AI_AGENT_SECRET",
-    "GOOGLE_API_KEY"
+    "GOOGLE_API_KEY",
+    "APP_EMAIL_RESEND_API_KEY"
   ]
   secret_values = {
     DB_SUPABASE_PASSWORD         = var.db_supabase_password_secret_value
     APP_AUTH_JWT_SECRET          = var.app_auth_jwt_secret_value
     APP_SECURITY_AI_AGENT_SECRET = var.app_security_ai_agent_secret_value
     GOOGLE_API_KEY               = var.google_api_key_secret_value
+    APP_EMAIL_RESEND_API_KEY     = var.app_email_resend_api_key_secret_value
   }
 }
 
@@ -123,6 +131,10 @@ module "backend_service" {
     APP_SECURITY_AI_AGENT_SECRET = {
       secret  = module.secret_manager.secret_ids["APP_SECURITY_AI_AGENT_SECRET"]
       version = try(module.secret_manager.secret_versions["APP_SECURITY_AI_AGENT_SECRET"], "latest")
+    }
+    APP_EMAIL_RESEND_API_KEY = {
+      secret  = module.secret_manager.secret_ids["APP_EMAIL_RESEND_API_KEY"]
+      version = try(module.secret_manager.secret_versions["APP_EMAIL_RESEND_API_KEY"], "latest")
     }
   }
   custom_domain = var.backend_domain

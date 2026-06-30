@@ -24,6 +24,7 @@ import type { ImplementSummary } from "../types/implement";
 import type { CreateLoanPayload, LoanStatus, LoanSummary } from "../types/loan";
 import type { RoomOption } from "../types/room";
 import type { SubjectOption } from "../types/subject";
+import { buildLoanDetailHash } from "../utils/loanDetailRouting";
 
 interface LoanCartItem {
   implement_uuid: string;
@@ -35,6 +36,7 @@ interface LoanCartItem {
 const RESULTS_PAGE_SIZE = 6;
 const LOAN_MIN_TIME = "08:00";
 const LOAN_MAX_TIME = "22:00";
+const MAX_SCHEDULE_DAYS_AHEAD = 14;
 
 function pad(value: number): string {
   return value.toString().padStart(2, "0");
@@ -130,6 +132,69 @@ function nextAllowedLoanMoment(anchor = new Date()): Date {
     }
     return next;
   }
+}
+
+function getLatestSelectableScheduleDate(anchor = new Date()): string {
+  const latest = new Date(anchor);
+  latest.setHours(0, 0, 0, 0);
+  latest.setDate(latest.getDate() + MAX_SCHEDULE_DAYS_AHEAD);
+  return formatDateForInput(latest);
+}
+
+function getScheduleRangeErrorMessage(): string {
+  return "La fecha requerida solo se puede programar entre hoy y los proximos 14 dias corridos.";
+}
+
+function validateLoanScheduleSelection({
+  dateValue,
+  timeValue,
+  returnDateValue,
+  returnTimeValue,
+  latestSelectableDate,
+}: {
+  dateValue: string;
+  timeValue: string;
+  returnDateValue: string;
+  returnTimeValue: string;
+  latestSelectableDate: string;
+}): string | null {
+  if (!dateValue || !timeValue) {
+    return null;
+  }
+  if (dateValue > latestSelectableDate) {
+    return getScheduleRangeErrorMessage();
+  }
+  if (isSundayDateValue(dateValue)) {
+    return "Las solicitudes solo se pueden programar de lunes a sabado.";
+  }
+  if (!isAllowedLoanTimeValue(timeValue)) {
+    return "Las solicitudes solo se pueden programar entre las 08:00 y las 22:00.";
+  }
+
+  const scheduledAt = buildScheduledAtIso(dateValue, timeValue);
+  if (scheduledAt && isIsoInPast(scheduledAt)) {
+    return "La fecha y hora de solicitud no puede estar en el pasado.";
+  }
+
+  if (!returnDateValue || !returnTimeValue) {
+    return null;
+  }
+  if (isSundayDateValue(returnDateValue)) {
+    return "La devolucion solo se puede programar de lunes a sabado.";
+  }
+  if (!isAllowedLoanTimeValue(returnTimeValue)) {
+    return "La devolucion solo se puede programar entre las 08:00 y las 22:00.";
+  }
+
+  const expectedReturnAt = buildScheduledAtIso(returnDateValue, returnTimeValue);
+  if (expectedReturnAt && isIsoInPast(expectedReturnAt)) {
+    return "La fecha y hora de devolucion no puede estar en el pasado.";
+  }
+  if (scheduledAt && expectedReturnAt && new Date(expectedReturnAt).getTime() <= new Date(scheduledAt).getTime()) {
+    return "La fecha y hora de devolucion debe ser posterior a la fecha y hora de solicitud.";
+  }
+
+  return null;
 }
 
 function getRequestedDateFromHash(): string | null {
@@ -275,11 +340,11 @@ function isLowStock(implement: ImplementSummary): boolean {
 
 function normalizeLoanStatusLabel(status: LoanStatus): string {
   const labels: Record<LoanStatus, string> = {
-    pending: "Pendiente",
-    approved: "Aprobado",
+    pending: "Reservado",
+    approved: "Reservado",
     prepared: "Preparado",
-    delivered: "Entregado",
-    completed: "Completado",
+    delivered: "En uso",
+    completed: "Finalizado",
     rejected: "Rechazado",
     cancelled: "Cancelado",
     expired: "Expirado",
@@ -304,7 +369,7 @@ export function LoanCreatePage({
   const [saving, setSaving] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [roomInlineError, setRoomInlineError] = useState<string | null>(null);
-  const [scheduleInlineError, setScheduleInlineError] = useState<string | null>(null);
+  const [scheduleServerError, setScheduleServerError] = useState<string | null>(null);
   const [searchInlineError, setSearchInlineError] = useState<string | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
 
@@ -330,7 +395,7 @@ export function LoanCreatePage({
     : null;
   const effectiveExpectedReturnAt = expectedReturnAt ?? (scheduledAt ? addHoursToIso(scheduledAt, 2) : null);
   const editBlockedMessage =
-    isEditMode && editingLoan && editingLoan.status !== "pending"
+    isEditMode && editingLoan && editingLoan.status !== "approved"
       ? `Esta solicitud ya no se puede modificar porque esta en estado ${normalizeLoanStatusLabel(editingLoan.status).toLowerCase()}.`
       : null;
 
@@ -404,11 +469,17 @@ export function LoanCreatePage({
     let cancelled = false;
 
     async function loadCatalog() {
+      if (!scheduledAt || !effectiveExpectedReturnAt) {
+        setAllImplements([]);
+        setCatalogLoading(false);
+        return;
+      }
+
       setCatalogLoading(true);
       try {
         const rows = await fetchImplements({
-          scheduledAt: scheduledAt ?? undefined,
-          expectedReturnAt: effectiveExpectedReturnAt ?? undefined,
+          scheduledAt,
+          expectedReturnAt: effectiveExpectedReturnAt,
           excludeLoanUuid: editLoanUuid ?? undefined,
         });
 
@@ -448,7 +519,6 @@ export function LoanCreatePage({
         implement.name,
         implement.category?.name ?? "",
         implement.barcode ?? "",
-        implement.uuid,
       ]
         .join(" ")
         .toLowerCase();
@@ -469,7 +539,7 @@ export function LoanCreatePage({
   const visiblePageNumbers = useMemo(() => {
     const windowSize = 5;
     let start = Math.max(1, safeResultsPage - 2);
-    let end = Math.min(totalResultPages, start + windowSize - 1);
+    const end = Math.min(totalResultPages, start + windowSize - 1);
     start = Math.max(1, end - windowSize + 1);
     return Array.from({ length: end - start + 1 }, (_, index) => start + index);
   }, [safeResultsPage, totalResultPages]);
@@ -487,8 +557,21 @@ export function LoanCreatePage({
   const earliestSelectableMoment = nextAllowedLoanMoment(getEarliestSelectableMoment());
   const earliestSelectableDate = formatDateForInput(earliestSelectableMoment);
   const earliestSelectableTime = formatTimeForInput(earliestSelectableMoment);
+  const latestSelectableDate = getLatestSelectableScheduleDate();
   const scheduledMinTime = dateValue === earliestSelectableDate ? earliestSelectableTime : LOAN_MIN_TIME;
   const expectedReturnMinTime = returnDateValue === earliestSelectableDate ? earliestSelectableTime : LOAN_MIN_TIME;
+  const scheduleClientError = useMemo(
+    () =>
+      validateLoanScheduleSelection({
+        dateValue,
+        timeValue,
+        returnDateValue,
+        returnTimeValue,
+        latestSelectableDate,
+      }),
+    [dateValue, latestSelectableDate, returnDateValue, returnTimeValue, timeValue],
+  );
+  const scheduleInlineError = scheduleClientError ?? scheduleServerError;
   const hasValidQuantities = cart.every(
     (item) => Number.isInteger(item.requested_quantity) && item.requested_quantity > 0,
   );
@@ -569,7 +652,7 @@ export function LoanCreatePage({
     const implement = implementByUuid.get(stockConflict.implement_uuid);
     const availableStock = implement ? getAvailableStock(implement) : null;
     setSearchInlineError(
-      `Solo puedes solicitar dentro del stock disponible. ${stockConflict.implement_name} tiene ${availableStock ?? 0} unidad(es) disponibles para la fecha y hora seleccionadas.`,
+      `Solo puedes solicitar dentro del stock disponible. ${stockConflict.implement_name} tiene ${availableStock ?? 0} unidad(es) disponibles para esta solicitud.`,
     );
   }, [cart, implementByUuid, searchInlineError]);
 
@@ -602,13 +685,9 @@ export function LoanCreatePage({
   }
 
   function handleScheduleDateChange(nextDateValue: string) {
+    setScheduleServerError(null);
     if (!nextDateValue) {
       setDateValue(nextDateValue);
-      setScheduleInlineError(null);
-      return;
-    }
-    if (isSundayDateValue(nextDateValue)) {
-      setScheduleInlineError("Las solicitudes solo se pueden programar de lunes a sabado.");
       return;
     }
     setDateValue(nextDateValue);
@@ -616,32 +695,18 @@ export function LoanCreatePage({
     if (!timeValue || timeValue < nextMinTime) {
       setTimeValue(nextMinTime);
     }
-    setScheduleInlineError(null);
   }
 
   function handleScheduleTimeChange(nextTimeValue: string) {
-    if (!isAllowedLoanTimeValue(nextTimeValue)) {
-      setScheduleInlineError("Las solicitudes solo se pueden programar entre las 08:00 y las 22:00.");
-      return;
-    }
-    const nextScheduledAt = buildScheduledAtIso(dateValue, nextTimeValue);
-    if (nextScheduledAt && isIsoInPast(nextScheduledAt)) {
-      setScheduleInlineError("La fecha y hora de solicitud no puede estar en el pasado.");
-      return;
-    }
+    setScheduleServerError(null);
     setTimeValue(nextTimeValue);
-    setScheduleInlineError(null);
   }
 
   function handleReturnDateChange(nextDateValue: string) {
+    setScheduleServerError(null);
     if (!nextDateValue) {
       setReturnDateValue("");
       setReturnTimeValue("");
-      setScheduleInlineError(null);
-      return;
-    }
-    if (isSundayDateValue(nextDateValue)) {
-      setScheduleInlineError("La devolucion solo se puede programar de lunes a sabado.");
       return;
     }
     setReturnDateValue(nextDateValue);
@@ -649,25 +714,19 @@ export function LoanCreatePage({
     if (returnTimeValue && returnTimeValue < nextMinTime) {
       setReturnTimeValue(nextMinTime);
     }
-    setScheduleInlineError(null);
   }
 
   function handleReturnTimeChange(nextTimeValue: string) {
+    setScheduleServerError(null);
     if (!nextTimeValue) {
       setReturnDateValue("");
       setReturnTimeValue("");
-      setScheduleInlineError(null);
-      return;
-    }
-    if (!isAllowedLoanTimeValue(nextTimeValue)) {
-      setScheduleInlineError("La devolucion solo se puede programar entre las 08:00 y las 22:00.");
       return;
     }
     if (!returnDateValue) {
       setReturnDateValue(dateValue);
     }
     setReturnTimeValue(nextTimeValue);
-    setScheduleInlineError(null);
   }
 
   function addImplement(implement: ImplementSummary, quantity: number) {
@@ -747,7 +806,7 @@ export function LoanCreatePage({
     }
 
     if (isEditMode && editLoanUuid) {
-      window.location.hash = `#/inventory/prestamos/${editLoanUuid}`;
+      window.location.assign(buildLoanDetailHash(editLoanUuid, "list"));
       return;
     }
 
@@ -757,12 +816,12 @@ export function LoanCreatePage({
   async function submitLoan() {
     setGlobalError(null);
     setRoomInlineError(null);
-    setScheduleInlineError(null);
+    setScheduleServerError(null);
     setSearchInlineError(null);
     setDuplicateWarning(null);
 
-    if (isEditMode && editingLoan && editingLoan.status !== "pending") {
-      setGlobalError("Solo puedes modificar solicitudes en estado pendiente.");
+    if (isEditMode && editingLoan && editingLoan.status !== "approved") {
+      setGlobalError("Solo puedes modificar solicitudes en estado reservado.");
       return;
     }
 
@@ -774,32 +833,7 @@ export function LoanCreatePage({
       setGlobalError("Debes completar fecha y hora validas.");
       return;
     }
-    if (isIsoInPast(scheduledAt)) {
-      setGlobalError("La fecha y hora de solicitud no puede estar en el pasado.");
-      return;
-    }
-    if (isSundayDateValue(dateValue)) {
-      setScheduleInlineError("Las solicitudes solo se pueden programar de lunes a sabado.");
-      return;
-    }
-    if (!isAllowedLoanTimeValue(timeValue)) {
-      setScheduleInlineError("Las solicitudes solo se pueden programar entre las 08:00 y las 22:00.");
-      return;
-    }
-    if (hasCustomExpectedReturn && returnDateValue && isSundayDateValue(returnDateValue)) {
-      setScheduleInlineError("La devolucion solo se puede programar de lunes a sabado.");
-      return;
-    }
-    if (hasCustomExpectedReturn && returnTimeValue && !isAllowedLoanTimeValue(returnTimeValue)) {
-      setScheduleInlineError("La devolucion solo se puede programar entre las 08:00 y las 22:00.");
-      return;
-    }
-    if (hasCustomExpectedReturn && expectedReturnAt && isIsoInPast(expectedReturnAt)) {
-      setGlobalError("La fecha y hora de devolucion no puede estar en el pasado.");
-      return;
-    }
-    if (hasCustomExpectedReturn && expectedReturnAt && new Date(expectedReturnAt).getTime() <= new Date(scheduledAt).getTime()) {
-      setGlobalError("La fecha y hora de devolucion debe ser posterior a la fecha y hora de solicitud.");
+    if (scheduleClientError) {
       return;
     }
     if (cart.length === 0) {
@@ -820,7 +854,7 @@ export function LoanCreatePage({
       const implement = implementByUuid.get(stockConflict.implement_uuid);
       const availableStock = implement ? getAvailableStock(implement) : null;
       setSearchInlineError(
-        `Solo puedes solicitar dentro del stock disponible. ${stockConflict.implement_name} tiene ${availableStock ?? 0} unidad(es) disponibles para la fecha y hora seleccionadas.`,
+        `Solo puedes solicitar dentro del stock disponible. ${stockConflict.implement_name} tiene ${availableStock ?? 0} unidad(es) disponibles para esta solicitud.`,
       );
       return;
     }
@@ -846,18 +880,22 @@ export function LoanCreatePage({
         savedLoan = await createLoan(payload);
         saveLastCreatedLoan(savedLoan);
       }
-      window.location.hash = `#/inventory/prestamos/${savedLoan.uuid}`;
+      window.location.assign(buildLoanDetailHash(savedLoan.uuid, "list"));
     } catch (requestError) {
       const payloadError = getApiErrorPayload(requestError);
       if (payloadError?.code === "LOAN_DUPLICATE_REQUEST") {
         setSearchInlineError(payloadError.message);
       } else if (
+        payloadError?.code === "LOAN_SCHEDULE_PAST_NOT_ALLOWED" ||
+        payloadError?.code === "LOAN_SCHEDULE_RANGE_NOT_ALLOWED" ||
         payloadError?.code === "LOAN_SCHEDULE_DAY_NOT_ALLOWED" ||
         payloadError?.code === "LOAN_SCHEDULE_TIME_NOT_ALLOWED" ||
+        payloadError?.code === "LOAN_EXPECTED_RETURN_INVALID" ||
+        payloadError?.code === "LOAN_EXPECTED_RETURN_PAST_NOT_ALLOWED" ||
         payloadError?.code === "LOAN_EXPECTED_RETURN_DAY_NOT_ALLOWED" ||
         payloadError?.code === "LOAN_EXPECTED_RETURN_TIME_NOT_ALLOWED"
       ) {
-        setScheduleInlineError(payloadError.message);
+        setScheduleServerError(payloadError.message);
       } else if (payloadError?.code === "LOAN_STOCK_CONFLICT") {
         setSearchInlineError(payloadError.message);
       } else if (
@@ -896,9 +934,6 @@ export function LoanCreatePage({
         <div className="panel">
           <p className="text-muted">Cargando datos de la solicitud para modificacion...</p>
         </div>
-      ) : null}
-      {isEditMode && editingLoan ? (
-        <div className="field-hint">Editando solicitud {editingLoan.uuid}</div>
       ) : null}
 
       {editBlockedMessage ? (
@@ -974,6 +1009,7 @@ export function LoanCreatePage({
                   type="date"
                   value={dateValue}
                   min={earliestSelectableDate}
+                  max={latestSelectableDate}
                   disabled={saving}
                   onChange={(event) => handleScheduleDateChange(event.target.value)}
                 />
@@ -1042,7 +1078,7 @@ export function LoanCreatePage({
                 en caso de que no se ingrese una fecha y hora de devolucion, se usara la misma fecha y hora de solicitud con un incremento de 2 horas
               </div>
               <div className="loan-create-note loan-create-note--warning">
-                la cantidad disponible de los implementos cambiara segun el rango de fecha y hora en la que los solicite. Si solo marcas la fecha y hora de solicitud, el sistema considerara como devolucion esa misma fecha con un incremento de 2 horas para validar la disponibilidad.
+                la disponibilidad se valida para esta solicitud. Si solo marcas la fecha y hora de solicitud, el sistema considerara como devolucion esa misma fecha con un incremento de 2 horas. En implementos consumibles de uso unico, una vez reservados quedan bloqueados para nuevas solicitudes hasta su entrega, cancelacion o expiracion.
               </div>
               {scheduleInlineError ? <p className="field-error loan-create-form-grid__error">{scheduleInlineError}</p> : null}
             </div>
@@ -1070,7 +1106,7 @@ export function LoanCreatePage({
                 id="loan-search-input"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Buscar por nombre, categoria o ID"
+                placeholder="Buscar por nombre, categoria o codigo"
                 disabled={saving}
               />
             </label>

@@ -12,11 +12,13 @@ public interface StockRepository {
 
     Optional<StockCounters> findStockByImplementUuid(UUID implementUuid);
 
+    IndividualStatusSummary summarizeActiveIndividuals();
+
     List<IndividualItem> findActiveIndividualsByImplementUuid(UUID implementUuid);
 
     List<IndividualItem> findActiveIndividualsByUuids(UUID implementUuid, List<UUID> individualUuids);
 
-    void createIndividuals(UUID implementUuid, UUID locationUuid, List<String> assetCodes);
+    void createIndividuals(UUID implementUuid, List<IndividualEntryDraft> individualEntries);
 
     void updateStock(UUID implementUuid, int totalDelta, int availableDelta, int reservedDelta, int loanedDelta, int damagedDelta);
 
@@ -28,7 +30,10 @@ public interface StockRepository {
             String conditionLiteral,
             String notes,
             UUID locationUuid,
-            Boolean active
+            Boolean active,
+            Integer remainingLife,
+            boolean remainingLifePresent,
+            Boolean assetCodeReprintRequired
     );
 
     record ImplementStockContext(UUID implementUuid, UUID locationUuid, StockItemType itemType, Boolean active) {

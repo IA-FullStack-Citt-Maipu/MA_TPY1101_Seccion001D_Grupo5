@@ -5,6 +5,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from time import perf_counter
 
 from app.agent.state import AgentState
+from app.client.context import get_query_intent, get_user_role
 from app.config import settings
 from app.observability.logger import log_event
 from app.observability.metrics import record_llm_call
@@ -28,7 +29,8 @@ def _build_model(*, with_tools: bool) -> object:
     if not with_tools:
         return llm
 
-    tools = list(get_tools())
+    role = get_user_role()
+    tools = list(get_tools(role))
     return llm.bind_tools(tools)
 
 
@@ -101,14 +103,22 @@ def call_model(state: AgentState) -> dict[str, list[AIMessage]]:
 def finalize_response(state: AgentState) -> dict[str, list[AIMessage]]:
     conversation_id = state.get("conversation_id")
     messages = list(state["messages"])
+    query_intent = get_query_intent()
 
     if messages and isinstance(messages[-1], AIMessage) and not messages[-1].tool_calls and not has_meaningful_text(messages[-1]):
         messages = messages[:-1]
 
+    finalization_rule = (
+        "Si la consulta fue un pedido explicito de identificador tecnico y las herramientas entregaron una seccion tecnica valida, "
+        "puedes incluir ese identificador de forma breve. "
+        if query_intent == "identifier_request"
+        else "No reveles identificadores tecnicos ni UUIDs. "
+    )
     finalization_instruction = HumanMessage(
         content=(
             "Redacta ahora la respuesta final para el usuario en espanol, usando solo la informacion ya obtenida. "
-            "No llames herramientas ni dejes la respuesta vacia."
+            + finalization_rule
+            + "No llames herramientas ni dejes la respuesta vacia."
         )
     )
     response = _invoke_llm(

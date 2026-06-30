@@ -5,3 +5,10 @@ export interface LocationOption {
   active?: boolean;
 }
 
+export interface LocationAssociationSummary {
+  locationUuid: string;
+  associationCount: number;
+  implementCount: number;
+  individualCount: number;
+  canDelete: boolean;
+}

@@ -1,4 +1,5 @@
 export interface InventoryMovementDetail {
+  id?: string;
   uuid: string;
   action: string;
   quantity: number;
@@ -6,6 +7,33 @@ export interface InventoryMovementDetail {
   notes: string | null;
   implement_uuid: string | null;
   performed_by: string | null;
+}
+
+export interface InventoryMovementHistoryItem {
+  id: string;
+  action: string;
+  quantity: number;
+  timestamp: string;
+  notes: string | null;
+  implement_uuid: string | null;
+  implement_name: string | null;
+  barcode: string | null;
+  item_type: "consumable" | "reusable" | "individual" | null;
+  category_name: string | null;
+  location_name: string | null;
+  performed_by_uuid: string | null;
+  performed_by: string | null;
+  performed_by_role: string | null;
+}
+
+export interface InventoryMovementHistoryPage {
+  items: InventoryMovementHistoryItem[];
+  page: number;
+  size: number;
+  totalItems: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
 }
 
 export interface ImplementCreatePayload {
@@ -18,6 +46,8 @@ export interface ImplementCreatePayload {
   img_url: string | null;
   min_stock: number;
   observations: string | null;
+  cost_center: string | null;
+  net_value: number | null;
 }
 
 export interface ImplementUpdatePayload {
@@ -30,6 +60,8 @@ export interface ImplementUpdatePayload {
   img_url: string | null;
   min_stock: number;
   observations: string | null;
+  cost_center: string | null;
+  net_value: number | null;
 }
 
 export interface ImplementSummary {
@@ -37,10 +69,13 @@ export interface ImplementSummary {
   name: string;
   description?: string | null;
   barcode?: string | null;
+  individualAssetCodes?: string[] | null;
+  individual_asset_codes?: string[] | null;
   imgUrl?: string | null;
   img_url?: string | null;
   active?: boolean;
   available?: boolean;
+  item_type?: "consumable" | "reusable" | "individual" | null;
   category: {
     uuid: string;
     name: string;
@@ -108,6 +143,8 @@ export interface ImplementDetail {
   barcode: string | null;
   img_url: string | null;
   observations: string | null;
+  cost_center: string | null;
+  net_value: number | null;
   active: boolean;
   createdAt: string;
   updatedAt: string;

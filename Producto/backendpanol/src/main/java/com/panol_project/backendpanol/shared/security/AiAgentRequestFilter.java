@@ -10,6 +10,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.OffsetDateTime;
+import java.util.Base64;
+import java.util.Map;
 import java.util.Set;
 import org.springframework.http.MediaType;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -20,10 +22,15 @@ public class AiAgentRequestFilter extends OncePerRequestFilter {
     private static final String AI_AGENT_ORIGIN = "AI-Agent";
     private static final String CLIENT_ORIGIN_HEADER = "X-Client-Origin";
     private static final String CLIENT_SECRET_HEADER = "X-Client-Secret";
+    private static final String AUTHORIZATION_HEADER = "Authorization";
+    private static final String BEARER_PREFIX = "Bearer ";
+    private static final String BOT_TOKEN_USE = "bot-panol";
     private static final String SECRET_INVALID_CODE = "AI_AGENT_SECRET_INVALID";
     private static final String SECRET_INVALID_MESSAGE = "Credenciales de origen AI-Agent invalidas.";
     private static final String MUTATION_FORBIDDEN_CODE = "AI_AGENT_MUTATION_FORBIDDEN";
     private static final String MUTATION_FORBIDDEN_MESSAGE = "El origen AI-Agent solo tiene permisos de lectura.";
+    private static final String BOT_SCOPE_FORBIDDEN_CODE = "AI_AGENT_TOKEN_SCOPE_FORBIDDEN";
+    private static final String BOT_SCOPE_FORBIDDEN_MESSAGE = "El token del asistente solo puede usarse desde AI-Agent.";
     private static final Set<String> SAFE_METHODS = Set.of("GET", "HEAD", "OPTIONS");
 
     private final ObjectMapper objectMapper;
@@ -47,8 +54,16 @@ public class AiAgentRequestFilter extends OncePerRequestFilter {
         }
 
         String clientOrigin = request.getHeader(CLIENT_ORIGIN_HEADER);
-        if (!AI_AGENT_ORIGIN.equals(clientOrigin)) {
+        boolean aiAgentOrigin = AI_AGENT_ORIGIN.equals(clientOrigin);
+        boolean botTokenRequest = isBotTokenRequest(request);
+
+        if (!aiAgentOrigin && !botTokenRequest) {
             filterChain.doFilter(request, response);
+            return;
+        }
+
+        if (!aiAgentOrigin) {
+            writeForbidden(response, BOT_SCOPE_FORBIDDEN_CODE, BOT_SCOPE_FORBIDDEN_MESSAGE);
             return;
         }
 
@@ -63,6 +78,52 @@ public class AiAgentRequestFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private boolean isBotTokenRequest(HttpServletRequest request) {
+        String token = extractBearerToken(request.getHeader(AUTHORIZATION_HEADER));
+        if (token == null) {
+            return false;
+        }
+
+        Map<String, Object> claims = decodeClaimsWithoutVerification(token);
+        if (claims == null) {
+            return false;
+        }
+
+        Object tokenUse = claims.get("token_use");
+        return BOT_TOKEN_USE.equals(tokenUse);
+    }
+
+    private String extractBearerToken(String authorization) {
+        if (authorization == null || authorization.isBlank()) {
+            return null;
+        }
+        if (!authorization.startsWith(BEARER_PREFIX)) {
+            return null;
+        }
+
+        String token = authorization.substring(BEARER_PREFIX.length()).trim();
+        return token.isBlank() ? null : token;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> decodeClaimsWithoutVerification(String token) {
+        String[] parts = token.split("\\.");
+        if (parts.length < 2) {
+            return null;
+        }
+
+        try {
+            byte[] decodedPayload = Base64.getUrlDecoder().decode(parts[1]);
+            Object payload = objectMapper.readValue(decodedPayload, Object.class);
+            if (payload instanceof Map<?, ?> payloadMap) {
+                return (Map<String, Object>) payloadMap;
+            }
+            return null;
+        } catch (IllegalArgumentException | IOException ex) {
+            return null;
+        }
     }
 
     private boolean hasValidSecret(String providedSecret) {

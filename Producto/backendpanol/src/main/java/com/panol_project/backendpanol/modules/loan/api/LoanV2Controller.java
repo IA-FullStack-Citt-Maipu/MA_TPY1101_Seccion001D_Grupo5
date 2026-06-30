@@ -6,13 +6,20 @@ import com.panol_project.backendpanol.modules.loan.api.dto.CreateLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.api.dto.DeliverLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanItemV2Response;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanPageV2Response;
+import com.panol_project.backendpanol.modules.loan.api.dto.LoanRequesterHistoryItemV2Response;
+import com.panol_project.backendpanol.modules.loan.api.dto.LoanRequesterHistoryPageV2Response;
+import com.panol_project.backendpanol.modules.loan.api.dto.LoanRequesterItemV2Response;
+import com.panol_project.backendpanol.modules.loan.api.dto.LoanRequesterPageV2Response;
+import com.panol_project.backendpanol.modules.loan.api.dto.LoanReturnContextIndividualV2Response;
+import com.panol_project.backendpanol.modules.loan.api.dto.LoanReturnContextItemV2Response;
+import com.panol_project.backendpanol.modules.loan.api.dto.LoanReturnContextV2Response;
+import com.panol_project.backendpanol.modules.loan.api.dto.PrepareLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanRoomV2Response;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanStateDatesV2Response;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanStatusTimelineEntryV2Response;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanSubjectV2Response;
 import com.panol_project.backendpanol.modules.loan.api.dto.LoanV2Response;
 import com.panol_project.backendpanol.modules.loan.api.dto.ReturnLoanV2Request;
-import com.panol_project.backendpanol.modules.loan.api.dto.ReviewLoanV2Request;
 import com.panol_project.backendpanol.modules.loan.application.GestionPrestamoUseCase;
 import com.panol_project.backendpanol.modules.loan.application.SolicitarPrestamoUseCase;
 import com.panol_project.backendpanol.modules.loan.application.dto.CancelarPrestamoCommand;
@@ -22,21 +29,28 @@ import com.panol_project.backendpanol.modules.loan.application.dto.DevolverPrest
 import com.panol_project.backendpanol.modules.loan.application.dto.DevolverPrestamoIndividualCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.EntregarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.EntregarPrestamoItemCommand;
-import com.panol_project.backendpanol.modules.loan.application.dto.RevisarPrestamoCommand;
-import com.panol_project.backendpanol.modules.loan.application.dto.RevisarPrestamoItemCommand;
+import com.panol_project.backendpanol.modules.loan.application.dto.PrepararPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.SolicitarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.SolicitarPrestamoItemCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStateDatesView;
+import com.panol_project.backendpanol.modules.loan.domain.LoanStatus;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryPage;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStatusTimelineEntry;
+import com.panol_project.backendpanol.modules.loan.domain.LoanReturnContextView;
+import com.panol_project.backendpanol.modules.loan.domain.LoanRequesterHistoryItem;
+import com.panol_project.backendpanol.modules.loan.domain.LoanRequesterHistoryPage;
+import com.panol_project.backendpanol.modules.loan.domain.LoanRequesterSummary;
+import com.panol_project.backendpanol.modules.loan.domain.LoanRequesterSummaryPage;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
 import com.panol_project.backendpanol.shared.error.ApiException;
 import com.panol_project.backendpanol.shared.error.BadRequestException;
 import com.panol_project.backendpanol.shared.error.NotFoundException;
 import com.panol_project.backendpanol.shared.security.CurrentUserUuidResolver;
 import jakarta.validation.Valid;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -75,7 +89,7 @@ public class LoanV2Controller {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasRole('DOCENTE')")
+    @PreAuthorize("hasAnyRole('DOCENTE', 'COORDINADOR')")
     public LoanV2Response solicitarPrestamo(@Valid @RequestBody CreateLoanV2Request request, Authentication authentication) {
         UUID requesterUuid = currentUserUuidResolver.resolveCurrentUserUuid(authentication)
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "AUTH_REQUIRED", "Autenticacion requerida"));
@@ -100,7 +114,7 @@ public class LoanV2Controller {
     }
 
     @PatchMapping("/{loanUuid}")
-    @PreAuthorize("hasRole('DOCENTE')")
+    @PreAuthorize("hasAnyRole('DOCENTE', 'COORDINADOR')")
     public LoanV2Response modificarPrestamo(
             @PathVariable UUID loanUuid,
             @Valid @RequestBody CreateLoanV2Request request,
@@ -134,12 +148,17 @@ public class LoanV2Controller {
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "20") Integer size,
             @RequestParam(defaultValue = "false") Boolean mine,
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            @RequestParam(required = false) OffsetDateTime from,
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            @RequestParam(required = false) OffsetDateTime to,
             Authentication authentication
     ) {
         int resolvedPage = page == null ? DEFAULT_PAGE : page;
         int resolvedSize = size == null ? DEFAULT_SIZE : size;
 
         validatePagination(resolvedPage, resolvedSize);
+        validateRange(from, to);
 
         UUID currentUserUuid = resolveCurrentUserUuid(authentication);
         boolean isDocente = hasRole(authentication, "ROLE_DOCENTE");
@@ -147,11 +166,45 @@ public class LoanV2Controller {
 
         LoanSummaryPage summaryPage = gestionPrestamoUseCase.listar(
                 onlyMine ? currentUserUuid : null,
+                from,
+                to,
                 resolvedPage,
                 resolvedSize
         );
 
         return toPageResponse(summaryPage);
+    }
+
+    @GetMapping("/requesters")
+    @PreAuthorize("hasAnyRole('COORDINADOR','DIRECTOR')")
+    public LoanRequesterPageV2Response listarSolicitantesDocentes(
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "15") Integer size,
+            @RequestParam(required = false) String search
+    ) {
+        int resolvedPage = page == null ? DEFAULT_PAGE : page;
+        int resolvedSize = size == null ? 15 : size;
+
+        validatePagination(resolvedPage, resolvedSize);
+
+        LoanRequesterSummaryPage summaryPage = gestionPrestamoUseCase.listarSolicitantesDocentes(search, resolvedPage, resolvedSize);
+        return toRequesterPageResponse(summaryPage);
+    }
+
+    @GetMapping("/requesters/{requesterUuid}/history")
+    @PreAuthorize("hasAnyRole('COORDINADOR','DIRECTOR')")
+    public LoanRequesterHistoryPageV2Response obtenerHistorialSolicitante(
+            @PathVariable UUID requesterUuid,
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "6") Integer size
+    ) {
+        int resolvedPage = page == null ? DEFAULT_PAGE : page;
+        int resolvedSize = size == null ? 6 : size;
+
+        validatePagination(resolvedPage, resolvedSize);
+
+        LoanRequesterHistoryPage historyPage = gestionPrestamoUseCase.obtenerHistorialSolicitante(requesterUuid, resolvedPage, resolvedSize);
+        return toRequesterHistoryPageResponse(historyPage);
     }
 
     @GetMapping("/{loanUuid}")
@@ -172,6 +225,16 @@ public class LoanV2Controller {
         return toStateDatesResponse(gestionPrestamoUseCase.obtenerFechasEstado(loanUuid));
     }
 
+    @GetMapping("/{loanUuid}/return-context")
+    @PreAuthorize("hasRole('COORDINADOR')")
+    public LoanReturnContextV2Response obtenerContextoDevolucionPrestamo(
+            @PathVariable UUID loanUuid,
+            Authentication authentication
+    ) {
+        findLoanVisibleForCurrentUser(authentication, loanUuid);
+        return toReturnContextResponse(gestionPrestamoUseCase.obtenerContextoDevolucion(loanUuid));
+    }
+
     @GetMapping("/{loanUuid}/status-timeline")
     public List<LoanStatusTimelineEntryV2Response> obtenerTimelineEstadoPrestamo(
             @PathVariable UUID loanUuid,
@@ -183,31 +246,22 @@ public class LoanV2Controller {
                 .toList();
     }
 
-    @PatchMapping("/{loanUuid}/review")
+    @PostMapping("/{loanUuid}/prepare")
     @PreAuthorize("hasRole('COORDINADOR')")
-    public LoanV2Response revisarPrestamo(
+    public LoanV2Response prepararPrestamo(
             @PathVariable UUID loanUuid,
-            @Valid @RequestBody ReviewLoanV2Request request,
+            @Valid @RequestBody(required = false) PrepareLoanV2Request request,
             Authentication authentication
     ) {
         UUID actorUuid = resolveCurrentUserUuid(authentication);
-        LoanSummaryView reviewed = gestionPrestamoUseCase.revisar(
-                new RevisarPrestamoCommand(
+        LoanSummaryView prepared = gestionPrestamoUseCase.preparar(
+                new PrepararPrestamoCommand(
                         loanUuid,
                         actorUuid,
-                        request.decision(),
-                        request.notes(),
-                        request.items() == null
-                                ? List.of()
-                                : request.items().stream()
-                                        .map(item -> new RevisarPrestamoItemCommand(
-                                                item.implementUuid(),
-                                                item.approvedQuantity()
-                                        ))
-                                        .toList()
+                        request == null ? null : request.notes()
                 )
         );
-        return toResponse(reviewed);
+        return toResponse(prepared);
     }
 
     @PostMapping("/{loanUuid}/delivery")
@@ -258,7 +312,7 @@ public class LoanV2Controller {
             @RequestBody(required = false) CancelLoanV2Request request,
             Authentication authentication
     ) {
-        findLoanVisibleForCurrentUser(authentication, loanUuid);
+        requireLoanCancellationAllowed(authentication, loanUuid);
         UUID actorUuid = resolveCurrentUserUuid(authentication);
 
         LoanSummaryView cancelled = gestionPrestamoUseCase.cancelar(
@@ -311,15 +365,18 @@ public class LoanV2Controller {
                 loan.scheduledAt(),
                 loan.expectedReturnAt(),
                 loan.createdAt(),
+                loan.completedAt(),
                 loan.room() == null ? null : new LoanRoomV2Response(loan.room().uuid(), loan.room().name()),
                 loan.subject() == null ? null : new LoanSubjectV2Response(loan.subject().uuid(), loan.subject().name()),
                 loan.items().stream()
                         .map(item -> new LoanItemV2Response(
                                 item.implementUuid(),
                                 item.implementName(),
+                                item.itemType(),
                                 item.requestedQuantity(),
                                 item.reservedQuantity(),
-                                item.deliveredQuantity()
+                                item.deliveredQuantity(),
+                                item.returnedQuantity()
                         ))
                         .toList()
         );
@@ -335,6 +392,27 @@ public class LoanV2Controller {
                 dates.cancelledAt(),
                 dates.expiredAt(),
                 dates.overdueAt()
+        );
+    }
+
+    private LoanReturnContextV2Response toReturnContextResponse(LoanReturnContextView context) {
+        return new LoanReturnContextV2Response(
+                context.loanUuid(),
+                context.items().stream()
+                        .map(item -> new LoanReturnContextItemV2Response(
+                                item.implementUuid(),
+                                item.implementName(),
+                                item.itemType(),
+                                item.deliveredQuantity(),
+                                item.pendingReturnQuantity(),
+                                item.individuals().stream()
+                                        .map(individual -> new LoanReturnContextIndividualV2Response(
+                                                individual.individualUuid(),
+                                                individual.assetCode()
+                                        ))
+                                        .toList()
+                        ))
+                        .toList()
         );
     }
 
@@ -366,12 +444,101 @@ public class LoanV2Controller {
         );
     }
 
+    private LoanRequesterPageV2Response toRequesterPageResponse(LoanRequesterSummaryPage page) {
+        boolean hasNext = page.page() < page.totalPages();
+        boolean hasPrevious = page.page() > 1;
+        return new LoanRequesterPageV2Response(
+                page.items().stream()
+                        .map(this::toRequesterItemResponse)
+                        .toList(),
+                page.page(),
+                page.size(),
+                page.totalItems(),
+                page.totalPages(),
+                hasNext,
+                hasPrevious
+        );
+    }
+
+    private LoanRequesterHistoryPageV2Response toRequesterHistoryPageResponse(LoanRequesterHistoryPage page) {
+        boolean hasNext = page.page() < page.totalPages();
+        boolean hasPrevious = page.page() > 1;
+        return new LoanRequesterHistoryPageV2Response(
+                toRequesterItemResponse(page.requester()),
+                page.items().stream()
+                        .map(this::toRequesterHistoryItemResponse)
+                        .toList(),
+                page.page(),
+                page.size(),
+                page.totalItems(),
+                page.totalPages(),
+                hasNext,
+                hasPrevious
+        );
+    }
+
+    private LoanRequesterItemV2Response toRequesterItemResponse(LoanRequesterSummary requester) {
+        return new LoanRequesterItemV2Response(
+                requester.requesterUuid(),
+                requester.requesterName(),
+                requester.requesterEmail(),
+                requester.requesterRut(),
+                requester.lastLoanAt(),
+                requester.latestLoanUuid(),
+                requester.latestLoanStatus() == null ? null : requester.latestLoanStatus().literal(),
+                requester.latestRoomName(),
+                requester.latestSubjectName(),
+                requester.totalLoans(),
+                requester.activeLoans()
+        );
+    }
+
+    private LoanRequesterHistoryItemV2Response toRequesterHistoryItemResponse(LoanRequesterHistoryItem item) {
+        return new LoanRequesterHistoryItemV2Response(
+                item.uuid(),
+                item.status().literal(),
+                item.scheduledAt(),
+                item.expectedReturnAt(),
+                item.createdAt(),
+                item.completedAt(),
+                item.stateDates() == null ? null : item.stateDates().approvedAt(),
+                item.stateDates() == null ? null : item.stateDates().preparedAt(),
+                item.stateDates() == null ? null : item.stateDates().deliveredAt(),
+                item.stateDates() == null ? null : item.stateDates().rejectedAt(),
+                item.stateDates() == null ? null : item.stateDates().cancelledAt(),
+                item.stateDates() == null ? null : item.stateDates().expiredAt(),
+                item.stateDates() == null ? null : item.stateDates().overdueAt(),
+                item.room() == null ? null : new LoanRoomV2Response(item.room().uuid(), item.room().name()),
+                item.subject() == null ? null : new LoanSubjectV2Response(item.subject().uuid(), item.subject().name()),
+                item.items().stream()
+                        .map(loanItem -> new LoanItemV2Response(
+                                loanItem.implementUuid(),
+                                loanItem.implementName(),
+                                loanItem.itemType(),
+                                loanItem.requestedQuantity(),
+                                loanItem.reservedQuantity(),
+                                loanItem.deliveredQuantity(),
+                                loanItem.returnedQuantity()
+                        ))
+                        .toList()
+        );
+    }
+
     private void validatePagination(int page, int size) {
         if (page < 1) {
             throw new BadRequestException("LOAN_PAGE_INVALID", "page debe ser mayor o igual a 1");
         }
         if (size < 1 || size > MAX_SIZE) {
             throw new BadRequestException("LOAN_SIZE_INVALID", "size debe estar entre 1 y " + MAX_SIZE);
+        }
+    }
+
+    private void validateRange(OffsetDateTime from, OffsetDateTime to) {
+        if ((from == null) != (to == null)) {
+            throw new BadRequestException("LOAN_RANGE_PAIR_REQUIRED", "from y to deben enviarse juntos");
+        }
+        if (from != null && !from.isBefore(to)) {
+            throw new BadRequestException("LOAN_RANGE_INVALID", "from debe ser anterior a to");
         }
     }
 
@@ -393,6 +560,40 @@ public class LoanV2Controller {
             throw new NotFoundException("LOAN_NOT_FOUND", "Prestamo no encontrado");
         }
         return loan;
+    }
+
+    private LoanSummaryView requireOwnedCancellableLoanForRequester(
+            Authentication authentication,
+            UUID loanUuid,
+            String forbiddenCode,
+            String invalidStateCode
+    ) {
+        LoanSummaryView loan = findLoanVisibleForCurrentUser(authentication, loanUuid);
+        UUID currentUserUuid = resolveCurrentUserUuid(authentication);
+        if (!currentUserUuid.equals(loan.requesterUuid())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, forbiddenCode, "No tienes permisos para gestionar este prestamo");
+        }
+        if (loan.status() != LoanStatus.PENDING
+                && loan.status() != LoanStatus.APPROVED
+                && loan.status() != LoanStatus.PREPARED) {
+            throw new BadRequestException(
+                    invalidStateCode,
+                    "Solo puedes cancelar prestamos en estado approved o prepared"
+            );
+        }
+        return loan;
+    }
+
+    private LoanSummaryView requireLoanCancellationAllowed(Authentication authentication, UUID loanUuid) {
+        if (hasRole(authentication, "ROLE_COORDINADOR")) {
+            return findLoanVisibleForCurrentUser(authentication, loanUuid);
+        }
+        return requireOwnedCancellableLoanForRequester(
+                authentication,
+                loanUuid,
+                "LOAN_CANCEL_FORBIDDEN",
+                "LOAN_CANCEL_INVALID_STATE"
+        );
     }
 
     private UUID resolveCurrentUserUuid(Authentication authentication) {

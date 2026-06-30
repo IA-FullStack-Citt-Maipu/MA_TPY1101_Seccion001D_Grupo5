@@ -10,6 +10,8 @@ public record IndividualItem(
         String condition,
         String notes,
         UUID currentLocationUuid,
-        Boolean active
+        Boolean active,
+        Integer remainingLife,
+        Boolean assetCodeReprintRequired
 ) {
 }

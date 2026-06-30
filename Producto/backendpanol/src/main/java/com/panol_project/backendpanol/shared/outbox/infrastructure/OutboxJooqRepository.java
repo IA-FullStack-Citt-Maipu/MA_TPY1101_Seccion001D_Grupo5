@@ -9,11 +9,14 @@ import com.panol_project.backendpanol.shared.outbox.domain.OutboxRepository;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
+import org.jooq.Field;
 import org.jooq.DSLContext;
 import org.springframework.stereotype.Repository;
 
 @Repository
 public class OutboxJooqRepository implements OutboxRepository {
+
+    private static final Field<OffsetDateTime> PROCESSED_AT_FIELD = OUTBOX_EVENT.field("processed_at", OffsetDateTime.class);
 
     private final DSLContext dsl;
 
@@ -66,7 +69,7 @@ public class OutboxJooqRepository implements OutboxRepository {
     public void markSent(UUID eventId, OffsetDateTime processedAt) {
         dsl.update(OUTBOX_EVENT)
                 .set(OUTBOX_EVENT.STATUS, OutboxStatusEnum.SENT)
-                .set(OUTBOX_EVENT.field("processed_at", OffsetDateTime.class), processedAt)
+                .set(PROCESSED_AT_FIELD, processedAt)
                 .where(OUTBOX_EVENT.EVENT_ID.eq(eventId))
                 .execute();
     }
@@ -96,5 +99,23 @@ public class OutboxJooqRepository implements OutboxRepository {
                 .where(OUTBOX_EVENT.RETRY_COUNT.gt(0))
                 .fetchOne(0, Integer.class);
         return count == null ? 0 : count;
+    }
+
+    @Override
+    public int deleteSentOlderThan(OffsetDateTime cutoff, int limit) {
+        if (cutoff == null || limit <= 0) {
+            return 0;
+        }
+
+        return dsl.deleteFrom(OUTBOX_EVENT)
+                .where(OUTBOX_EVENT.ID.in(
+                        dsl.select(OUTBOX_EVENT.ID)
+                                .from(OUTBOX_EVENT)
+                                .where(OUTBOX_EVENT.STATUS.eq(OutboxStatusEnum.SENT))
+                                .and(PROCESSED_AT_FIELD.lt(cutoff))
+                                .orderBy(PROCESSED_AT_FIELD.asc())
+                                .limit(limit)
+                ))
+                .execute();
     }
 }

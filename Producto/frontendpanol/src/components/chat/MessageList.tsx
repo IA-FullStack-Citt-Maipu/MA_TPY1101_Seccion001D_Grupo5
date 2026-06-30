@@ -72,6 +72,7 @@ export const MessageList = ({
             role={message.role}
             content={message.content}
             timestamp={message.timestamp}
+            uiBlocks={message.uiBlocks}
           />
         ))
       )}

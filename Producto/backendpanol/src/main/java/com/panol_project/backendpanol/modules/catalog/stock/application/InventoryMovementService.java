@@ -3,6 +3,9 @@ package com.panol_project.backendpanol.modules.catalog.stock.application;
 import com.panol_project.backendpanol.modules.catalog.stock.application.contract.InventoryMovementQueryContract;
 import com.panol_project.backendpanol.modules.catalog.stock.application.contract.InventoryMovementQueryContract.InventoryMovementView;
 import com.panol_project.backendpanol.modules.catalog.stock.domain.InventoryMovement;
+import com.panol_project.backendpanol.modules.catalog.stock.domain.InventoryMovementDashboardSummary;
+import com.panol_project.backendpanol.modules.catalog.stock.domain.InventoryMovementHistoryFilter;
+import com.panol_project.backendpanol.modules.catalog.stock.domain.InventoryMovementHistoryPage;
 import com.panol_project.backendpanol.modules.catalog.stock.domain.InventoryMovementRepository;
 import com.panol_project.backendpanol.modules.catalog.stock.domain.MovementAction;
 import com.panol_project.backendpanol.modules.catalog.stock.domain.StockRepository;
@@ -59,7 +62,26 @@ public class InventoryMovementService implements InventoryMovementQueryContract 
         return repository.findAllByOrderByTimestampDesc();
     }
 
+    @Transactional(readOnly = true)
+    public List<InventoryMovement> obtenerMovimientosRecientes(int limit) {
+        if (limit <= 0) {
+            return repository.findAllByOrderByTimestampDesc();
+        }
+        return repository.findByOrderByTimestampDesc(limit);
+    }
+
+    @Transactional(readOnly = true)
+    public InventoryMovementHistoryPage obtenerHistorial(InventoryMovementHistoryFilter filter, int page, int size) {
+        return repository.findHistory(filter, page, size);
+    }
+
+    @Transactional(readOnly = true)
+    public InventoryMovementDashboardSummary obtenerResumenDashboard() {
+        return repository.findDashboardSummary();
+    }
+
     @Override
+    @Transactional(readOnly = true)
     public List<InventoryMovementView> obtenerUltimosMovimientosPorImplemento(UUID implementUuid) {
         return repository.findTop10ByImplementUuidOrderByTimestampDesc(implementUuid)
                 .stream()

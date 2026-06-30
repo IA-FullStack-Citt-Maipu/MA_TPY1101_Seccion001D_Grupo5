@@ -1,9 +1,9 @@
 ﻿# 00 - Matriz Canonica Vigente
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-05-31
-- Fuente de verdad: `Producto/databasepanol/migrations/v25/V25..V35`, `docs/architecture/data-management/16-catalogo-bd-v31.md`, controllers V2, `SecurityConfig`,
-  `application.yaml`, compose files, `ArchitectureTest`
+- Ultima verificacion: 2026-06-30
+- Fuente de verdad: controllers V2, `SecurityConfig`, `application.yaml`, compose files, `ArchitectureTest`, `Producto/databasepanol/migrations/v25/V25..V53`,
+  `docs/architecture/data-management/03-postgresql-guia-tecnica.md`
 
 ## Rutas publicas vigentes
 
@@ -17,7 +17,7 @@
 
 ## Seguridad vigente
 
-- `permitAll`: `/actuator/health`, `/actuator/info`, `POST /api/v2/auth/login`.
+- `permitAll`: `/actuator/health`, `/actuator/info`, `POST /api/v2/auth/login`, `POST /api/v2/auth/password-recovery/request`, `POST /api/v2/auth/password-recovery/verify`, `POST /api/v2/auth/password-recovery/reset`, `POST /api/v2/auth/logout`, `POST /api/v2/auth/refresh`.
 - `denyAll`: `/internal/**`, `/api/v1/**`.
 - Todo lo demas requiere autenticacion.
 - `APP_SECURITY_ENABLED=true` por defecto.
@@ -30,7 +30,8 @@
 4. Worker publica eventos al destino de integración/observabilidad.
 5. Reintentos y estado en `public.outbox_event` con estados canónicos:
    `PENDING`, `PROCESSING`, `SENT`, `FAILED` (compatibilidad: vista `outbox_events`).
-6. `loan`: flujo de préstamo (solicitud, revisión, entrega y devolución) con impacto de disponibilidad y stock.
+6. `loan`: los prestamos nuevos nacen reservados (`approved`), pasan por `prepared`, `delivered` y `completed`, con `pending` relegado a compatibilidad legacy.
+7. La disponibilidad de `consumable` reservado se bloquea globalmente mientras el prestamo siga en `approved` o `prepared`; `reusable` e `individual` siguen evaluandose por traslape de ventana.
 
 ## Compose vigente
 

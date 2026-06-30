@@ -1,7 +1,7 @@
 # Modulo: auth
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-06-13
+- Ultima verificacion: 2026-06-30
 - Fuente de verdad: `AuthV2Controller`, `AuthService`, `AuthCookieService`,
   `RefreshSessionJooqRepository`, `SecurityConfig`, `TokenRevocationValidator`
 
@@ -14,13 +14,18 @@ Ver tambien:
 Autenticacion con JWT en cookie HTTP-only, refresh token opaco persistido en
 `public.user_session`, bloqueo temporal por intentos fallidos, revocacion de
 token en logout y autogestion del usuario autenticado (`/me`, sesiones activas,
-cambio de correo y cambio de contrasena).
+cambio de correo y cambio de contrasena). Tambien cubre recuperacion publica de
+contrasena por RUT + correo asociado con codigo de verificacion enviado por
+email.
 
 ## API vigente
 
 Base path: `/api/v2/auth`
 
 - `POST /login`
+- `POST /password-recovery/request`
+- `POST /password-recovery/verify`
+- `POST /password-recovery/reset`
 - `POST /refresh`
 - `POST /logout`
 - `GET /me`
@@ -34,19 +39,36 @@ Base path: `/api/v2/auth`
 
 - Login, refresh y logout son `permitAll`; el backend autentica `/me` y el resto
   de endpoints protegidos desde la cookie `panol_access_token`.
+- Los tres endpoints de recuperacion de contrasena tambien son `permitAll`.
 - Login setea `panol_access_token` y `panol_refresh_token` como cookies
   HTTP-only.
+- `rememberMe=true` usa el TTL refresh persistente; `rememberMe=false` deja
+  cookies de sesion y usa un TTL server-side temporal mas corto.
 - Refresh rota el refresh token y reemite ambas cookies.
 - Login devuelve `role`, `expiresInSeconds` y `user` para bootstrap de sesion
   del frontend; el JWT ya no se expone en el body.
 - `POST /me/bot-token` emite un JWT efimero para `bot-panol` con
   `aud = bot-panol`; no reemplaza la sesion web basada en cookies.
+- Ese JWT queda acotado al canal `AI-Agent`: no debe reutilizarse contra el
+  backend general fuera del flujo del bot.
 - `GET /me/sessions` devuelve solo las sesiones del usuario autenticado.
 - `DELETE /me/sessions/{sessionId}` revoca una sesion puntual del mismo usuario,
   revoca su `currentAccessJti` cuando existe y elimina la fila refresh.
 - `PATCH /me/email` normaliza el correo a lowercase y rechaza duplicados.
 - `PATCH /me/password` exige contrasena actual valida, minimo 8 caracteres y
   no permite reutilizar la misma contrasena.
+- `POST /password-recovery/request` exige que el correo transaccional este
+  habilitado; si no lo esta, responde `503 AUTH_PASSWORD_RECOVERY_UNAVAILABLE`.
+- Cuando el correo esta habilitado, `POST /password-recovery/request` responde
+  `202` aunque el usuario no exista o no tenga correo asociado.
+- El codigo de recuperacion es alfanumerico, en mayuscula, de 8 caracteres,
+  expira a los 15 minutos y permite hasta 5 intentos fallidos por solicitud.
+- `POST /password-recovery/verify` devuelve un `reset_token` opaco temporal;
+  ese token reemplaza al codigo para el paso final.
+- `POST /password-recovery/reset` exige una contrasena nueva con la misma regla
+  vigente del sistema: minimo 8 caracteres y distinta a la actual.
+- Al resetear por recuperacion se revocan todas las filas activas de
+  `public.user_session` y sus `currentAccessJti` asociados.
 - Logout es idempotente: revoca el access token vigente por `jti` cuando aplica,
   elimina la sesion refresh actual y expira ambas cookies.
 - La validacion de request autenticada consulta `token_revocation` por `jti`
@@ -127,6 +149,20 @@ Base path: `/api/v2/auth`
 - Restriccion relevante:
   - `UNIQUE (jti)`
 
+### `public.password_reset_request`
+
+- Almacena solicitudes de recuperacion de contrasena.
+- Columnas relevantes:
+  - `id`: PK interna.
+  - `user_id`: FK a `user.id`.
+  - `code_hash`: SHA-256 del codigo enviado por correo.
+  - `reset_token_hash`: hash del token opaco emitido tras verificar el codigo.
+  - `expires_at`: vencimiento operativo de la solicitud.
+  - `verified_at`: momento en que el codigo fue validado correctamente.
+  - `consumed_at`: momento en que la solicitud se invalido o se uso.
+  - `last_sent_at`: ultimo envio efectivo del correo.
+  - `attempt_count`: cantidad de intentos fallidos acumulados.
+
 ## Flujo completo
 
 ### 1. Login
@@ -206,7 +242,8 @@ Base path: `/api/v2/auth`
    - `persistentLogin`
    - `userAgent`
    - `createdAt`
-   - `expiresAt`
+   - `accessExpiresAt`
+   - `sessionExpiresAt`
 
 ### 6. Revocacion selectiva por dispositivo
 
@@ -244,10 +281,40 @@ Base path: `/api/v2/auth`
 4. El frontend guarda ese token solo en memoria.
 5. El frontend llama `POST /api/v1/chat` del bot usando
    `Authorization: Bearer <token-puente>`.
+6. Si ese token se usa contra `/api/v2/**`, el backend exige ademas:
+   - `X-Client-Origin: AI-Agent`
+   - `X-Client-Secret` valido
+   - uso exclusivo de metodos de lectura
 6. Si el bot responde `401`, el frontend solicita un nuevo token puente y
    reintenta una sola vez.
 
-### 9. Cleanup de revocaciones expiradas
+### 9. Recuperacion publica de contrasena
+
+1. El usuario envia `POST /api/v2/auth/password-recovery/request` con su RUT.
+2. El backend normaliza el RUT con la misma regla del login.
+3. Si el correo del sistema no esta disponible, responde
+   `503 AUTH_PASSWORD_RECOVERY_UNAVAILABLE`.
+4. Si el usuario existe y tiene correo asociado:
+   - invalida solicitudes previas pendientes
+   - genera un codigo aleatorio de 8 caracteres
+   - persiste `SHA-256(codigo)` en `public.password_reset_request`
+   - encola el correo `auth.password_recovery`
+5. La respuesta del request inicial sigue siendo `202` sin revelar existencia
+   de cuenta.
+6. El usuario envia `POST /api/v2/auth/password-recovery/verify` con `rut` y
+   `code`.
+7. Si el codigo coincide y la solicitud sigue vigente:
+   - se genera un `reset_token` opaco
+   - se persiste su hash
+   - se marca `verified_at`
+8. El usuario envia `POST /api/v2/auth/password-recovery/reset` con
+   `reset_token` y `new_password`.
+9. Si el token sigue vigente:
+   - se actualiza `password_hash`
+   - se consume la solicitud
+   - se revocan todas las sesiones activas del usuario
+
+### 10. Cleanup de revocaciones expiradas
 
 1. Un worker programado del backend corre por `fixedDelay`.
 2. Toma un lote acotado de filas en `public.token_revocation` con
@@ -283,6 +350,7 @@ Base path: `/api/v2/auth`
 - El refresh token no se persiste en claro en la base de datos.
 - El refresh token rota en cada uso valido.
 - El access token tiene `jti` unico y soporte de revocacion.
+- La recuperacion de contrasena nunca guarda codigo ni reset token en claro.
 - `token_revocation` se mantiene acotada con purge automatico de filas ya
   expiradas.
 - Las cookies de auth son `HttpOnly`.

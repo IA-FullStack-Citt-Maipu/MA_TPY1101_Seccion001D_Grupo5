@@ -35,4 +35,6 @@ public interface RefreshSessionPort {
     Optional<RefreshSession> deleteSessionByTokenHash(String refreshTokenHash);
 
     void deleteSessionById(long sessionId);
+
+    List<RefreshSession> deleteSessionsByUserUuid(UUID userUuid);
 }

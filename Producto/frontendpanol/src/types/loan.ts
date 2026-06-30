@@ -1,9 +1,13 @@
+export type LoanItemType = "consumable" | "reusable" | "individual";
+
 export interface LoanItem {
   implement_uuid: string;
   implement_name: string;
+  item_type: LoanItemType | null;
   requested_quantity: number;
   reserved_quantity: number;
   delivered_quantity: number;
+  returned_quantity: number;
 }
 
 export interface LoanRoomSummary {
@@ -23,6 +27,7 @@ export interface LoanSummary {
   scheduled_at: string;
   expected_return_at: string;
   created_at: string;
+  completed_at: string | null;
   room: LoanRoomSummary | null;
   subject: LoanSubjectSummary | null;
   items: LoanItem[];
@@ -36,6 +41,60 @@ export interface LoanPage {
   total_pages: number;
   has_next: boolean;
   has_previous: boolean;
+}
+
+export interface LoanRequesterSummary {
+  requesterUuid: string;
+  requesterName: string;
+  requesterEmail: string | null;
+  requesterRut: string | null;
+  lastLoanAt: string | null;
+  latestLoanUuid: string | null;
+  latestStatus: LoanStatus | null;
+  latestRoomName: string | null;
+  latestSubjectName: string | null;
+  totalLoans: number;
+  activeLoans: number;
+}
+
+export interface LoanRequesterPage {
+  items: LoanRequesterSummary[];
+  page: number;
+  size: number;
+  totalItems: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
+}
+
+export interface LoanRequesterHistoryItem {
+  uuid: string;
+  status: LoanStatus;
+  scheduledAt: string;
+  expectedReturnAt: string | null;
+  createdAt: string;
+  completedAt: string | null;
+  approvedAt: string | null;
+  preparedAt: string | null;
+  deliveredAt: string | null;
+  rejectedAt: string | null;
+  cancelledAt: string | null;
+  expiredAt: string | null;
+  overdueAt: string | null;
+  room: LoanRoomSummary | null;
+  subject: LoanSubjectSummary | null;
+  items: LoanItem[];
+}
+
+export interface LoanRequesterHistoryPage {
+  requester: LoanRequesterSummary | null;
+  items: LoanRequesterHistoryItem[];
+  page: number;
+  size: number;
+  totalItems: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
 }
 
 export interface CreateLoanItemPayload {
@@ -63,6 +122,10 @@ export interface DeliverLoanPayload {
   notes?: string | null;
 }
 
+export interface PrepareLoanPayload {
+  notes?: string | null;
+}
+
 export interface CompleteLoanPayload {
   notes?: string | null;
 }
@@ -81,6 +144,25 @@ export interface ReturnLoanPayload {
   returned_individuals?: ReturnLoanIndividualPayload[];
   consumable_returns?: ReturnLoanConsumablePayload[];
   notes?: string | null;
+}
+
+export interface LoanReturnContextIndividual {
+  individual_uuid: string;
+  asset_code: string;
+}
+
+export interface LoanReturnContextItem {
+  implement_uuid: string;
+  implement_name: string;
+  item_type: LoanItemType | null;
+  delivered_quantity: number;
+  pending_return_quantity: number;
+  individuals: LoanReturnContextIndividual[];
+}
+
+export interface LoanReturnContext {
+  loan_uuid: string;
+  items: LoanReturnContextItem[];
 }
 
 export type LoanStatus =

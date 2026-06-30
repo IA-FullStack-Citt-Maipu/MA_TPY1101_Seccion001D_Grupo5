@@ -24,7 +24,10 @@ import com.panol_project.backendpanol.shared.error.ApiException;
 import com.panol_project.backendpanol.shared.error.BadRequestException;
 import com.panol_project.backendpanol.shared.error.ConflictException;
 import com.panol_project.backendpanol.shared.error.NotFoundException;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -37,6 +40,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class SolicitarPrestamoUseCaseTest {
 
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2099-06-01T14:00:00Z"), ZoneOffset.ofHours(-4));
     private static final OffsetDateTime FUTURE_SCHEDULED_AT = OffsetDateTime.parse("2099-06-12T10:30:00-04:00");
     private static final OffsetDateTime FUTURE_EXPECTED_RETURN_BASE = OffsetDateTime.parse("2099-06-12T10:00:00-04:00");
     private static final OffsetDateTime FUTURE_SUNDAY_SCHEDULED_AT = OffsetDateTime.parse("2099-06-14T10:30:00-04:00");
@@ -59,7 +63,7 @@ class SolicitarPrestamoUseCaseTest {
                 List.of(new SolicitarPrestamoItemCommand(UUID.randomUUID(), 1))
         );
 
-        SolicitarPrestamoUseCase useCase = new SolicitarPrestamoUseCase(loanRepositoryPort);
+        SolicitarPrestamoUseCase useCase = useCase();
 
         BadRequestException ex = assertThrows(BadRequestException.class, () -> useCase.solicitar(command));
 
@@ -80,7 +84,7 @@ class SolicitarPrestamoUseCaseTest {
                 List.of(new SolicitarPrestamoItemCommand(UUID.randomUUID(), 1))
         );
 
-        SolicitarPrestamoUseCase useCase = new SolicitarPrestamoUseCase(loanRepositoryPort);
+        SolicitarPrestamoUseCase useCase = useCase();
 
         BadRequestException ex = assertThrows(BadRequestException.class, () -> useCase.solicitar(command));
 
@@ -89,7 +93,7 @@ class SolicitarPrestamoUseCaseTest {
     }
 
     @Test
-    void solicitarDebeCrearPrestamoPendienteYRetornarResumenEnriquecido() {
+    void solicitarDebeCrearPrestamoAutoReservadoYRetornarResumenEnriquecido() {
         UUID requesterUuid = UUID.randomUUID();
         UUID roomUuid = UUID.randomUUID();
         UUID subjectUuid = UUID.randomUUID();
@@ -112,22 +116,23 @@ class SolicitarPrestamoUseCaseTest {
                 requesterUuid,
                 roomUuid,
                 subjectUuid,
-                LoanStatus.PENDING,
+                LoanStatus.APPROVED,
                 scheduledAt,
                 null,
                 OffsetDateTime.parse("2026-05-21T21:00:00-04:00"),
-                List.of(new LoanDetailItem(implementUuid, 2, 0, 0))
+                List.of(new LoanDetailItem(implementUuid, 2, 2, 0))
         );
         LoanSummaryView expectedSummary = new LoanSummaryView(
                 loanUuid,
                 requesterUuid,
-                LoanStatus.PENDING,
+                LoanStatus.APPROVED,
                 scheduledAt,
                 null,
                 OffsetDateTime.parse("2026-05-21T21:00:00-04:00"),
+                null,
                 new LoanSummaryView.RoomView(roomUuid, "Sala 301"),
                 new LoanSummaryView.SubjectView(subjectUuid, "Anatomia"),
-                List.of(new LoanSummaryView.ItemView(implementUuid, "Fonendoscopio", 2, 0, 0))
+                List.of(new LoanSummaryView.ItemView(implementUuid, "Fonendoscopio", 2, 2, 0))
         );
 
         when(loanRepositoryPort.existsActiveRequesterByUuid(requesterUuid)).thenReturn(true);
@@ -142,7 +147,7 @@ class SolicitarPrestamoUseCaseTest {
         when(loanRepositoryPort.createPendingLoan(any(LoanCreateCommand.class))).thenReturn(createdLoan);
         when(loanRepositoryPort.findVisibleLoanSummaryByUuid(loanUuid)).thenReturn(Optional.of(expectedSummary));
 
-        SolicitarPrestamoUseCase useCase = new SolicitarPrestamoUseCase(loanRepositoryPort);
+        SolicitarPrestamoUseCase useCase = useCase();
 
         LoanSummaryView result = useCase.solicitar(command);
 
@@ -153,6 +158,7 @@ class SolicitarPrestamoUseCaseTest {
 
         LoanCreateCommand persisted = createCommandCaptor.getValue();
         assertEquals(requesterUuid, persisted.requesterUuid());
+        assertEquals(UUID.fromString("99999999-9999-9999-9999-999999999999"), persisted.actorUuid());
         assertEquals(roomUuid, persisted.roomUuid());
         assertEquals(subjectUuid, persisted.subjectUuid());
         assertEquals(scheduledAt, persisted.scheduledAt());
@@ -189,7 +195,7 @@ class SolicitarPrestamoUseCaseTest {
                 )
         );
 
-        SolicitarPrestamoUseCase useCase = new SolicitarPrestamoUseCase(loanRepositoryPort);
+        SolicitarPrestamoUseCase useCase = useCase();
 
         BadRequestException ex = assertThrows(BadRequestException.class, () -> useCase.solicitar(command));
 
@@ -215,7 +221,7 @@ class SolicitarPrestamoUseCaseTest {
         when(loanRepositoryPort.existsActiveRequesterByUuid(requesterUuid)).thenReturn(true);
         when(loanRepositoryPort.existsActiveRoomByUuid(roomUuid)).thenReturn(false);
 
-        SolicitarPrestamoUseCase useCase = new SolicitarPrestamoUseCase(loanRepositoryPort);
+        SolicitarPrestamoUseCase useCase = useCase();
 
         NotFoundException ex = assertThrows(NotFoundException.class, () -> useCase.solicitar(command));
 
@@ -245,7 +251,7 @@ class SolicitarPrestamoUseCaseTest {
         when(loanRepositoryPort.existsActiveRoomByUuid(roomUuid)).thenReturn(true);
         when(loanRepositoryPort.existsActiveSubjectByUuid(subjectUuid)).thenReturn(false);
 
-        SolicitarPrestamoUseCase useCase = new SolicitarPrestamoUseCase(loanRepositoryPort);
+        SolicitarPrestamoUseCase useCase = useCase();
 
         NotFoundException ex = assertThrows(NotFoundException.class, () -> useCase.solicitar(command));
 
@@ -276,7 +282,7 @@ class SolicitarPrestamoUseCaseTest {
         when(loanRepositoryPort.existsActiveRoomByUuid(roomUuid)).thenReturn(true);
         when(loanRepositoryPort.findImplementAvailabilityByUuid(implementUuid)).thenReturn(Optional.empty());
 
-        SolicitarPrestamoUseCase useCase = new SolicitarPrestamoUseCase(loanRepositoryPort);
+        SolicitarPrestamoUseCase useCase = useCase();
 
         NotFoundException ex = assertThrows(NotFoundException.class, () -> useCase.solicitar(command));
 
@@ -310,7 +316,7 @@ class SolicitarPrestamoUseCaseTest {
         when(loanRepositoryPort.findImplementAvailabilityByUuid(implementUuid))
                 .thenReturn(Optional.of(new LoanImplementAvailability(implementUuid, false)));
 
-        SolicitarPrestamoUseCase useCase = new SolicitarPrestamoUseCase(loanRepositoryPort);
+        SolicitarPrestamoUseCase useCase = useCase();
 
         BadRequestException ex = assertThrows(BadRequestException.class, () -> useCase.solicitar(command));
 
@@ -353,13 +359,13 @@ class SolicitarPrestamoUseCaseTest {
         when(loanRepositoryPort.existsPendingLoanConflict(requesterUuid, scheduledAt, null, List.of(implementUuid)))
                 .thenReturn(true);
 
-        SolicitarPrestamoUseCase useCase = new SolicitarPrestamoUseCase(loanRepositoryPort);
+        SolicitarPrestamoUseCase useCase = useCase();
 
         ApiException ex = assertThrows(ApiException.class, () -> useCase.solicitar(command));
 
         assertEquals("LOAN_DUPLICATE_REQUEST", ex.getCode());
         assertEquals(org.springframework.http.HttpStatus.CONFLICT, ex.getStatus());
-        assertEquals("Ya tienes una solicitud pendiente con uno o m\u00e1s de estos implementos", ex.getMessage());
+        assertEquals("Ya tienes una solicitud activa con uno o mas de estos implementos en la misma ventana horaria", ex.getMessage());
         verify(loanRepositoryPort).existsActiveRequesterByUuid(requesterUuid);
         verify(loanRepositoryPort).existsActiveRoomByUuid(roomUuid);
         verify(loanRepositoryPort).findImplementAvailabilityByUuid(implementUuid);
@@ -388,7 +394,7 @@ class SolicitarPrestamoUseCaseTest {
                 List.of(new SolicitarPrestamoItemCommand(UUID.randomUUID(), 1))
         );
 
-        SolicitarPrestamoUseCase useCase = new SolicitarPrestamoUseCase(loanRepositoryPort);
+        SolicitarPrestamoUseCase useCase = useCase();
 
         BadRequestException ex = assertThrows(BadRequestException.class, () -> useCase.solicitar(command));
 
@@ -410,11 +416,33 @@ class SolicitarPrestamoUseCaseTest {
                 List.of(new SolicitarPrestamoItemCommand(UUID.randomUUID(), 1))
         );
 
-        SolicitarPrestamoUseCase useCase = new SolicitarPrestamoUseCase(loanRepositoryPort);
+        SolicitarPrestamoUseCase useCase = useCase();
 
         BadRequestException ex = assertThrows(BadRequestException.class, () -> useCase.solicitar(command));
 
         assertEquals("LOAN_SCHEDULE_TIME_NOT_ALLOWED", ex.getCode());
+        verifyNoInteractions(loanRepositoryPort);
+    }
+
+    @Test
+    void solicitarDebeRechazarFechasProgramadasMasAllaDeDosSemanas() {
+        OffsetDateTime scheduledAt = OffsetDateTime.parse("2099-06-16T10:30:00-04:00");
+
+        SolicitarPrestamoCommand command = new SolicitarPrestamoCommand(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                null,
+                scheduledAt,
+                null,
+                null,
+                List.of(new SolicitarPrestamoItemCommand(UUID.randomUUID(), 1))
+        );
+
+        SolicitarPrestamoUseCase useCase = useCase();
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> useCase.solicitar(command));
+
+        assertEquals("LOAN_SCHEDULE_RANGE_NOT_ALLOWED", ex.getCode());
         verifyNoInteractions(loanRepositoryPort);
     }
 
@@ -442,13 +470,13 @@ class SolicitarPrestamoUseCaseTest {
         when(loanRepositoryPort.findRequestedItemAvailabilities(List.of(implementUuid), scheduledAt, null, null))
                 .thenReturn(List.of(new LoanRequestedItemAvailability(implementUuid, "Arcillas de dientes", true, 5)));
 
-        SolicitarPrestamoUseCase useCase = new SolicitarPrestamoUseCase(loanRepositoryPort);
+        SolicitarPrestamoUseCase useCase = useCase();
 
         ConflictException ex = assertThrows(ConflictException.class, () -> useCase.solicitar(command));
 
         assertEquals("LOAN_STOCK_CONFLICT", ex.getCode());
         assertEquals(
-                "Solo puedes solicitar dentro del stock disponible. Arcillas de dientes tiene 5 unidad(es) disponibles para la fecha y hora seleccionadas.",
+                "Solo puedes solicitar dentro del stock disponible. Arcillas de dientes tiene 5 unidad(es) disponibles para esta solicitud.",
                 ex.getMessage()
         );
         verify(loanRepositoryPort).existsActiveRequesterByUuid(requesterUuid);
@@ -474,7 +502,7 @@ class SolicitarPrestamoUseCaseTest {
                 List.of(new SolicitarPrestamoItemCommand(UUID.randomUUID(), 1))
         );
 
-        SolicitarPrestamoUseCase useCase = new SolicitarPrestamoUseCase(loanRepositoryPort);
+        SolicitarPrestamoUseCase useCase = useCase();
 
         BadRequestException ex = assertThrows(BadRequestException.class, () -> useCase.solicitar(command));
 
@@ -483,7 +511,7 @@ class SolicitarPrestamoUseCaseTest {
     }
 
     @Test
-    void modificarDebeRechazarPrestamoNoPendienteAntesDeValidarHorario() {
+    void modificarDebeRechazarPrestamoNoAprobadoAntesDeValidarHorario() {
         UUID loanUuid = UUID.randomUUID();
         UUID requesterUuid = UUID.randomUUID();
         UUID roomUuid = UUID.randomUUID();
@@ -502,10 +530,11 @@ class SolicitarPrestamoUseCaseTest {
         LoanSummaryView existingLoan = new LoanSummaryView(
                 loanUuid,
                 requesterUuid,
-                LoanStatus.APPROVED,
+                LoanStatus.PREPARED,
                 OffsetDateTime.parse("2026-06-19T12:00:00-04:00"),
                 OffsetDateTime.parse("2026-06-19T14:00:00-04:00"),
                 OffsetDateTime.parse("2026-06-09T10:00:00-04:00"),
+                null,
                 new LoanSummaryView.RoomView(roomUuid, "Sala 321"),
                 null,
                 List.of(new LoanSummaryView.ItemView(implementUuid, "Fonendoscopio", 1, 1, 0))
@@ -513,12 +542,16 @@ class SolicitarPrestamoUseCaseTest {
 
         when(loanRepositoryPort.findVisibleLoanSummaryByUuid(loanUuid)).thenReturn(Optional.of(existingLoan));
 
-        SolicitarPrestamoUseCase useCase = new SolicitarPrestamoUseCase(loanRepositoryPort);
+        SolicitarPrestamoUseCase useCase = useCase();
 
         BadRequestException ex = assertThrows(BadRequestException.class, () -> useCase.modificar(loanUuid, command));
 
         assertEquals("LOAN_UPDATE_INVALID_STATE", ex.getCode());
         verify(loanRepositoryPort).findVisibleLoanSummaryByUuid(loanUuid);
         verifyNoMoreInteractions(loanRepositoryPort);
+    }
+
+    private SolicitarPrestamoUseCase useCase() {
+        return new SolicitarPrestamoUseCase(loanRepositoryPort, FIXED_CLOCK);
     }
 }

@@ -146,6 +146,19 @@ public class RefreshSessionJooqRepository implements RefreshSessionPort {
                 .execute();
     }
 
+    @Override
+    public List<RefreshSession> deleteSessionsByUserUuid(UUID userUuid) {
+        List<RefreshSession> sessions = findSessionsByUserUuid(userUuid);
+        if (sessions.isEmpty()) {
+            return List.of();
+        }
+
+        dsl.deleteFrom(USER_SESSION)
+                .where(USER_SESSION.ID.in(sessions.stream().map(RefreshSession::id).toList()))
+                .execute();
+        return sessions;
+    }
+
     private Long findUserIdByUuid(UUID userUuid) {
         if (userUuid == null) {
             return null;

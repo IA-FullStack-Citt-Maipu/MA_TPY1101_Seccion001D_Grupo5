@@ -1,7 +1,7 @@
 ﻿# Modulos Backend
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-05-15
+- Ultima verificacion: 2026-06-28
 - Fuente de verdad: controllers V2 y servicios de aplicacion por modulo
 
 ## Indice

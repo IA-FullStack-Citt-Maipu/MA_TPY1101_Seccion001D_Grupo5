@@ -8,6 +8,7 @@ public record CurrentUserSessionResponse(
         boolean persistentLogin,
         String userAgent,
         OffsetDateTime createdAt,
-        OffsetDateTime expiresAt
+        OffsetDateTime accessExpiresAt,
+        OffsetDateTime sessionExpiresAt
 ) {
 }

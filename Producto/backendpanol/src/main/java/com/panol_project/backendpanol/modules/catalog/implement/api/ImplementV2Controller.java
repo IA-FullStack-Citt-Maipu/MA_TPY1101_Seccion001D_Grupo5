@@ -56,7 +56,9 @@ public class ImplementV2Controller {
                 request.minStock(),
                 request.barcode(),
                 request.imgUrl(),
-                request.observations()
+                request.observations(),
+                request.costCenter(),
+                request.netValue()
         );
         return buildDetailResponse(created, authentication);
     }
@@ -74,7 +76,9 @@ public class ImplementV2Controller {
                 request.minStock(),
                 request.barcode(),
                 request.imgUrl(),
-                request.observations()
+                request.observations(),
+                request.costCenter(),
+                request.netValue()
         );
         return buildDetailResponse(updated, authentication);
     }
@@ -123,9 +127,11 @@ public class ImplementV2Controller {
                 row.name(),
                 row.description(),
                 row.barcode(),
+                row.individualAssetCodes(),
                 row.imgUrl(),
                 row.active(),
                 row.stock() != null && row.stock().hasAvailability(),
+                row.itemType() == null ? null : row.itemType().literal(),
                 row.category() == null ? null : new ImplementCategorySummaryV2Response(
                         row.category().uuid(), row.category().name(), row.category().active()),
                 row.location() == null ? null : new ImplementLocationSummaryV2Response(
@@ -176,6 +182,8 @@ public class ImplementV2Controller {
                 summary.barcode(),
                 summary.imgUrl(),
                 implemento.observations(),
+                implemento.costCenter(),
+                implemento.netValue(),
                 implemento.activo(),
                 implemento.createdAt(),
                 implemento.updatedAt(),

@@ -8,6 +8,11 @@ from fastapi.testclient import TestClient
 from app.client.context import set_request_id, set_token
 from app.main import app
 from app.tools.alerts import listar_implementos_bajo_stock_minimo
+from app.tools.analytics import (
+    contar_prestamos_por_producto,
+    recomendar_reposicion,
+    resumen_inventario_por_categoria,
+)
 from app.tools.catalog import buscar_implementos
 from app.tools.categories import listar_categorias
 from app.tools.details import detalle_implemento
@@ -144,7 +149,7 @@ def test_integration_detalle_implemento_contract() -> None:
     if result["ok"]:
         assert result["data"]["uuid"] == implement_uuid
         assert "item_type" in result["data"]
-        assert isinstance(result["data"]["recent_movements"], list)
+        assert "recent_movements" not in result["data"]
     else:
         assert "status_code" in result
         assert "error_code" in result
@@ -193,6 +198,51 @@ def test_integration_listar_prestamos_programados_contract() -> None:
     if result["ok"]:
         assert isinstance(result["data"]["items"], list)
         assert "fecha" in result["data"]["filters"]
+    else:
+        assert "status_code" in result
+        assert "error_code" in result
+
+
+def test_integration_contar_prestamos_por_producto_contract() -> None:
+    search = buscar_implementos.invoke({"nombre": "a"})
+    if not search.get("ok"):
+        pytest.skip("No se pudo obtener implementos reales para probar contar_prestamos_por_producto")
+    items = search["data"].get("items", [])
+    if not items:
+        pytest.skip("No hay implementos disponibles para probar contar_prestamos_por_producto")
+
+    implement_uuid = items[0].get("uuid")
+    if not isinstance(implement_uuid, str) or not implement_uuid:
+        pytest.skip("Implemento sin uuid util para test analitico")
+
+    result = contar_prestamos_por_producto.invoke({"implement_uuid": implement_uuid})
+    assert result["source"] == "backend"
+    assert "ok" in result
+    if result["ok"]:
+        assert result["data"]["implement_uuid"] == implement_uuid
+        assert isinstance(result["data"]["loan_count"], int)
+    else:
+        assert "status_code" in result
+        assert "error_code" in result
+
+
+def test_integration_recomendar_reposicion_contract() -> None:
+    result = recomendar_reposicion.invoke({})
+    assert result["source"] == "backend"
+    assert "ok" in result
+    if result["ok"]:
+        assert isinstance(result["data"]["items"], list)
+    else:
+        assert "status_code" in result
+        assert "error_code" in result
+
+
+def test_integration_resumen_inventario_por_categoria_contract() -> None:
+    result = resumen_inventario_por_categoria.invoke({})
+    assert result["source"] == "backend"
+    assert "ok" in result
+    if result["ok"]:
+        assert isinstance(result["data"]["categories"], list)
     else:
         assert "status_code" in result
         assert "error_code" in result

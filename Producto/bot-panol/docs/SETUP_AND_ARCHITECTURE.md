@@ -6,6 +6,20 @@
 HTTP basada en FastAPI y utiliza LangGraph para orquestar consultas al backend de
 inventario y generar respuestas contextuales con Gemini.
 
+## Capacidades vigentes del asistente
+
+El bot esta orientado exclusivamente a consultas de lectura y actualmente puede:
+
+- identificar implementos bajo stock minimo;
+- listar prestamos programados para hoy o para una fecha especifica;
+- consultar disponibilidad y distribucion de stock de un implemento;
+- listar prestamos vencidos (`overdue`);
+- contar cuantos prestamos historicos ha tenido un producto;
+- recomendar reposicion con una regla operativa simple;
+- resumir el inventario agrupado por categoria.
+
+No implementa la HU-72 de ranking semestral.
+
 ## Requisitos Previos
 
 - Docker Desktop o Docker Engine con Compose habilitado.
@@ -80,6 +94,22 @@ Contrato vigente:
 
 El bot no depende de leer JWT desde `localStorage` ni `sessionStorage`.
 
+### Politica conversacional vigente
+
+- El bot bloquea antes del LLM solicitudes de escritura, cambios de estado o
+  intentos de bypass de permisos.
+- El bot clasifica la intencion de cada solicitud antes de ejecutar el grafo:
+  `read_query`, `identifier_request`, `write_or_mutation`,
+  `sensitive_traceability`, `prompt_injection_or_bypass` y `out_of_scope`.
+- `COORDINADOR` recibe lectura operativa controlada.
+- `DIRECTOR` recibe solo resumenes agregados y ejecutivos.
+- El bot no expone `requester_uuid`, `performed_by`, `notes`, `asset_code`,
+  `individual_uuid` ni trazabilidad fina hacia el modelo ni en la respuesta final.
+- Los UUID de recursos se ocultan por defecto. Solo `COORDINADOR` puede pedir
+  explicitamente un identificador tecnico de un recurso operativo no personal.
+- Las tools entregan resultados sanitizados y, cuando corresponde, bloques
+  estructurados para UI sin depender de que el modelo invente el formato.
+
 Request:
 
 ```json
@@ -99,9 +129,41 @@ Response:
 {
   "response": "Texto generado por el asistente",
   "conversation_id": "uuid",
-  "tools_used": ["buscar_implementos"]
+  "tools_used": ["buscar_implementos"],
+  "ui_blocks": [
+    {
+      "type": "entity_list",
+      "title": "Implementos encontrados",
+      "entities": [
+        {
+          "title": "Jeringa 10 ml",
+          "subtitle": "Insumos clinicos",
+          "meta": [
+            "Ubicacion: Bodega central",
+            "Stock disponible: 8"
+          ],
+          "badges": ["Disponible", "Activo"]
+        }
+      ]
+    },
+    {
+      "type": "stat_group",
+      "title": "Stock de Jeringa 10 ml",
+      "stats": [
+        { "label": "Disponible", "value": "8" },
+        { "label": "Reservado", "value": "2" }
+      ]
+    }
+  ]
 }
 ```
+
+Notas del contrato:
+
+- `response` sigue siendo el fallback textual principal y se mantiene por compatibilidad.
+- `ui_blocks` es aditivo y opcional; permite renderizar listas y metricas
+  enriquecidas en frontend.
+- Los bloques no deben incluir UUIDs ni datos sensibles visibles por defecto.
 
 ### `GET /health`
 

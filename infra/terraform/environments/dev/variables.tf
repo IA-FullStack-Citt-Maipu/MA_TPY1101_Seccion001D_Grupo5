@@ -77,6 +77,11 @@ variable "app_auth_refresh_expiration_seconds" {
   default = 604800
 }
 
+variable "app_auth_refresh_temporary_expiration_seconds" {
+  type    = number
+  default = 86400
+}
+
 variable "app_auth_cookie_secure" {
   type    = bool
   default = true
@@ -105,6 +110,26 @@ variable "app_auth_token_revocation_cleanup_delay_ms" {
 variable "app_auth_token_revocation_cleanup_batch_size" {
   type    = number
   default = 500
+}
+
+variable "app_email_enabled" {
+  type    = bool
+  default = false
+}
+
+variable "app_email_provider" {
+  type    = string
+  default = "resend"
+}
+
+variable "app_email_from_name" {
+  type    = string
+  default = "Panol"
+}
+
+variable "app_email_from_address" {
+  type    = string
+  default = "notificaciones@panol.cl"
 }
 
 variable "frontend_domain" {
@@ -203,6 +228,12 @@ variable "app_security_ai_agent_secret_value" {
 }
 
 variable "google_api_key_secret_value" {
+  type      = string
+  default   = ""
+  sensitive = true
+}
+
+variable "app_email_resend_api_key_secret_value" {
   type      = string
   default   = ""
   sensitive = true

@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Search } from "lucide-react";
+import { ConfirmModal } from "../components/categories/ConfirmModal";
 import { InventoryLayout } from "../components/layout/InventoryLayout";
 import { getApiErrorPayload, getErrorMessage } from "../services/apiClient";
 import {
   createLocation,
+  deleteLocation,
+  fetchLocationAssociation,
   fetchLocationsForManagement,
   setLocationActive,
   updateLocation,
 } from "../services/locationService";
-import type { LocationOption } from "../types/location";
+import type { LocationAssociationSummary, LocationOption } from "../types/location";
 
 interface FormState {
   name: string;
@@ -17,6 +20,8 @@ interface FormState {
 
 type ModalMode = "create" | "edit" | null;
 
+const PAGE_SIZE = 10;
+
 function normalize(value: string): string | null {
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
@@ -24,15 +29,18 @@ function normalize(value: string): string | null {
 
 export function InventoryLocationsPage({ embedded = false }: { embedded?: boolean }) {
   const [locations, setLocations] = useState<LocationOption[]>([]);
+  const [associations, setAssociations] = useState<Record<string, LocationAssociationSummary>>({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [page, setPage] = useState(1);
 
   const [modalMode, setModalMode] = useState<ModalMode>(null);
   const [selected, setSelected] = useState<LocationOption | null>(null);
+  const [deleteCandidate, setDeleteCandidate] = useState<LocationOption | null>(null);
   const [form, setForm] = useState<FormState>({ name: "", description: "" });
   const [fieldError, setFieldError] = useState<string | null>(null);
 
@@ -41,7 +49,14 @@ export function InventoryLocationsPage({ embedded = false }: { embedded?: boolea
     setError(null);
     try {
       const data = await fetchLocationsForManagement();
+      const associationEntries = await Promise.all(
+        data.map(async (location) => {
+          const summary = await fetchLocationAssociation(location.uuid);
+          return [location.uuid, summary] as const;
+        }),
+      );
       setLocations(data);
+      setAssociations(Object.fromEntries(associationEntries));
     } catch (requestError) {
       setError(getErrorMessage(requestError, "No se pudo cargar ubicaciones."));
     } finally {
@@ -83,6 +98,28 @@ export function InventoryLocationsPage({ embedded = false }: { embedded?: boolea
     return { total: locations.length, active, inactive };
   }, [locations]);
 
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(filtered.length / PAGE_SIZE)), [filtered.length]);
+  const safePage = useMemo(() => {
+    if (page < 1) {
+      return 1;
+    }
+    if (page > totalPages) {
+      return totalPages;
+    }
+    return page;
+  }, [page, totalPages]);
+  const pageStart = (safePage - 1) * PAGE_SIZE;
+  const pagedLocations = filtered.slice(pageStart, pageStart + PAGE_SIZE);
+  const rangeStart = filtered.length === 0 ? 0 : pageStart + 1;
+  const rangeEnd = filtered.length === 0 ? 0 : Math.min(pageStart + pagedLocations.length, filtered.length);
+  const pageNumbers = useMemo(() => {
+    const windowSize = 5;
+    let start = Math.max(1, safePage - 2);
+    const end = Math.min(totalPages, start + windowSize - 1);
+    start = Math.max(1, end - windowSize + 1);
+    return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+  }, [safePage, totalPages]);
+
   function openCreate() {
     setModalMode("create");
     setSelected(null);
@@ -104,6 +141,13 @@ export function InventoryLocationsPage({ embedded = false }: { embedded?: boolea
     setModalMode(null);
     setSelected(null);
     setFieldError(null);
+  }
+
+  function closeDeleteModal() {
+    if (saving) {
+      return;
+    }
+    setDeleteCandidate(null);
   }
 
   function validate(): string | null {
@@ -161,6 +205,27 @@ export function InventoryLocationsPage({ embedded = false }: { embedded?: boolea
     }
   }
 
+  async function handleDelete() {
+    if (!deleteCandidate?.uuid) {
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await deleteLocation(deleteCandidate.uuid);
+      setSuccess("Ubicacion eliminada correctamente.");
+      setDeleteCandidate(null);
+      await load();
+      setPage(1);
+    } catch (requestError) {
+      const errorPayload = getApiErrorPayload(requestError);
+      setError(errorPayload?.message ?? getErrorMessage(requestError, "No se pudo eliminar la ubicacion."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const content = (
     <>
       <section className="content-header">
@@ -198,7 +263,10 @@ export function InventoryLocationsPage({ embedded = false }: { embedded?: boolea
             <select
               id="locations-status"
               value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value as "all" | "active" | "inactive")}
+              onChange={(event) => {
+                setStatusFilter(event.target.value as "all" | "active" | "inactive");
+                setPage(1);
+              }}
             >
               <option value="all">Todas</option>
               <option value="active">Activas</option>
@@ -212,7 +280,10 @@ export function InventoryLocationsPage({ embedded = false }: { embedded?: boolea
               <input
                 id="locations-search"
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setPage(1);
+                }}
                 placeholder="Buscar por nombre o descripcion"
               />
             </div>
@@ -226,9 +297,9 @@ export function InventoryLocationsPage({ embedded = false }: { embedded?: boolea
           <table className="category-table">
             <thead>
               <tr>
-                <th>UUID</th>
                 <th>Nombre</th>
                 <th>Descripcion</th>
+                <th>Asociaciones</th>
                 <th>Estado</th>
                 <th>Acciones</th>
               </tr>
@@ -243,11 +314,11 @@ export function InventoryLocationsPage({ embedded = false }: { embedded?: boolea
                   <td colSpan={5} className="table-hint">No hay ubicaciones para el filtro actual.</td>
                 </tr>
               ) : (
-                filtered.map((location) => (
+                pagedLocations.map((location) => (
                   <tr key={location.uuid ?? location.name}>
-                    <td>{location.uuid ?? "-"}</td>
                     <td>{location.name}</td>
                     <td>{location.description ?? "-"}</td>
+                    <td>{associations[location.uuid]?.associationCount ?? 0}</td>
                     <td>
                       <span className={`badge ${location.active === false ? "badge--inactive" : "badge--active"}`}>
                         {location.active === false ? "Inactiva" : "Activa"}
@@ -265,6 +336,18 @@ export function InventoryLocationsPage({ embedded = false }: { embedded?: boolea
                       >
                         {location.active === false ? "Activar" : "Desactivar"}
                       </button>
+                      {(associations[location.uuid]?.canDelete ?? false) ? (
+                        <button
+                          type="button"
+                          className="button button--table button--danger"
+                          onClick={() => setDeleteCandidate(location)}
+                          disabled={saving}
+                        >
+                          Eliminar
+                        </button>
+                      ) : (
+                        <span className="table-hint">No eliminable</span>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -272,6 +355,42 @@ export function InventoryLocationsPage({ embedded = false }: { embedded?: boolea
             </tbody>
           </table>
         </div>
+
+        {!loading ? (
+          <div className="inventory-table-footer">
+            <p>
+              Mostrando {rangeStart} a {rangeEnd} de {filtered.length} ubicaciones
+            </p>
+            <div className="inventory-pagination">
+              <button
+                type="button"
+                className="inventory-pagination__btn"
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                disabled={safePage <= 1}
+              >
+                <ChevronLeft size={16} />
+              </button>
+              {pageNumbers.map((pageNumber) => (
+                <button
+                  key={pageNumber}
+                  type="button"
+                  className={pageNumber === safePage ? "inventory-pagination__btn inventory-pagination__btn--active" : "inventory-pagination__btn"}
+                  onClick={() => setPage(pageNumber)}
+                >
+                  {pageNumber}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="inventory-pagination__btn"
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                disabled={safePage >= totalPages}
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       {modalMode ? (
@@ -310,6 +429,17 @@ export function InventoryLocationsPage({ embedded = false }: { embedded?: boolea
           </div>
         </div>
       ) : null}
+
+      <ConfirmModal
+        isOpen={deleteCandidate != null}
+        title="Eliminar ubicacion"
+        message="Esta accion elimina la ubicacion de forma permanente."
+        confirmLabel="Eliminar"
+        tone="danger"
+        loading={saving}
+        onClose={closeDeleteModal}
+        onConfirm={handleDelete}
+      />
     </>
   );
 

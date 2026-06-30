@@ -1,7 +1,7 @@
 # Despliegue (Docker y Kubernetes)
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-06-07
+- Ultima verificacion: 2026-06-30
 - Fuente de verdad: `Producto/databasepanol/docker-compose.yaml`, `Producto/docker-compose.yaml`, `Producto/backendpanol/docker-compose.yaml`, `deploy/k8s/*.yaml`
 
 ## Opciones
@@ -76,7 +76,13 @@ Si quieres que el build introspecte la base local en vez de Supabase, debes camb
 ## Seguridad en despliegue
 
 - `APP_SECURITY_ENABLED=true` por defecto.
-- `POST /api/v2/auth/login` es el unico endpoint publico de auth.
+- Endpoints publicos de auth:
+  - `POST /api/v2/auth/login`
+  - `POST /api/v2/auth/password-recovery/request`
+  - `POST /api/v2/auth/password-recovery/verify`
+  - `POST /api/v2/auth/password-recovery/reset`
+  - `POST /api/v2/auth/logout`
+  - `POST /api/v2/auth/refresh`
 
 ## Nota operativa
 

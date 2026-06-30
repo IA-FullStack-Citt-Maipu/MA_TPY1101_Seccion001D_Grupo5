@@ -4,13 +4,18 @@ import com.panol_project.backendpanol.modules.loan.application.dto.CancelarPrest
 import com.panol_project.backendpanol.modules.loan.application.dto.CompletarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.DevolverPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.EntregarPrestamoCommand;
+import com.panol_project.backendpanol.modules.loan.application.dto.PrepararPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.application.dto.RevisarPrestamoCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanAggregate;
 import com.panol_project.backendpanol.modules.loan.domain.LoanCancelCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanDeliveryCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanDeliveryItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanDeliveryResult;
+import com.panol_project.backendpanol.modules.loan.domain.LoanPrepareCommand;
+import com.panol_project.backendpanol.modules.loan.domain.LoanRequesterHistoryPage;
+import com.panol_project.backendpanol.modules.loan.domain.LoanRequesterSummaryPage;
 import com.panol_project.backendpanol.modules.loan.domain.LoanRepositoryPort;
+import com.panol_project.backendpanol.modules.loan.domain.LoanReturnContextView;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReturnCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReturnConsumableItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReturnIndividual;
@@ -19,14 +24,16 @@ import com.panol_project.backendpanol.modules.loan.domain.LoanReviewCommand;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReviewDecision;
 import com.panol_project.backendpanol.modules.loan.domain.LoanReviewItem;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStateDatesView;
+import com.panol_project.backendpanol.modules.loan.domain.LoanStatus;
 import com.panol_project.backendpanol.modules.loan.domain.LoanStatusTimelineEntry;
-import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
 import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryPage;
+import com.panol_project.backendpanol.modules.loan.domain.LoanSummaryView;
 import com.panol_project.backendpanol.shared.error.BadRequestException;
 import com.panol_project.backendpanol.shared.error.NotFoundException;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,7 +43,7 @@ public class GestionPrestamoUseCase {
     private static final int MAX_NOTES_LENGTH = 1000;
 
     private final LoanRepositoryPort loanRepositoryPort;
-
+    @Autowired
     public GestionPrestamoUseCase(LoanRepositoryPort loanRepositoryPort) {
         this.loanRepositoryPort = loanRepositoryPort;
     }
@@ -47,8 +54,19 @@ public class GestionPrestamoUseCase {
     }
 
     @Transactional(readOnly = true)
-    public LoanSummaryPage listar(UUID requesterUuid, int page, int size) {
-        return loanRepositoryPort.findVisibleLoanSummaries(requesterUuid, page, size);
+    public LoanSummaryPage listar(UUID requesterUuid, OffsetDateTime from, OffsetDateTime to, int page, int size) {
+        return loanRepositoryPort.findVisibleLoanSummaries(requesterUuid, from, to, page, size);
+    }
+
+    @Transactional(readOnly = true)
+    public LoanRequesterSummaryPage listarSolicitantesDocentes(String search, int page, int size) {
+        return loanRepositoryPort.findLoanRequesterSummaries(search, page, size);
+    }
+
+    @Transactional(readOnly = true)
+    public LoanRequesterHistoryPage obtenerHistorialSolicitante(UUID requesterUuid, int page, int size) {
+        return loanRepositoryPort.findLoanRequesterHistory(requesterUuid, page, size)
+                .orElseThrow(() -> new NotFoundException("LOAN_REQUESTER_NOT_FOUND", "Docente no encontrado"));
     }
 
     @Transactional(readOnly = true)
@@ -104,8 +122,31 @@ public class GestionPrestamoUseCase {
     }
 
     @Transactional
+    public LoanSummaryView preparar(PrepararPrestamoCommand command) {
+        String notes = normalizeOptionalText(command.notes());
+        validateNotes(notes);
+
+        LoanSummaryView currentLoan = findVisibleLoanSummaryOrThrow(command.loanUuid());
+        validatePreparationAllowed(currentLoan);
+
+        LoanAggregate prepared = loanRepositoryPort.prepareLoan(
+                new LoanPrepareCommand(
+                        command.loanUuid(),
+                        command.actorUuid(),
+                        notes
+                )
+        );
+
+        return findVisibleLoanSummaryOrThrow(prepared.uuid());
+    }
+
+    @Transactional
     public LoanSummaryView entregar(EntregarPrestamoCommand command) {
         validateNotes(command.notes());
+
+        LoanSummaryView currentLoan = findVisibleLoanSummaryOrThrow(command.loanUuid());
+        validateDeliveryAllowed(currentLoan);
+
         LoanDeliveryResult delivery = loanRepositoryPort.deliverLoan(
                 new LoanDeliveryCommand(
                         command.loanUuid(),
@@ -128,7 +169,7 @@ public class GestionPrestamoUseCase {
         boolean hasIndividuals = command.returnedIndividuals() != null && !command.returnedIndividuals().isEmpty();
         boolean hasConsumable = command.consumableReturns() != null && !command.consumableReturns().isEmpty();
         if (!hasIndividuals && !hasConsumable) {
-            throw new BadRequestException("LOAN_RETURN_EMPTY", "Debes incluir al menos un retorno (individual o consumable/reusable)");
+            throw new BadRequestException("LOAN_RETURN_EMPTY", "Debes incluir al menos un retorno (activo o reutilizable)");
         }
 
         LoanReturnResult returned = loanRepositoryPort.returnLoan(
@@ -173,6 +214,12 @@ public class GestionPrestamoUseCase {
     }
 
     @Transactional(readOnly = true)
+    public LoanReturnContextView obtenerContextoDevolucion(UUID loanUuid) {
+        return loanRepositoryPort.findLoanReturnContextByUuid(loanUuid)
+                .orElseThrow(() -> new NotFoundException("LOAN_NOT_FOUND", "Prestamo no encontrado"));
+    }
+
+    @Transactional(readOnly = true)
     public List<LoanStatusTimelineEntry> obtenerTimelineEstado(UUID loanUuid) {
         findVisibleLoanSummaryOrThrow(loanUuid);
         return loanRepositoryPort.findLoanStatusTimelineByUuid(loanUuid);
@@ -202,7 +249,25 @@ public class GestionPrestamoUseCase {
         }
     }
 
-    private LoanSummaryView findVisibleLoanSummaryOrThrow(java.util.UUID loanUuid) {
+    private void validatePreparationAllowed(LoanSummaryView loan) {
+        if (loan.status() != LoanStatus.APPROVED) {
+            throw new BadRequestException(
+                    "LOAN_PREPARE_INVALID_STATE",
+                    "Solo se puede preparar un prestamo en estado approved"
+            );
+        }
+    }
+
+    private void validateDeliveryAllowed(LoanSummaryView loan) {
+        if (loan.status() != LoanStatus.PREPARED) {
+            throw new BadRequestException(
+                    "LOAN_DELIVERY_INVALID_STATE",
+                    "Solo se puede entregar un prestamo en estado prepared"
+            );
+        }
+    }
+
+    private LoanSummaryView findVisibleLoanSummaryOrThrow(UUID loanUuid) {
         return loanRepositoryPort.findVisibleLoanSummaryByUuid(loanUuid)
                 .orElseThrow(() -> new NotFoundException("LOAN_NOT_FOUND", "Prestamo no encontrado"));
     }

@@ -15,6 +15,7 @@ import com.panol_project.backendpanol.modules.catalog.implement.domain.StockStat
 import com.panol_project.backendpanol.modules.catalog.location.application.contract.LocationValidationContract;
 import com.panol_project.backendpanol.shared.error.BadRequestException;
 import com.panol_project.backendpanol.shared.error.NotFoundException;
+import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.Optional;
@@ -51,14 +52,54 @@ class ImplementServiceTest {
         UUID implementUuid = UUID.randomUUID();
         UUID categoryUuid = UUID.randomUUID();
         UUID locationUuid = UUID.randomUUID();
-        Implemento created = new Implemento(implementUuid, "Guantes", null, categoryUuid, locationUuid, ImplementItemType.INDIVIDUAL, null, null, null, true, now, now);
+        Implemento created = new Implemento(
+                implementUuid,
+                "Guantes",
+                null,
+                categoryUuid,
+                locationUuid,
+                ImplementItemType.INDIVIDUAL,
+                null,
+                null,
+                null,
+                "1617103021",
+                new BigDecimal("116734.00"),
+                true,
+                now,
+                now
+        );
 
-        when(repository.create("Guantes", null, categoryUuid, locationUuid, ImplementItemType.INDIVIDUAL, null, null, null)).thenReturn(created);
+        when(repository.create(
+                "Guantes",
+                null,
+                categoryUuid,
+                locationUuid,
+                ImplementItemType.INDIVIDUAL,
+                null,
+                null,
+                null,
+                "1617103021",
+                new BigDecimal("116734.00")
+        )).thenReturn(created);
         when(repository.updateMinStockByImplementUuid(implementUuid, 3)).thenReturn(1);
 
-        Implemento result = service.crear("Guantes", null, categoryUuid, locationUuid, "individual", 3, " ", null, null);
+        Implemento result = service.crear(
+                "Guantes",
+                null,
+                categoryUuid,
+                locationUuid,
+                "individual",
+                3,
+                " ",
+                null,
+                null,
+                "1617103021",
+                new BigDecimal("116734.00")
+        );
 
         assertEquals(implementUuid, result.uuid());
+        assertEquals("1617103021", result.costCenter());
+        assertEquals(new BigDecimal("116734.00"), result.netValue());
         verify(categoryValidationContract).validarCategoriaActivaParaImplemento(categoryUuid);
         verify(locationValidationContract).validarLocationExistente(locationUuid);
         verify(repository).updateMinStockByImplementUuid(implementUuid, 3);
@@ -73,8 +114,10 @@ class ImplementServiceTest {
                 .validarCategoriaActivaParaImplemento(categoryUuid);
 
         assertThrows(BadRequestException.class, () ->
-                service.crear("Guantes", null, categoryUuid, locationUuid, "consumable", 5, null, null, null));
+                service.crear("Guantes", null, categoryUuid, locationUuid, "consumable", 5, null, null, null, null, null));
         verify(repository, never()).create(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any(),
@@ -91,7 +134,7 @@ class ImplementServiceTest {
         UUID categoryUuid = UUID.randomUUID();
         UUID locationUuid = UUID.randomUUID();
         BadRequestException ex = assertThrows(BadRequestException.class, () ->
-                service.crear("Guantes", null, categoryUuid, locationUuid, "otro", 5, null, null, null));
+                service.crear("Guantes", null, categoryUuid, locationUuid, "otro", 5, null, null, null, null, null));
 
         assertEquals("IMPLEMENT_ITEM_TYPE_INVALID", ex.getCode());
     }
@@ -103,7 +146,7 @@ class ImplementServiceTest {
         when(repository.existsActiveByNameIgnoreCase("Guantes", categoryUuid)).thenReturn(true);
 
         BadRequestException ex = assertThrows(BadRequestException.class, () ->
-                service.crear("Guantes", null, categoryUuid, locationUuid, "consumable", 4, null, null, null));
+                service.crear("Guantes", null, categoryUuid, locationUuid, "consumable", 4, null, null, null, null, null));
 
         assertEquals("IMPLEMENT_NAME_DUPLICATE", ex.getCode());
     }
@@ -112,11 +155,21 @@ class ImplementServiceTest {
     void crearDebeRetornarBadRequestSiNombreDuplicadoPorConstraintUnico() {
         UUID categoryUuid = UUID.randomUUID();
         UUID locationUuid = UUID.randomUUID();
-        when(repository.create("Guantes", null, categoryUuid, locationUuid, ImplementItemType.CONSUMABLE, null, null, null))
-                .thenThrow(new DataIntegrityViolationException("unique violation", new SQLException("duplicate key", "23505")));
+        when(repository.create(
+                "Guantes",
+                null,
+                categoryUuid,
+                locationUuid,
+                ImplementItemType.CONSUMABLE,
+                null,
+                null,
+                null,
+                null,
+                null
+        )).thenThrow(new DataIntegrityViolationException("unique violation", new SQLException("duplicate key", "23505")));
 
         BadRequestException ex = assertThrows(BadRequestException.class, () ->
-                service.crear("Guantes", null, categoryUuid, locationUuid, "consumable", 3, null, null, null));
+                service.crear("Guantes", null, categoryUuid, locationUuid, "consumable", 3, null, null, null, null, null));
 
         assertEquals("IMPLEMENT_NAME_DUPLICATE", ex.getCode());
     }
@@ -127,28 +180,173 @@ class ImplementServiceTest {
         UUID locationUuid = UUID.randomUUID();
         when(repository.findByUuid(implementUuid)).thenReturn(Optional.empty());
 
-        assertThrows(NotFoundException.class, () -> service.editar(implementUuid, "X", null, null, locationUuid, "individual", 1, null, null, null));
+        assertThrows(NotFoundException.class, () ->
+                service.editar(implementUuid, "X", null, null, locationUuid, "individual", 1, null, null, null, null, null));
     }
 
     @Test
-    void editarDebeValidarCategoriaSiExisteImplemento() {
+    void editarDebePermitirActualizarManteniendoCategoriaYTipoOriginales() {
         OffsetDateTime now = OffsetDateTime.now();
         UUID implementUuid = UUID.randomUUID();
         UUID categoryUuid = UUID.randomUUID();
         UUID locationUuid = UUID.randomUUID();
-        Implemento existing = new Implemento(implementUuid, "Existente", null, categoryUuid, locationUuid, ImplementItemType.INDIVIDUAL, null, null, null, true, now, now);
-        Implemento updated = new Implemento(implementUuid, "Nuevo", null, categoryUuid, locationUuid, ImplementItemType.INDIVIDUAL, "Obs", null, null, true, now, now);
+        Implemento existing = new Implemento(
+                implementUuid,
+                "Existente",
+                null,
+                categoryUuid,
+                locationUuid,
+                ImplementItemType.INDIVIDUAL,
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                now,
+                now
+        );
+        Implemento updated = new Implemento(
+                implementUuid,
+                "Nuevo",
+                null,
+                categoryUuid,
+                locationUuid,
+                ImplementItemType.INDIVIDUAL,
+                "Obs",
+                null,
+                null,
+                "1617103021",
+                new BigDecimal("999.99"),
+                true,
+                now,
+                now
+        );
 
         when(repository.findByUuid(implementUuid)).thenReturn(Optional.of(existing));
-        when(repository.update(implementUuid, "Nuevo", null, categoryUuid, locationUuid, ImplementItemType.INDIVIDUAL, "Obs", null, null)).thenReturn(updated);
+        when(repository.update(
+                implementUuid,
+                "Nuevo",
+                null,
+                categoryUuid,
+                locationUuid,
+                ImplementItemType.INDIVIDUAL,
+                "Obs",
+                null,
+                null,
+                "1617103021",
+                new BigDecimal("999.99")
+        )).thenReturn(updated);
         when(repository.updateMinStockByImplementUuid(implementUuid, 1)).thenReturn(1);
 
-        Implemento result = service.editar(implementUuid, "Nuevo", null, categoryUuid, locationUuid, "individual", 1, "Obs", null, null);
+        Implemento result = service.editar(
+                implementUuid,
+                "Nuevo",
+                null,
+                categoryUuid,
+                locationUuid,
+                "individual",
+                1,
+                "Obs",
+                null,
+                null,
+                "1617103021",
+                new BigDecimal("999.99")
+        );
 
         assertEquals(categoryUuid, result.categoriaUuid());
-        verify(categoryValidationContract).validarCategoriaActivaParaImplemento(categoryUuid);
+        assertEquals("1617103021", result.costCenter());
+        assertEquals(new BigDecimal("999.99"), result.netValue());
+        verify(categoryValidationContract, never()).validarCategoriaActivaParaImplemento(categoryUuid);
         verify(locationValidationContract).validarLocationExistente(locationUuid);
         verify(repository).updateMinStockByImplementUuid(implementUuid, 1);
+    }
+
+    @Test
+    void editarDebeFallarSiIntentaCambiarCategoria() {
+        OffsetDateTime now = OffsetDateTime.now();
+        UUID implementUuid = UUID.randomUUID();
+        UUID currentCategoryUuid = UUID.randomUUID();
+        UUID newCategoryUuid = UUID.randomUUID();
+        UUID locationUuid = UUID.randomUUID();
+        Implemento existing = new Implemento(
+                implementUuid,
+                "Existente",
+                null,
+                currentCategoryUuid,
+                locationUuid,
+                ImplementItemType.INDIVIDUAL,
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                now,
+                now
+        );
+        when(repository.findByUuid(implementUuid)).thenReturn(Optional.of(existing));
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () ->
+                service.editar(implementUuid, "Nuevo", null, newCategoryUuid, locationUuid, "individual", 1, null, null, null, null, null));
+
+        assertEquals("IMPLEMENT_CATEGORY_IMMUTABLE", ex.getCode());
+        verify(repository, never()).update(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any()
+        );
+    }
+
+    @Test
+    void editarDebeFallarSiIntentaCambiarTipo() {
+        OffsetDateTime now = OffsetDateTime.now();
+        UUID implementUuid = UUID.randomUUID();
+        UUID categoryUuid = UUID.randomUUID();
+        UUID locationUuid = UUID.randomUUID();
+        Implemento existing = new Implemento(
+                implementUuid,
+                "Existente",
+                null,
+                categoryUuid,
+                locationUuid,
+                ImplementItemType.INDIVIDUAL,
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                now,
+                now
+        );
+        when(repository.findByUuid(implementUuid)).thenReturn(Optional.of(existing));
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () ->
+                service.editar(implementUuid, "Nuevo", null, categoryUuid, locationUuid, "consumable", 1, null, null, null, null, null));
+
+        assertEquals("IMPLEMENT_ITEM_TYPE_IMMUTABLE", ex.getCode());
+        verify(repository, never()).update(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any()
+        );
     }
 
     @Test
@@ -157,14 +355,31 @@ class ImplementServiceTest {
         UUID implementUuid = UUID.randomUUID();
         UUID categoryUuid = UUID.randomUUID();
         UUID locationUuid = UUID.randomUUID();
-        Implemento existing = new Implemento(implementUuid, "Existente", null, categoryUuid, locationUuid, ImplementItemType.INDIVIDUAL, null, null, null, false, now, now);
+        Implemento existing = new Implemento(
+                implementUuid,
+                "Existente",
+                null,
+                categoryUuid,
+                locationUuid,
+                ImplementItemType.INDIVIDUAL,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                now,
+                now
+        );
         when(repository.findByUuid(implementUuid)).thenReturn(Optional.of(existing));
 
         BadRequestException ex = assertThrows(BadRequestException.class, () ->
-                service.editar(implementUuid, "Nuevo", null, categoryUuid, locationUuid, "individual", 1, null, null, null));
+                service.editar(implementUuid, "Nuevo", null, categoryUuid, locationUuid, "individual", 1, null, null, null, null, null));
 
         assertEquals("IMPLEMENT_INACTIVE", ex.getCode());
         verify(repository, never()).update(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any(),
@@ -183,11 +398,27 @@ class ImplementServiceTest {
         UUID implementUuid = UUID.randomUUID();
         UUID categoryUuid = UUID.randomUUID();
         UUID locationUuid = UUID.randomUUID();
-        Implemento existing = new Implemento(implementUuid, "Existente", null, categoryUuid, locationUuid, ImplementItemType.INDIVIDUAL, null, null, null, true, now, now);
+        Implemento existing = new Implemento(
+                implementUuid,
+                "Existente",
+                null,
+                categoryUuid,
+                locationUuid,
+                ImplementItemType.INDIVIDUAL,
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                now,
+                now
+        );
         when(repository.findByUuid(implementUuid)).thenReturn(Optional.of(existing));
         when(repository.existsActiveByNameIgnoreCaseAndUuidNot("Guantes", categoryUuid, implementUuid)).thenReturn(true);
 
-        BadRequestException ex = assertThrows(BadRequestException.class, () -> service.editar(implementUuid, "Guantes", null, categoryUuid, locationUuid, "individual", 1, null, null, null));
+        BadRequestException ex = assertThrows(BadRequestException.class, () ->
+                service.editar(implementUuid, "Guantes", null, categoryUuid, locationUuid, "individual", 1, null, null, null, null, null));
 
         assertEquals("IMPLEMENT_NAME_DUPLICATE", ex.getCode());
     }
