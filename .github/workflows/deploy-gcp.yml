@@ -593,12 +593,13 @@ jobs:
 
       - name: Build backend image
         env:
-          JOOQ_DB_URL: jdbc:postgresql://127.0.0.1:5432/${{ vars.CLOUDSQL_DB_NAME_STAGING_PERF }}?sslmode=disable
+          JOOQ_DB_URL: jdbc:postgresql://host.docker.internal:5432/${{ vars.CLOUDSQL_DB_NAME_STAGING_PERF }}?sslmode=disable
           JOOQ_DB_USER: ${{ vars.CLOUDSQL_DB_USER_STAGING_PERF }}
           JOOQ_DB_PASSWORD: ${{ secrets.DB_CLOUDSQL_PASSWORD_STAGING_PERF }}
         run: |
           docker build \
             -f ./Producto/backendpanol/Dockerfile \
+            --add-host=host.docker.internal:host-gateway \
             --build-arg JOOQ_DB_URL="$JOOQ_DB_URL" \
             --build-arg JOOQ_DB_USER="$JOOQ_DB_USER" \
             --build-arg JOOQ_DB_PASSWORD="$JOOQ_DB_PASSWORD" \
