@@ -20,6 +20,10 @@ import com.panol_project.backendpanol.modules.auth.application.dto.BotAccessToke
 import com.panol_project.backendpanol.modules.auth.application.dto.ChangeCurrentPasswordCommand;
 import com.panol_project.backendpanol.modules.auth.application.dto.CurrentUserSessionSummary;
 import com.panol_project.backendpanol.modules.auth.application.dto.LoginResult;
+import com.panol_project.backendpanol.modules.auth.application.dto.PasswordRecoveryRequestCommand;
+import com.panol_project.backendpanol.modules.auth.application.dto.PasswordRecoveryResetCommand;
+import com.panol_project.backendpanol.modules.auth.application.dto.PasswordRecoveryVerificationResult;
+import com.panol_project.backendpanol.modules.auth.application.dto.PasswordRecoveryVerifyCommand;
 import com.panol_project.backendpanol.modules.auth.application.dto.RefreshResult;
 import com.panol_project.backendpanol.modules.auth.application.dto.RevokeCurrentUserSessionResult;
 import com.panol_project.backendpanol.modules.auth.application.dto.UpdateCurrentEmailCommand;
@@ -114,6 +118,60 @@ class AuthV2ControllerTest {
                 .andExpect(result -> org.junit.jupiter.api.Assertions.assertEquals(2, result.getResponse().getHeaders("Set-Cookie").size()));
 
         verify(authService).refresh("refresh-cookie", "JUnit");
+    }
+
+    @Test
+    void requestPasswordRecoveryDebeResponder202SinAutenticacion() throws Exception {
+        PasswordRecoveryRequestCommand command = new PasswordRecoveryRequestCommand("12345678K");
+
+        mockMvc.perform(post("/api/v2/auth/password-recovery/request")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "rut": "12345678K"
+                                }
+                                """))
+                .andExpect(status().isAccepted());
+
+        verify(authService).requestPasswordRecovery(eq(command));
+    }
+
+    @Test
+    void verifyPasswordRecoveryDebeRetornarResetToken() throws Exception {
+        PasswordRecoveryVerifyCommand command = new PasswordRecoveryVerifyCommand("12345678K", "AB12CD34");
+        when(authService.verifyPasswordRecoveryCode(eq(command)))
+                .thenReturn(new PasswordRecoveryVerificationResult("opaque-reset-token", 600));
+
+        mockMvc.perform(post("/api/v2/auth/password-recovery/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "rut": "12345678K",
+                                  "code": "AB12CD34"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reset_token").value("opaque-reset-token"))
+                .andExpect(jsonPath("$.expires_in_seconds").value(600));
+
+        verify(authService).verifyPasswordRecoveryCode(eq(command));
+    }
+
+    @Test
+    void resetPasswordRecoveryDebeRetornar204() throws Exception {
+        PasswordRecoveryResetCommand command = new PasswordRecoveryResetCommand("opaque-reset-token", "Nueva1234");
+
+        mockMvc.perform(post("/api/v2/auth/password-recovery/reset")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reset_token": "opaque-reset-token",
+                                  "new_password": "Nueva1234"
+                                }
+                                """))
+                .andExpect(status().isNoContent());
+
+        verify(authService).resetPasswordFromRecovery(eq(command));
     }
 
     @Test
@@ -328,7 +386,14 @@ class AuthV2ControllerTest {
             return http
                     .csrf(AbstractHttpConfigurer::disable)
                     .authorizeHttpRequests(auth -> auth
-                            .requestMatchers("/api/v2/auth/login", "/api/v2/auth/logout", "/api/v2/auth/refresh").permitAll()
+                            .requestMatchers(
+                                    "/api/v2/auth/login",
+                                    "/api/v2/auth/logout",
+                                    "/api/v2/auth/refresh",
+                                    "/api/v2/auth/password-recovery/request",
+                                    "/api/v2/auth/password-recovery/verify",
+                                    "/api/v2/auth/password-recovery/reset"
+                            ).permitAll()
                             .anyRequest().authenticated())
                     .exceptionHandling(ex -> ex
                             .authenticationEntryPoint(authenticationEntryPoint)

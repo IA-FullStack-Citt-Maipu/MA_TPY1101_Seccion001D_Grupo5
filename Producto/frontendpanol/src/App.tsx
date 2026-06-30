@@ -25,6 +25,9 @@ import { LoanPreparationPage } from "./pages/LoanPreparationPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { NotificationsPage } from "./pages/NotificationsPage";
+import { PasswordRecoveryCodePage } from "./pages/PasswordRecoveryCodePage";
+import { PasswordRecoveryRequestPage } from "./pages/PasswordRecoveryRequestPage";
+import { PasswordRecoveryResetPage } from "./pages/PasswordRecoveryResetPage";
 import { SupportPage } from "./pages/SupportPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { logout } from "./services/authService";
@@ -55,6 +58,13 @@ interface RouteView {
 }
 
 type AuthStatus = "bootstrapping" | "authenticated" | "unauthenticated";
+
+const PUBLIC_HASH_PATHS = new Set([
+  "#/login",
+  "#/recuperar-contrasena",
+  "#/recuperar-contrasena/codigo",
+  "#/recuperar-contrasena/nueva",
+]);
 
 function getInitialAuthState(): { sessionUser: SessionUserSummary | null; authStatus: AuthStatus } {
   const sessionUser = getSessionUser();
@@ -93,7 +103,7 @@ function renderAccessDenied(message: string) {
 }
 
 function App() {
-  const initialAuthState = useMemo(getInitialAuthState, []);
+  const initialAuthState = useMemo(() => getInitialAuthState(), []);
   const [hash, setHash] = useState(() => window.location.hash || "#/login");
   const [routeTransitionKey, setRouteTransitionKey] = useState(0);
   const [sessionUser, setSessionUser] = useState<SessionUserSummary | null>(initialAuthState.sessionUser);
@@ -181,10 +191,11 @@ function App() {
   const authenticated = authStatus === "authenticated" && sessionUser != null;
   const normalizedHash = hash || "#/login";
   const normalizedHashPath = getHashPath(normalizedHash);
+  const isPublicHash = PUBLIC_HASH_PATHS.has(normalizedHashPath);
   const defaultHash = getDefaultHashByRole(role);
   const effectiveHash = !authenticated
-    ? "#/login"
-    : normalizedHashPath === "#/login"
+    ? (isPublicHash ? normalizedHash : "#/login")
+    : normalizedHashPath === "#/login" || normalizedHashPath.startsWith("#/recuperar-contrasena")
       ? defaultHash
       : normalizedHash;
   const effectiveHashPath = getHashPath(effectiveHash);
@@ -208,7 +219,7 @@ function App() {
     if (authStatus === "bootstrapping") {
       return;
     }
-    if (!authenticated && normalizedHashPath !== "#/login") {
+    if (!authenticated && !isPublicHash) {
       window.location.hash = "#/login";
       return;
     }
@@ -221,10 +232,10 @@ function App() {
       window.location.hash = "#/director/dashboard";
       return;
     }
-    if (authenticated && normalizedHashPath === "#/login") {
+    if (authenticated && (normalizedHashPath === "#/login" || normalizedHashPath.startsWith("#/recuperar-contrasena"))) {
       window.location.hash = defaultHash;
     }
-  }, [authStatus, authenticated, defaultHash, normalizedHashPath, role]);
+  }, [authStatus, authenticated, defaultHash, isPublicHash, normalizedHashPath, role]);
 
   useEffect(() => {
     if (!authenticated) {
@@ -625,8 +636,20 @@ function App() {
     );
   }
 
-  if (effectiveHash === "#/login") {
+  if (effectiveHashPath === "#/login") {
     return <LoginPage />;
+  }
+
+  if (effectiveHashPath === "#/recuperar-contrasena") {
+    return <PasswordRecoveryRequestPage />;
+  }
+
+  if (effectiveHashPath === "#/recuperar-contrasena/codigo") {
+    return <PasswordRecoveryCodePage />;
+  }
+
+  if (effectiveHashPath === "#/recuperar-contrasena/nueva") {
+    return <PasswordRecoveryResetPage />;
   }
 
   return (

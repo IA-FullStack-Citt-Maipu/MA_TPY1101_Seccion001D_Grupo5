@@ -263,6 +263,32 @@ class EmailTemplateRendererTest {
         assertNoTemplateArtifacts(rendered.html());
     }
 
+    @Test
+    void renderPasswordRecoveryDebeMostrarCodigoExpiracionYCta() {
+        Map<String, Object> templateData = new LinkedHashMap<>();
+        templateData.put("event_type", "auth.password_recovery");
+        templateData.put("title", "Recupera tu contrasena");
+        templateData.put("message", "Usa este codigo para continuar con la recuperacion de tu contrasena.");
+        templateData.put("recipient_name", "Ana Perez");
+        templateData.put("verification_code", "AB12CD34");
+        templateData.put("expires_in_minutes", 15);
+        templateData.put("action_url", "https://frontend.panol.cl/#/recuperar-contrasena/codigo?rut=12345678K");
+        templateData.put("created_at", CREATED_AT);
+
+        RenderedEmail rendered = renderer.render("auth.password_recovery", templateData);
+
+        assertEquals("Recupera tu contrasena | Panol", rendered.subject());
+        assertContainsAll(rendered.html(),
+                "Recuperacion de contrasena",
+                "Verifica tu identidad",
+                "AB12CD34",
+                "15",
+                "Ingresar codigo",
+                "https://frontend.panol.cl/#/recuperar-contrasena/codigo?rut=12345678K"
+        );
+        assertNoTemplateArtifacts(rendered.html());
+    }
+
     private Map<String, Object> baseLoanTemplateData(String title, String message) {
         Map<String, Object> templateData = new LinkedHashMap<>();
         templateData.put("event_type", "loan.request_registered");

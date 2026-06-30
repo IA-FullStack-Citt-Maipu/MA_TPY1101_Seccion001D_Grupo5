@@ -6,11 +6,18 @@ import com.panol_project.backendpanol.modules.auth.api.dto.CurrentUserSessionRes
 import com.panol_project.backendpanol.modules.auth.api.dto.LoginRequest;
 import com.panol_project.backendpanol.modules.auth.api.dto.LoginResponse;
 import com.panol_project.backendpanol.modules.auth.api.dto.LoginUserResponse;
+import com.panol_project.backendpanol.modules.auth.api.dto.PasswordRecoveryRequest;
+import com.panol_project.backendpanol.modules.auth.api.dto.PasswordRecoveryResetRequest;
+import com.panol_project.backendpanol.modules.auth.api.dto.PasswordRecoveryVerifyRequest;
+import com.panol_project.backendpanol.modules.auth.api.dto.PasswordRecoveryVerifyResponse;
 import com.panol_project.backendpanol.modules.auth.api.dto.UpdateCurrentEmailRequest;
 import com.panol_project.backendpanol.modules.auth.api.dto.UpdateCurrentPasswordRequest;
 import com.panol_project.backendpanol.modules.auth.application.AuthService;
 import com.panol_project.backendpanol.modules.auth.application.dto.ChangeCurrentPasswordCommand;
 import com.panol_project.backendpanol.modules.auth.application.dto.LoginCommand;
+import com.panol_project.backendpanol.modules.auth.application.dto.PasswordRecoveryRequestCommand;
+import com.panol_project.backendpanol.modules.auth.application.dto.PasswordRecoveryResetCommand;
+import com.panol_project.backendpanol.modules.auth.application.dto.PasswordRecoveryVerifyCommand;
 import com.panol_project.backendpanol.modules.auth.application.dto.UpdateCurrentEmailCommand;
 import com.panol_project.backendpanol.shared.error.ApiException;
 import com.panol_project.backendpanol.shared.security.CurrentUserUuidResolver;
@@ -84,6 +91,24 @@ public class AuthV2Controller {
                 .header("Set-Cookie", authCookieService.createAccessCookie(result.accessToken(), result.persistentLogin()).toString())
                 .header("Set-Cookie", authCookieService.createRefreshCookie(result.refreshToken(), result.persistentLogin()).toString())
                 .build();
+    }
+
+    @PostMapping("/password-recovery/request")
+    ResponseEntity<Void> requestPasswordRecovery(@Valid @RequestBody PasswordRecoveryRequest request) {
+        authService.requestPasswordRecovery(new PasswordRecoveryRequestCommand(request.rut()));
+        return ResponseEntity.accepted().build();
+    }
+
+    @PostMapping("/password-recovery/verify")
+    PasswordRecoveryVerifyResponse verifyPasswordRecoveryCode(@Valid @RequestBody PasswordRecoveryVerifyRequest request) {
+        var result = authService.verifyPasswordRecoveryCode(new PasswordRecoveryVerifyCommand(request.rut(), request.code()));
+        return new PasswordRecoveryVerifyResponse(result.resetToken(), result.expiresInSeconds());
+    }
+
+    @PostMapping("/password-recovery/reset")
+    ResponseEntity<Void> resetPasswordFromRecovery(@Valid @RequestBody PasswordRecoveryResetRequest request) {
+        authService.resetPasswordFromRecovery(new PasswordRecoveryResetCommand(request.resetToken(), request.newPassword()));
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/logout")

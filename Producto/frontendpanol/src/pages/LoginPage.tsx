@@ -5,6 +5,8 @@ import { login } from "../services/authService";
 import { getDefaultHashByRole } from "../utils/auth";
 import { cleanRut, formatRut } from "../utils/rut";
 
+const PASSWORD_RECOVERY_SUCCESS_STORAGE_KEY = "panol.passwordRecovery.success";
+
 export function LoginPage() {
   const [rutRaw, setRutRaw] = useState("");
   const [password, setPassword] = useState("");
@@ -14,6 +16,13 @@ export function LoginPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [rutError, setRutError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [successMessage] = useState(() => {
+    const stored = sessionStorage.getItem(PASSWORD_RECOVERY_SUCCESS_STORAGE_KEY);
+    if (stored) {
+      sessionStorage.removeItem(PASSWORD_RECOVERY_SUCCESS_STORAGE_KEY);
+    }
+    return stored;
+  });
 
   const rutClean = useMemo(() => cleanRut(rutRaw), [rutRaw]);
   const rutFormatted = useMemo(() => formatRut(rutRaw), [rutRaw]);
@@ -136,11 +145,12 @@ export function LoginPage() {
                 />
                 <span>Recordarme</span>
               </label>
-              <a href="#/login" className="login-form__link" onClick={(e) => e.preventDefault()}>
+              <a href="#/recuperar-contrasena" className="login-form__link">
                 ¿Olvidaste tu contraseña?
               </a>
             </div>
 
+            {successMessage ? <div className="success-banner">{successMessage}</div> : null}
             {formError ? <div className="error-banner">{formError}</div> : null}
 
             <button className="button login-form__submit" type="submit" disabled={submitting}>
