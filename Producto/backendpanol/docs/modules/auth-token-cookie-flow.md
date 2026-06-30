@@ -1,7 +1,7 @@
 # Flujo Completo de Tokens y Cookies
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-06-26
+- Ultima verificacion: 2026-06-30
 - Fuente de verdad: `AuthService`, `AuthCookieService`,
   `RefreshSessionJooqRepository`, `AuthJooqRepository`, `SecurityConfig`,
   `TokenRevocationValidator`, `TokenRevocationCleanupWorker`
@@ -16,6 +16,7 @@ Este documento explica el flujo completo de autenticacion web del backend:
 - como funciona el refresh token
 - como funciona la revocacion inmediata
 - como funciona el cleanup automatico de `token_revocation`
+- y como la recuperacion de contrasena corta todas las sesiones activas
 
 La implementacion actual usa un modelo hibrido:
 
@@ -73,6 +74,10 @@ Piezas principales:
 
 5. `TokenRevocationCleanupWorker`
 - elimina revocaciones vencidas de `public.token_revocation`
+
+6. `AuthService` en recuperacion de contrasena
+- valida codigo y emite `reset_token` opaco temporal
+- invalida todas las sesiones refresh del usuario al completar el reset
 
 ### Frontend
 
@@ -349,6 +354,19 @@ Importante:
 
 - este cleanup aplica solo a `token_revocation`
 - no elimina `user_session`
+
+### 7. Reset de contrasena por recuperacion
+
+1. El usuario valida un codigo de recuperacion fuera del flujo de cookies.
+2. Cuando completa `POST /api/v2/auth/password-recovery/reset`, el backend:
+   - cambia `password_hash`
+   - elimina todas las filas activas de `public.user_session` para ese usuario
+   - revoca cada `currentAccessJti` encontrado en `device_info`
+3. Resultado operativo:
+   - cualquier navegador autenticado del mismo usuario cae en la siguiente
+     request protegida
+   - el refresh silencioso tambien falla porque ya no queda sesion refresh
+     valida en base de datos
 
 ## Ejemplos de datos
 

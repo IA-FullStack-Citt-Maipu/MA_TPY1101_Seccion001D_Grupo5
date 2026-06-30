@@ -1,8 +1,8 @@
 ﻿# 03 - PostgreSQL: Guia Tecnica Vigente
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-06-29
-- Fuente de verdad: `Producto/databasepanol/migrations/v25/V25..V52` + `migrations/README.md`
+- Ultima verificacion: 2026-06-30
+- Fuente de verdad: `Producto/databasepanol/migrations/v25/V25..V53` + `migrations/README.md`
 
 ## Rol de PostgreSQL
 

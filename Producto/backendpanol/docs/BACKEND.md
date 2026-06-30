@@ -1,7 +1,7 @@
 # Backend Docs
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-06-29
+- Ultima verificacion: 2026-06-30
 - Fuente de verdad: controllers V2, SecurityConfig, application.yaml
 
 ## Alcance
@@ -31,6 +31,9 @@ Base publica: `/api/v2/**`
 
 ### Auth
 - `POST /api/v2/auth/login`
+- `POST /api/v2/auth/password-recovery/request`
+- `POST /api/v2/auth/password-recovery/verify`
+- `POST /api/v2/auth/password-recovery/reset`
 - `POST /api/v2/auth/refresh`
 - `POST /api/v2/auth/logout`
 - `GET /api/v2/auth/me`
@@ -163,11 +166,29 @@ Valores canonicos de `movement_type`/`action`:
 
 ## Seguridad vigente
 
-- `permitAll`: `POST /api/v2/auth/login`, `POST /api/v2/auth/logout`, `POST /api/v2/auth/refresh`, `/actuator/health` y `/actuator/info`.
+- `permitAll`: `POST /api/v2/auth/login`, `POST /api/v2/auth/password-recovery/request`, `POST /api/v2/auth/password-recovery/verify`, `POST /api/v2/auth/password-recovery/reset`, `POST /api/v2/auth/logout`, `POST /api/v2/auth/refresh`, `/actuator/health` y `/actuator/info`.
 - Rutas bloqueadas: `/api/v1/**` y `/internal/**`.
 - Resto de rutas: autenticadas.
 - `GET /api/v2/auth/me` y sus `PATCH` son parte del contrato requerido por
   la vista de configuracion del frontend.
+
+## Recuperacion de contrasena
+
+- El flujo publico se inicia con `POST /api/v2/auth/password-recovery/request`
+  usando solo el `rut` limpio y completo con DV.
+- La respuesta del paso inicial es siempre `202 Accepted` cuando el servicio
+  esta disponible, para no exponer si la cuenta existe o no.
+- `POST /api/v2/auth/password-recovery/verify` valida un codigo alfanumerico
+  de 8 caracteres en mayuscula y devuelve un `reset_token` opaco temporal.
+- `POST /api/v2/auth/password-recovery/reset` solo acepta ese `reset_token`;
+  no reutiliza el codigo del correo en el paso final.
+- Al completar el reset:
+  - se actualiza `password_hash`
+  - se consume la solicitud
+  - se revocan todas las sesiones activas del usuario
+- El correo usa `email_type = auth.password_recovery` y depende de que
+  `APP_EMAIL_ENABLED=true` y exista `frontend-base-url` configurable para
+  construir el CTA hacia `#/recuperar-contrasena/codigo`.
 
 ## Formato de error publico
 

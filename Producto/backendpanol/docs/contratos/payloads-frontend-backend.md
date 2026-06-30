@@ -1,10 +1,10 @@
 - Estado del documento: vigente
-- Ultima verificacion: 2026-06-29
+- Ultima verificacion: 2026-06-30
 - Fuente de verdad: ver matriz canonica vigente y codigo fuente actual
 
 # Payloads Frontend / Backend
 
-- Ultima actualizacion: 2026-06-29
+- Ultima actualizacion: 2026-06-30
 - Alcance: contratos JSON usados por frontend y backend
 
 ## 1) Payload de error publico (backend -> frontend)
@@ -241,11 +241,88 @@ Error funcional esperado:
 
 - `404` cuando la sesion no existe o no pertenece al usuario autenticado.
 
-## 11) Consumo en frontend
+## 11) Recuperacion de contrasena
+
+### Request inicial (`POST /api/v2/auth/password-recovery/request`)
+
+```json
+{
+  "rut": "12345678K"
+}
+```
+
+Notas:
+
+- `rut` se envia limpio, completo y con DV.
+- Si el servicio de correo esta habilitado, la respuesta es `202 Accepted`
+  aunque la cuenta no exista o no tenga correo asociado.
+
+### Response 202
+
+- Sin body.
+
+Error funcional esperado:
+
+- `AUTH_PASSWORD_RECOVERY_UNAVAILABLE` cuando el pipeline de correo no esta
+  disponible.
+
+### Verificacion de codigo (`POST /api/v2/auth/password-recovery/verify`)
+
+```json
+{
+  "rut": "12345678K",
+  "code": "AB12CD34"
+}
+```
+
+### Response 200
+
+```json
+{
+  "reset_token": "opaque-reset-token",
+  "expires_in_seconds": 600
+}
+```
+
+Errores funcionales esperados:
+
+- `AUTH_PASSWORD_RECOVERY_CODE_REQUIRED`
+- `AUTH_PASSWORD_RECOVERY_CODE_INVALID`
+- `AUTH_PASSWORD_RECOVERY_CODE_EXPIRED`
+- `AUTH_PASSWORD_RECOVERY_CODE_ATTEMPTS_EXCEEDED`
+
+### Reset final (`POST /api/v2/auth/password-recovery/reset`)
+
+```json
+{
+  "reset_token": "opaque-reset-token",
+  "new_password": "Nueva1234"
+}
+```
+
+### Response 204
+
+- Sin body.
+
+Errores funcionales esperados:
+
+- `AUTH_PASSWORD_RECOVERY_TOKEN_INVALID`
+- `AUTH_PASSWORD_RECOVERY_TOKEN_EXPIRED`
+- `AUTH_NEW_PASSWORD_REQUIRED`
+- `AUTH_NEW_PASSWORD_TOO_SHORT`
+- `AUTH_PASSWORD_REUSE_NOT_ALLOWED`
+
+## 12) Consumo en frontend
 
 - `src/services/apiClient.ts` espera en errores: `code`, `message`, `timestamp`.
 - `src/services/authService.ts` consume `POST /api/v2/auth/login` y persiste
   solo `auth_user` como snapshot no sensible.
+- `src/services/passwordRecoveryService.ts` consume:
+  - `POST /api/v2/auth/password-recovery/request`
+  - `POST /api/v2/auth/password-recovery/verify`
+  - `POST /api/v2/auth/password-recovery/reset`
+- El frontend guarda `reset_token` solo en `sessionStorage` y lo elimina al
+  terminar o abandonar el flujo.
 - `src/services/botService.ts` solicita `POST /api/v2/auth/me/bot-token` usando
   la sesion por cookies y luego llama `POST /api/v1/chat` con
   `Authorization: Bearer <token-puente>`.
@@ -258,7 +335,7 @@ Error funcional esperado:
   `PATCH /api/v2/auth/me/email` y `PATCH /api/v2/auth/me/password`.
 - Cualquier otro detalle tecnico debe permanecer en logs internos del backend.
 
-## 12) Administracion de usuarios
+## 13) Administracion de usuarios
 
 ### Request de creacion (`POST /api/v2/users`)
 
@@ -298,7 +375,7 @@ Notas:
 - Sin body.
 - Solo aplica sobre usuarios inactivos y sin referencias bloqueantes.
 
-## 13) Historial y resumen de movimientos
+## 14) Historial y resumen de movimientos
 
 ### Query de historial (`GET /api/v2/implements/movements/history`)
 
@@ -366,7 +443,7 @@ Params soportados:
 }
 ```
 
-## 14) Prestamos v2
+## 15) Prestamos v2
 
 ### Flujo vigente
 
@@ -545,7 +622,7 @@ Notas:
 - `complete` asume retorno correcto para todos los items retornables pendientes.
 - `return` debe usarse cuando hace falta clasificar unidades `individual` o informar retorno parcial de `reusable`.
 
-## 13) Catalogo de implementos y stock individual
+## 16) Catalogo de implementos y stock individual
 
 ### Request (`POST /api/v2/implements`)
 

@@ -1,7 +1,7 @@
 # Entorno y Secrets del Backend
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-06-29
+- Ultima verificacion: 2026-06-30
 - Fuente de verdad: `application.yaml`, `Producto/databasepanol/.env.example`, `.env`, `.env.local.example`, compose vigentes
 
 ## Selector de entorno de BD
@@ -46,6 +46,11 @@ Comunes:
 - `APP_AUTH_REFRESH_TEMPORARY_EXPIRATION_SECONDS`
 - `APP_AUTH_BOT_TOKEN_EXPIRATION_SECONDS`
 - `APP_AUTH_BOT_TOKEN_AUDIENCE`
+- `APP_AUTH_PASSWORD_RECOVERY_CODE_LENGTH`
+- `APP_AUTH_PASSWORD_RECOVERY_EXPIRATION_MINUTES`
+- `APP_AUTH_PASSWORD_RECOVERY_MAX_ATTEMPTS`
+- `APP_AUTH_PASSWORD_RECOVERY_RESEND_COOLDOWN_SECONDS`
+- `APP_AUTH_PASSWORD_RECOVERY_RESET_TOKEN_EXPIRATION_SECONDS`
 - `APP_AUTH_COOKIE_SECURE`
 - `APP_AUTH_COOKIE_SAME_SITE`
 - `APP_AUTH_JWT_SECRET`
@@ -104,6 +109,21 @@ jOOQ (build-time):
 - `APP_AUTH_BOT_TOKEN_AUDIENCE`
   - Audience esperado por `bot-panol` para validar el token puente.
   - Default: `bot-panol`.
+- `APP_AUTH_PASSWORD_RECOVERY_CODE_LENGTH`
+  - Largo del codigo alfanumerico enviado por correo.
+  - Default: `8`.
+- `APP_AUTH_PASSWORD_RECOVERY_EXPIRATION_MINUTES`
+  - Vigencia total del codigo y de la solicitud de recuperacion.
+  - Default: `15`.
+- `APP_AUTH_PASSWORD_RECOVERY_MAX_ATTEMPTS`
+  - Maximo de intentos fallidos permitidos por solicitud.
+  - Default: `5`.
+- `APP_AUTH_PASSWORD_RECOVERY_RESEND_COOLDOWN_SECONDS`
+  - Cooldown minimo antes de reenviar un nuevo codigo para el mismo usuario.
+  - Default: `120`.
+- `APP_AUTH_PASSWORD_RECOVERY_RESET_TOKEN_EXPIRATION_SECONDS`
+  - Vigencia del `reset_token` opaco emitido despues de verificar el codigo.
+  - Default: `600`.
 - `APP_AUTH_COOKIE_SECURE`
   - Si `true`, el navegador solo enviara las cookies por HTTPS.
   - En localhost HTTP normalmente debe ser `false`.
@@ -160,6 +180,11 @@ jOOQ (build-time):
 - `APP_EMAIL_READ_TIMEOUT_MS`
   - timeout de lectura de la respuesta del proveedor.
   - Default: `10000` ms.
+- La recuperacion de contrasena depende de este bloque:
+  - `APP_EMAIL_ENABLED=true`
+  - `APP_EMAIL_PROVIDER=resend`
+  - `APP_EMAIL_RESEND_API_KEY` valido
+  - `frontend-base-url` efectivo para construir el CTA del correo
 
 ## Compose y entorno
 

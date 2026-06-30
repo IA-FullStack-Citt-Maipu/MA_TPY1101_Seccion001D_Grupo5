@@ -1,8 +1,8 @@
 # SQL Artefacts (Canon Operativo Vigente)
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-06-29
-- Fuente de verdad: `Producto/databasepanol/migrations/v25/` (cadena vigente `V25..V52`, sin archivo `V28` versionado en el repo)
+- Ultima verificacion: 2026-06-30
+- Fuente de verdad: `Producto/databasepanol/migrations/v25/` (cadena vigente `V25..V53`, sin archivo `V28` versionado en el repo)
 
 Este directorio no almacena dumps historicos ni scripts legacy.
 El contrato operativo vigente de esquema vive en Flyway y su fuente SQL versionada esta en `Producto/databasepanol/migrations/v25`.
