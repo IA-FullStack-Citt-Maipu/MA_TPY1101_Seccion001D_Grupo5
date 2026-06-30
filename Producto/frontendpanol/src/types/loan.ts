@@ -43,6 +43,60 @@ export interface LoanPage {
   has_previous: boolean;
 }
 
+export interface LoanRequesterSummary {
+  requesterUuid: string;
+  requesterName: string;
+  requesterEmail: string | null;
+  requesterRut: string | null;
+  lastLoanAt: string | null;
+  latestLoanUuid: string | null;
+  latestStatus: LoanStatus | null;
+  latestRoomName: string | null;
+  latestSubjectName: string | null;
+  totalLoans: number;
+  activeLoans: number;
+}
+
+export interface LoanRequesterPage {
+  items: LoanRequesterSummary[];
+  page: number;
+  size: number;
+  totalItems: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
+}
+
+export interface LoanRequesterHistoryItem {
+  uuid: string;
+  status: LoanStatus;
+  scheduledAt: string;
+  expectedReturnAt: string | null;
+  createdAt: string;
+  completedAt: string | null;
+  approvedAt: string | null;
+  preparedAt: string | null;
+  deliveredAt: string | null;
+  rejectedAt: string | null;
+  cancelledAt: string | null;
+  expiredAt: string | null;
+  overdueAt: string | null;
+  room: LoanRoomSummary | null;
+  subject: LoanSubjectSummary | null;
+  items: LoanItem[];
+}
+
+export interface LoanRequesterHistoryPage {
+  requester: LoanRequesterSummary | null;
+  items: LoanRequesterHistoryItem[];
+  page: number;
+  size: number;
+  totalItems: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
+}
+
 export interface CreateLoanItemPayload {
   implement_uuid: string;
   requested_quantity: number;

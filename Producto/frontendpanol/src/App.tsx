@@ -18,6 +18,7 @@ import { InventoryMovesPage } from "./pages/InventoryMovesPage";
 import { LoanCalendarPage } from "./pages/LoanCalendarPage";
 import { LoanCreatePage } from "./pages/LoanCreatePage";
 import { LoanCoordinatorPage } from "./pages/LoanCoordinatorPage";
+import { LoanRequesterDirectoryPage } from "./pages/LoanRequesterDirectoryPage";
 import { LoanDeliveryPage } from "./pages/LoanDeliveryPage";
 import { LoanHistoryPage } from "./pages/LoanHistoryPage";
 import { LoanPreparationPage } from "./pages/LoanPreparationPage";
@@ -283,6 +284,17 @@ function App() {
       };
     }
 
+    if (directorRole && currentHashPath.startsWith("#/director/docentes")) {
+      return {
+        key: "director-requesters",
+        navigationMode: "director",
+        activeSection: "director-requesters",
+        breadcrumbs: [{ label: "Director" }, { label: "Docentes" }],
+        showSearch: false,
+        content: <LoanRequesterDirectoryPage embedded viewMode="director" />,
+      };
+    }
+
     if (directorRole && currentHashPath.startsWith("#/director/dashboard")) {
       return {
         key: "director-dashboard",
@@ -369,6 +381,20 @@ function App() {
           ? [{ label: "Prestamos", href: "#/inventory/prestamos" }, { label: "Agenda" }]
           : [{ label: "Inventario", href: "#/inventory/dashboard" }, { label: "Prestamos", href: "#/inventory/prestamos" }, { label: "Agenda" }],
         content: <LoanCalendarPage embedded activeDetailLoanUuid={activeLoanDetailUuid} />,
+      };
+    }
+
+    if (currentHashPath.startsWith("#/inventory/prestamos/docentes")) {
+      if (!coordinatorRole) {
+        return inventoryDenied("coordinator-requesters", "Docentes", "Solo el rol Coordinador puede acceder al historial de docentes.");
+      }
+      return {
+        key: "loan-requesters",
+        navigationMode: "inventory",
+        activeSection: "coordinator-requesters",
+        breadcrumbs: [{ label: "Inventario", href: "#/inventory/dashboard" }, { label: "Docentes" }],
+        showSearch: false,
+        content: <LoanRequesterDirectoryPage embedded viewMode="coordinator" />,
       };
     }
 
