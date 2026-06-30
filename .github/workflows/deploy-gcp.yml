@@ -558,10 +558,32 @@ jobs:
             -target=module.runtime_iam \
             -target=module.cloud_sql
 
+      - name: Start Cloud SQL proxy for backend build
+        env:
+          CLOUDSQL_CONNECTION_NAME: ${{ vars.GCP_PROJECT_ID_STAGING_PERF }}:${{ vars.GCP_REGION_STAGING_PERF }}:${{ vars.CLOUDSQL_INSTANCE_NAME_STAGING_PERF }}
+        run: |
+          docker run -d \
+            --name cloud-sql-proxy-staging-perf \
+            --restart=unless-stopped \
+            --network host \
+            -e GOOGLE_APPLICATION_CREDENTIALS="$GOOGLE_APPLICATION_CREDENTIALS" \
+            -v "$GOOGLE_APPLICATION_CREDENTIALS:$GOOGLE_APPLICATION_CREDENTIALS:ro" \
+            gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.22.1 \
+            "${CLOUDSQL_CONNECTION_NAME}" \
+            --address 127.0.0.1 \
+            --port 5432
+
       - name: Build backend image
+        env:
+          JOOQ_DB_URL: jdbc:postgresql://127.0.0.1:5432/${{ vars.CLOUDSQL_DB_NAME_STAGING_PERF }}?sslmode=disable
+          JOOQ_DB_USER: ${{ vars.CLOUDSQL_DB_USER_STAGING_PERF }}
+          JOOQ_DB_PASSWORD: ${{ secrets.DB_CLOUDSQL_PASSWORD_STAGING_PERF }}
         run: |
           docker build \
             -f ./Producto/backendpanol/Dockerfile \
+            --build-arg JOOQ_DB_URL="$JOOQ_DB_URL" \
+            --build-arg JOOQ_DB_USER="$JOOQ_DB_USER" \
+            --build-arg JOOQ_DB_PASSWORD="$JOOQ_DB_PASSWORD" \
             -t "${{ steps.meta.outputs.repo }}/backend:${{ steps.meta.outputs.tag }}" \
             ./Producto
 
