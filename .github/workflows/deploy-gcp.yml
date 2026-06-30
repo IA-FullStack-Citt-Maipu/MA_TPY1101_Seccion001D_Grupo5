@@ -423,6 +423,41 @@ jobs:
           CLOUDSQL_INSTANCE_NAME: ${{ vars.CLOUDSQL_INSTANCE_NAME_STAGING_PERF }}
           CLOUDSQL_DB_NAME: ${{ vars.CLOUDSQL_DB_NAME_STAGING_PERF }}
           CLOUDSQL_DB_USER: ${{ vars.CLOUDSQL_DB_USER_STAGING_PERF }}
+          TF_VAR_gcp_project_id: ${{ vars.GCP_PROJECT_ID_STAGING_PERF }}
+          TF_VAR_region: ${{ vars.GCP_REGION_STAGING_PERF }}
+          TF_VAR_environment: staging-perf
+          TF_VAR_artifact_registry_location: ${{ vars.GCP_ARTIFACT_REGISTRY_LOCATION_STAGING_PERF }}
+          TF_VAR_backend_image: ${{ steps.meta.outputs.repo }}/backend:${{ steps.meta.outputs.tag }}
+          TF_VAR_frontend_image: ${{ steps.meta.outputs.repo }}/frontend:${{ steps.meta.outputs.tag }}
+          TF_VAR_cloudsql_instance_name: ${{ vars.CLOUDSQL_INSTANCE_NAME_STAGING_PERF }}
+          TF_VAR_cloudsql_db_name: ${{ vars.CLOUDSQL_DB_NAME_STAGING_PERF }}
+          TF_VAR_cloudsql_db_user: ${{ vars.CLOUDSQL_DB_USER_STAGING_PERF }}
+          TF_VAR_cloudsql_db_tier: ${{ vars.CLOUDSQL_DB_TIER_STAGING_PERF }}
+          TF_VAR_cloudsql_db_disk_size_gb: ${{ vars.CLOUDSQL_DB_DISK_SIZE_GB_STAGING_PERF }}
+          TF_VAR_cloudsql_db_availability_type: ${{ vars.CLOUDSQL_DB_AVAILABILITY_TYPE_STAGING_PERF }}
+          TF_VAR_app_security_enabled: ${{ vars.APP_SECURITY_ENABLED_STAGING_PERF }}
+          TF_VAR_app_auth_max_failed_attempts: ${{ vars.APP_AUTH_MAX_FAILED_ATTEMPTS_STAGING_PERF }}
+          TF_VAR_app_auth_lock_minutes: ${{ vars.APP_AUTH_LOCK_MINUTES_STAGING_PERF }}
+          TF_VAR_app_auth_jwt_issuer: ${{ vars.APP_AUTH_JWT_ISSUER_STAGING_PERF }}
+          TF_VAR_app_auth_jwt_expiration_seconds: ${{ vars.APP_AUTH_JWT_EXPIRATION_SECONDS_STAGING_PERF }}
+          TF_VAR_app_auth_refresh_expiration_seconds: ${{ vars.APP_AUTH_REFRESH_EXPIRATION_SECONDS_STAGING_PERF }}
+          TF_VAR_app_auth_cookie_secure: ${{ vars.APP_AUTH_COOKIE_SECURE_STAGING_PERF }}
+          TF_VAR_app_auth_cookie_same_site: ${{ vars.APP_AUTH_COOKIE_SAME_SITE_STAGING_PERF }}
+          TF_VAR_app_auth_token_revocation_cleanup_enabled: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_ENABLED_STAGING_PERF }}
+          TF_VAR_app_auth_token_revocation_cleanup_initial_delay_ms: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_INITIAL_DELAY_MS_STAGING_PERF }}
+          TF_VAR_app_auth_token_revocation_cleanup_delay_ms: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_DELAY_MS_STAGING_PERF }}
+          TF_VAR_app_auth_token_revocation_cleanup_batch_size: ${{ vars.APP_AUTH_TOKEN_REVOCATION_CLEANUP_BATCH_SIZE_STAGING_PERF }}
+          TF_VAR_backend_min_instances: ${{ vars.BACKEND_MIN_INSTANCES_STAGING_PERF }}
+          TF_VAR_backend_max_instances: ${{ vars.BACKEND_MAX_INSTANCES_STAGING_PERF }}
+          TF_VAR_backend_timeout_seconds: ${{ vars.BACKEND_TIMEOUT_SECONDS_STAGING_PERF }}
+          TF_VAR_backend_concurrency: ${{ vars.BACKEND_CONCURRENCY_STAGING_PERF }}
+          TF_VAR_frontend_min_instances: ${{ vars.FRONTEND_MIN_INSTANCES_STAGING_PERF }}
+          TF_VAR_frontend_max_instances: ${{ vars.FRONTEND_MAX_INSTANCES_STAGING_PERF }}
+          TF_VAR_frontend_timeout_seconds: ${{ vars.FRONTEND_TIMEOUT_SECONDS_STAGING_PERF }}
+          TF_VAR_frontend_concurrency: ${{ vars.FRONTEND_CONCURRENCY_STAGING_PERF }}
+          TF_VAR_db_cloudsql_password_secret_value: ${{ secrets.DB_CLOUDSQL_PASSWORD_STAGING_PERF }}
+          TF_VAR_app_auth_jwt_secret_value: ${{ secrets.APP_AUTH_JWT_SECRET_STAGING_PERF }}
+          TF_VAR_runtime_sa_user_members: '["serviceAccount:${{ secrets.GCP_SERVICE_ACCOUNT_STAGING_PERF }}"]'
         run: |
           set -euo pipefail
 
