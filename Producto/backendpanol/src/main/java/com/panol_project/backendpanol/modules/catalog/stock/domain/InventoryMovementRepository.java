@@ -7,4 +7,6 @@ public interface InventoryMovementRepository {
     InventoryMovement save(InventoryMovement movement);
     List<InventoryMovement> findTop10ByImplementUuidOrderByTimestampDesc(UUID implementUuid);
     List<InventoryMovement> findAllByOrderByTimestampDesc();
+    InventoryMovementHistoryPage findHistory(InventoryMovementHistoryFilter filter, int page, int size);
+    InventoryMovementDashboardSummary findDashboardSummary();
 }

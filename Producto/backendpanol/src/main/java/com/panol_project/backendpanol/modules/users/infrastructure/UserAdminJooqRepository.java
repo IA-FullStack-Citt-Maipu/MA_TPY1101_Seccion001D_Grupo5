@@ -1,12 +1,19 @@
 package com.panol_project.backendpanol.modules.users.infrastructure;
 
+import static com.panol_project.backendpanol.jooq.tables.AuditLog.AUDIT_LOG;
+import static com.panol_project.backendpanol.jooq.tables.InventoryMovement.INVENTORY_MOVEMENT;
+import static com.panol_project.backendpanol.jooq.tables.Loan.LOAN;
+import static com.panol_project.backendpanol.jooq.tables.LoanStatusHistory.LOAN_STATUS_HISTORY;
 import static com.panol_project.backendpanol.jooq.tables.Role.ROLE;
 import static com.panol_project.backendpanol.jooq.tables.User.USER;
 
 import com.panol_project.backendpanol.modules.users.domain.UserAdminRepository;
+import com.panol_project.backendpanol.modules.users.domain.UserAdminManagedUser;
 import com.panol_project.backendpanol.modules.users.domain.UserAdminSummary;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
+import org.jooq.Select;
 import org.jooq.DSLContext;
 import org.jooq.impl.DSL;
 import org.springframework.stereotype.Repository;
@@ -127,6 +134,45 @@ public class UserAdminJooqRepository implements UserAdminRepository {
                 .set(USER.NAME, name)
                 .set(USER.RUT, rut)
                 .set(USER.EMAIL, email)
+                .where(USER.UUID.eq(userUuid))
+                .execute();
+    }
+
+    @Override
+    public Optional<UserAdminManagedUser> findManagedUserByUuid(UUID userUuid) {
+        return dsl.select(USER.ID, USER.UUID, USER.NAME, USER.ACTIVE)
+                .from(USER)
+                .where(USER.UUID.eq(userUuid))
+                .fetchOptional(record -> new UserAdminManagedUser(
+                        record.get(USER.ID),
+                        record.get(USER.UUID),
+                        record.get(USER.NAME),
+                        Boolean.TRUE.equals(record.get(USER.ACTIVE))
+                ));
+    }
+
+    @Override
+    public boolean hasBlockingReferences(Long userId) {
+        Select<?> blockingReferences = dsl.selectOne()
+                .from(LOAN)
+                .where(LOAN.REQUESTER_ID.eq(userId))
+                .unionAll(dsl.selectOne()
+                        .from(LOAN_STATUS_HISTORY)
+                        .where(LOAN_STATUS_HISTORY.ACTOR_USER_ID.eq(userId)))
+                .unionAll(dsl.selectOne()
+                        .from(INVENTORY_MOVEMENT)
+                        .where(INVENTORY_MOVEMENT.ACTOR_USER_ID.eq(userId)))
+                .unionAll(dsl.selectOne()
+                        .from(AUDIT_LOG)
+                        .where(AUDIT_LOG.ACTOR_USER_ID.eq(userId)
+                                .or(AUDIT_LOG.TARGET_USER_ID.eq(userId))));
+
+        return dsl.fetchExists(blockingReferences);
+    }
+
+    @Override
+    public int deleteUserByUuid(UUID userUuid) {
+        return dsl.deleteFrom(USER)
                 .where(USER.UUID.eq(userUuid))
                 .execute();
     }

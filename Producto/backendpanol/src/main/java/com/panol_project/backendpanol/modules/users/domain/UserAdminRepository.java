@@ -1,6 +1,7 @@
 package com.panol_project.backendpanol.modules.users.domain;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface UserAdminRepository {
@@ -13,4 +14,7 @@ public interface UserAdminRepository {
     int updateUserActive(UUID userUuid, boolean active);
     boolean existsUserByUuid(UUID userUuid);
     int updateUser(UUID userUuid, String name, String rut, String email);
+    Optional<UserAdminManagedUser> findManagedUserByUuid(UUID userUuid);
+    boolean hasBlockingReferences(Long userId);
+    int deleteUserByUuid(UUID userUuid);
 }

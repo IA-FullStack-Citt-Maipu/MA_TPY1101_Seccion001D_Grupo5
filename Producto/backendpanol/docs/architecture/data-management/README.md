@@ -1,8 +1,8 @@
 ﻿# Gestion de Datos: Canon Operativo Vigente
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-06-28
-- Fuente de verdad: `Producto/databasepanol/migrations/v25/V25..V47` + `03-postgresql-guia-tecnica.md`
+- Ultima verificacion: 2026-06-29
+- Fuente de verdad: `Producto/databasepanol/migrations/v25/V25..V51` + `03-postgresql-guia-tecnica.md`
 
 ## Documentos principales de base de datos
 
@@ -35,4 +35,4 @@
 ## Politica de legado
 
 - No se consideran vigentes documentos/artefactos previos al baseline V25.
-- Las extensiones funcionales posteriores al baseline quedan trazadas por Flyway (`V26..V47`) y se contrastan, solo cuando hace falta contexto historico, con `16-catalogo-bd-v31.md`.
+- Las extensiones funcionales posteriores al baseline quedan trazadas por Flyway (`V26..V51`) y se contrastan, solo cuando hace falta contexto historico, con `16-catalogo-bd-v31.md`.
