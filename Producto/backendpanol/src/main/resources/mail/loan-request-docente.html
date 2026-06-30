@@ -3,56 +3,144 @@
 <body>
 <th:block th:replace="~{base :: layout(~{::section})}">
     <section>
-        <p style="margin:0 0 12px 0;font-size:16px;color:#1d3557;">Hola,</p>
-        <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#334e68;" th:text="${message}">
-            Tu solicitud fue registrada.
-        </p>
-
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
-               style="border-collapse:separate;border-spacing:0;background-color:#f8fbff;border:1px solid #d9e6f7;border-radius:14px;overflow:hidden;">
+               style="width:100%;border-collapse:separate;border-spacing:0;background-color:#f3f8ff;border:1px solid #dce6f5;border-radius:18px;">
             <tr>
-                <td style="padding:16px 18px;border-bottom:1px solid #d9e6f7;">
-                    <strong>Prestamo</strong><br>
-                    <span th:text="${loan_uuid}">uuid</span>
-                </td>
-            </tr>
-            <tr>
-                <td style="padding:16px 18px;border-bottom:1px solid #d9e6f7;">
-                    <strong>Asignatura</strong><br>
-                    <span th:text="${subject_name}">Asignatura</span>
-                </td>
-            </tr>
-            <tr>
-                <td style="padding:16px 18px;border-bottom:1px solid #d9e6f7;">
-                    <strong>Sala</strong><br>
-                    <span th:text="${room_name}">Sala</span>
-                </td>
-            </tr>
-            <tr>
-                <td style="padding:16px 18px;border-bottom:1px solid #d9e6f7;">
-                    <strong>Estado</strong><br>
-                    <span th:text="${status_label}">Pendiente</span>
-                </td>
-            </tr>
-            <tr>
-                <td style="padding:16px 18px;">
-                    <strong>Programado</strong><br>
-                    <span th:text="${scheduledAtFormatted}">Fecha</span>
+                <td style="padding:20px 22px;">
+                    <div style="font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:16px;line-height:1.7;color:#334e68;"
+                         th:text="${requester_name != null ? 'Hola, ' + requester_name + '.' : 'Hola.'}">
+                        Hola.
+                    </div>
+                    <div style="margin-top:10px;font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:16px;line-height:1.7;color:#334e68;"
+                         th:text="${message}">
+                        Tu solicitud fue registrada.
+                    </div>
                 </td>
             </tr>
         </table>
 
-        <div th:if="${!#lists.isEmpty(details)}" style="margin-top:20px;">
-            <div style="font-size:16px;font-weight:700;margin-bottom:12px;">Implementos solicitados</div>
-            <div th:each="detail : ${details}"
-                 style="padding:12px 14px;border:1px solid #d9e6f7;border-radius:12px;background-color:#ffffff;margin-bottom:10px;">
-                <div style="font-weight:700;" th:text="${detail['implement_name']}">Implemento</div>
-                <div style="color:#5b6f8f;margin-top:4px;">
-                    Cantidad solicitada:
-                    <span th:text="${detail['requested_quantity']}">0</span>
-                </div>
-            </div>
-        </div>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+               style="width:100%;margin-top:20px;border-collapse:collapse;">
+            <tr>
+                <td style="padding-right:8px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                           style="width:100%;border-collapse:separate;border-spacing:0;background-color:#ffffff;border:1px solid #dce6f5;border-radius:16px;">
+                        <tr>
+                            <td style="padding:16px 18px;">
+                                <div style="font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#6b7ea3;">Estado actual</div>
+                                <div style="margin-top:8px;font-family:'Poppins','Inter','Segoe UI',Arial,sans-serif;font-size:18px;font-weight:700;color:#132f65;" th:text="${statusLabel}">Estado</div>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+                <td style="padding-left:8px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                           style="width:100%;border-collapse:separate;border-spacing:0;background-color:#ffffff;border:1px solid #dce6f5;border-radius:16px;">
+                        <tr>
+                            <td style="padding:16px 18px;">
+                                <div style="font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#6b7ea3;">Fecha del evento</div>
+                                <div style="margin-top:8px;font-family:'Poppins','Inter','Segoe UI',Arial,sans-serif;font-size:18px;font-weight:700;color:#132f65;" th:text="${createdAtFormatted}">Fecha</div>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+               style="width:100%;margin-top:20px;border-collapse:separate;border-spacing:0;background-color:#ffffff;border:1px solid #dce6f5;border-radius:18px;">
+            <tr>
+                <td style="padding:18px 20px;border-bottom:1px solid #dce6f5;font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#0b5b8f;">
+                    <span th:text="${docenteSummaryTitle}">Resumen de la solicitud</span>
+                </td>
+            </tr>
+            <tr>
+                <td style="padding:0 20px 18px 20px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                           style="width:100%;border-collapse:collapse;">
+                        <tr>
+                            <td width="50%" style="padding:16px 12px 16px 0;border-bottom:1px solid #edf2fb;vertical-align:top;">
+                                <div style="font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#6b7ea3;">Estado</div>
+                                <div style="margin-top:6px;font-family:'Poppins','Inter','Segoe UI',Arial,sans-serif;font-size:16px;font-weight:700;color:#132f65;" th:text="${status_label}">Pendiente</div>
+                            </td>
+                            <td width="50%" style="padding:16px 0 16px 12px;border-bottom:1px solid #edf2fb;vertical-align:top;">
+                                <div style="font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#6b7ea3;">Asignatura</div>
+                                <div style="margin-top:6px;font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:15px;line-height:1.6;color:#132f65;" th:text="${subject_name}">Asignatura</div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding:16px 12px 16px 0;border-bottom:1px solid #edf2fb;vertical-align:top;">
+                                <div style="font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#6b7ea3;">Sala</div>
+                                <div style="margin-top:6px;font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:15px;line-height:1.6;color:#132f65;" th:text="${room_name}">Sala</div>
+                            </td>
+                            <td style="padding:16px 0 16px 12px;border-bottom:1px solid #edf2fb;vertical-align:top;">
+                                <div style="font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#6b7ea3;">Programado</div>
+                                <div style="margin-top:6px;font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:15px;line-height:1.6;color:#132f65;" th:text="${scheduledAtFormatted}">Fecha</div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td colspan="2" style="padding:16px 0 0 0;vertical-align:top;">
+                                <div style="font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#6b7ea3;">Devolucion estimada</div>
+                                <div style="margin-top:6px;font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:15px;line-height:1.6;color:#132f65;" th:text="${expectedReturnAtFormatted}">Fecha</div>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+
+        <table th:if="${requestNote != null}" role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+               style="width:100%;margin-top:20px;border-collapse:separate;border-spacing:0;background-color:#f6fbff;border:1px solid #d6e7fb;border-radius:18px;">
+            <tr>
+                <td style="padding:18px 20px;border-bottom:1px solid #dce6f5;font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#0b5b8f;">
+                    <span th:text="${docenteRequestNoteTitle}">Nota enviada</span>
+                </td>
+            </tr>
+            <tr>
+                <td style="padding:18px 20px;font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:15px;line-height:1.7;color:#334e68;"
+                    th:text="${requestNote}">
+                    Necesito estos implementos para la practica del bloque de la manana.
+                </td>
+            </tr>
+        </table>
+
+        <table th:if="${!#lists.isEmpty(details)}" role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+               style="width:100%;margin-top:20px;border-collapse:collapse;">
+            <tr>
+                <td style="padding-bottom:12px;font-family:'Poppins','Inter','Segoe UI',Arial,sans-serif;font-size:18px;font-weight:700;color:#132f65;">
+                    <span th:text="${docenteDetailsTitle}">Implementos solicitados</span>
+                </td>
+            </tr>
+            <tr th:each="detail : ${details}">
+                <td style="padding-bottom:12px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                           style="width:100%;border-collapse:separate;border-spacing:0;background-color:#ffffff;border:1px solid #dce6f5;border-radius:16px;">
+                        <tr>
+                            <td style="padding:16px 18px;">
+                                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                                       style="width:100%;border-collapse:collapse;">
+                                    <tr>
+                                        <td style="vertical-align:top;">
+                                            <div style="font-family:'Poppins','Inter','Segoe UI',Arial,sans-serif;font-size:16px;font-weight:700;color:#132f65;"
+                                                 th:text="${detail['implement_name']}">Implemento</div>
+                                            <div style="margin-top:6px;font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:14px;line-height:1.6;color:#6b7ea3;">
+                                                <span th:text="${docenteQuantityLabel}">Cantidad solicitada</span>:
+                                                <span style="font-weight:700;color:#132f65;" th:text="${detail['requested_quantity']}">0</span>
+                                            </div>
+                                        </td>
+                                        <td align="right" style="vertical-align:top;">
+                                            <span style="display:inline-block;padding:7px 12px;border-radius:999px;background-color:#eaf1ff;border:1px solid #cdddf8;font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:12px;font-weight:700;color:#0c2f75;">
+                                                Item del prestamo
+                                            </span>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
     </section>
 </th:block>
 </body>

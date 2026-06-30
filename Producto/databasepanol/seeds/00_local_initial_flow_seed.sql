@@ -41,7 +41,7 @@ VALUES
         'Coordinador QA Local',
         '11111111',
         'coordinador.local@panolsalud.test',
-        '$2b$12$cBAk2d9bJrAobQW1u349AumIkUAqehI7qZzD9AOCptNkDW/yOlCtW',
+        '$2a$10$zADN7rGUBlC0dpUEZ23u.euSxD49O8aXJuQtOjFRFpgEGsdd3yvT6',
         NULL,
         true,
         0,
@@ -58,7 +58,7 @@ VALUES
         'Docente QA Local',
         '22222222',
         'docente.local@panolsalud.test',
-        '$2b$12$.3Ddd0MLBoYPDQPo4xh.d.FrrB4vwBGDxBVITDuIY94HRjfVH03Rq',
+        '$2a$10$zADN7rGUBlC0dpUEZ23u.euSxD49O8aXJuQtOjFRFpgEGsdd3yvT6',
         NULL,
         true,
         0,
@@ -75,7 +75,7 @@ VALUES
         'Director QA Local',
         '33333333',
         'director.local@panolsalud.test',
-        '$2b$12$qZkxz21Or9bWy4vQc0EUMeaNKvqIf.YxoQYgrYGfkWschGCwneaPG',
+        '$2a$10$zADN7rGUBlC0dpUEZ23u.euSxD49O8aXJuQtOjFRFpgEGsdd3yvT6',
         NULL,
         true,
         0,
@@ -84,7 +84,20 @@ VALUES
         now(),
         now()
     )
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE
+SET uuid = EXCLUDED.uuid,
+    role_id = EXCLUDED.role_id,
+    career_id = EXCLUDED.career_id,
+    name = EXCLUDED.name,
+    rut = EXCLUDED.rut,
+    email = EXCLUDED.email,
+    password_hash = EXCLUDED.password_hash,
+    auth_uuid = EXCLUDED.auth_uuid,
+    active = EXCLUDED.active,
+    failed_login_attempts = EXCLUDED.failed_login_attempts,
+    blocked_until = EXCLUDED.blocked_until,
+    last_login_at = EXCLUDED.last_login_at,
+    updated_at = now();
 
 INSERT INTO public.category (id, uuid, name, description, active, created_at)
 VALUES

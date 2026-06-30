@@ -1,7 +1,7 @@
 # Frontend Docs
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-06-10
+- Ultima verificacion: 2026-06-29
 - Fuente de verdad: `src/pages/*`, `src/services/*`, controllers backend V2
 
 ## Objetivo
@@ -78,6 +78,22 @@ Frontend para gestion operativa de inventario consumiendo API v2 del backend.
   ante `401`.
 - El token puente del bot no se persiste; si expira, el frontend pide uno nuevo
   al backend y reintenta la llamada al asistente una vez.
+- Login y administracion de usuarios trabajan con RUT limpio completo con DV;
+  en UI puede mostrarse formateado, pero al backend se envia compacto.
+
+### Area director
+
+- Rutas activas:
+  - `#/director/dashboard`
+  - `#/director/users/create`
+  - `#/director/movimientos`
+- La alerta de "movimientos registrados" en el dashboard del director redirige
+  a `#/director/movimientos`.
+- `DirectorMovementHistoryPage.tsx` usa una experiencia tipo master-detail:
+  - lista resumida y paginada
+  - panel de detalle al seleccionar fila
+  - drawer fullscreen en mobile
+- La vista evita scroll infinito y usa paginacion real de 15 filas por pagina.
 
 ### Implementos
 

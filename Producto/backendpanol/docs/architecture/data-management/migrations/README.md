@@ -1,7 +1,7 @@
 # Registro de Migraciones Vigentes
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-06-28
+- Ultima verificacion: 2026-06-29
 - Fuente de verdad: `Producto/databasepanol/migrations/v25/`
 
 ## Cadena aplicada en el repositorio (baseline + refinamientos)
@@ -28,6 +28,10 @@
 20. `V45__consumable_global_reservation_availability.sql`
 21. `V46__loan_prepare_reserved_stock_reconciliation.sql`
 22. `V47__loan_history_and_stock_reconciliation.sql`
+23. `V48__email_templates_request_note_and_copy_cleanup.sql` - incorpora `request_note` y limpia el copy visible de correos de prestamo.
+24. `V49__loan_status_email_copy_for_approved_and_prepared.sql` - ajusta asuntos y mensajes de docente para `approved` y `prepared`.
+25. `V50__auto_reserved_docente_approved_email.sql` - habilita correo al docente cuando la solicitud nace auto-reservada en `approved`.
+26. `V51__director_without_loan_notifications.sql` - excluye al director de notificaciones de prestamo y mantiene solo alertas de stock.
 
 ## Nota de versionado
 
@@ -41,6 +45,6 @@
 
 ## Convencion
 
-- Nuevas migraciones se agregan en `Producto/databasepanol/migrations/v25` con version mayor a `47`.
+- Nuevas migraciones se agregan en `Producto/databasepanol/migrations/v25` con version mayor a `51`.
 - No se editan migraciones ya aplicadas en ambientes compartidos.
 - No se reintroduce cadena legacy previa al baseline V25.

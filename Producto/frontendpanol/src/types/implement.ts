@@ -1,4 +1,5 @@
 export interface InventoryMovementDetail {
+  id?: string;
   uuid: string;
   action: string;
   quantity: number;
@@ -6,6 +7,33 @@ export interface InventoryMovementDetail {
   notes: string | null;
   implement_uuid: string | null;
   performed_by: string | null;
+}
+
+export interface InventoryMovementHistoryItem {
+  id: string;
+  action: string;
+  quantity: number;
+  timestamp: string;
+  notes: string | null;
+  implement_uuid: string | null;
+  implement_name: string | null;
+  barcode: string | null;
+  item_type: "consumable" | "reusable" | "individual" | null;
+  category_name: string | null;
+  location_name: string | null;
+  performed_by_uuid: string | null;
+  performed_by: string | null;
+  performed_by_role: string | null;
+}
+
+export interface InventoryMovementHistoryPage {
+  items: InventoryMovementHistoryItem[];
+  page: number;
+  size: number;
+  totalItems: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
 }
 
 export interface ImplementCreatePayload {

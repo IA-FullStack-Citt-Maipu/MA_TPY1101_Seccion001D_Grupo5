@@ -1,8 +1,8 @@
 # Modulo: loan
 
 - Estado del documento: vigente
-- Ultima verificacion: 2026-06-28
-- Fuente de verdad: `LoanV2Controller`, `SolicitarPrestamoUseCase`, `GestionPrestamoUseCase`, `LoanJooqAdapter`, migraciones `V43` a `V47`
+- Ultima verificacion: 2026-06-29
+- Fuente de verdad: `LoanV2Controller`, `SolicitarPrestamoUseCase`, `GestionPrestamoUseCase`, `LoanJooqAdapter`, migraciones `V43` a `V51`
 
 ## Responsabilidad
 
@@ -131,5 +131,7 @@ Notas:
 - Toda transicion relevante queda registrada en `loan_status_history`.
 - La reserva automatica usa el usuario de sistema configurado por lifecycle/outbox.
 - Si no llegan `notes`, el backend persiste una nota operativa por defecto para mantener trazabilidad.
-- El solicitante no recibe notificacion cuando el prestamo entra en `approved`.
-- La notificacion de nueva solicitud para coordinacion/direccion se mantiene al crear la solicitud.
+- El solicitante recibe notificacion cuando la solicitud queda en `approved` y cuando el prestamo cambia a estados operativos relevantes posteriores.
+- En correo al docente, `approved` se comunica como reserva confirmada y `prepared` como implementos listos para retiro.
+- La notificacion de nueva solicitud se mantiene para coordinacion al crear la solicitud.
+- El director queda fuera del flujo de prestamos y solo conserva alertas de stock.
