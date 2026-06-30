@@ -2,7 +2,7 @@
 
 - Estado del documento: vigente
 - Ultima verificacion: 2026-06-29
-- Fuente de verdad: `Producto/databasepanol/migrations/v25/V25..V51` + `migrations/README.md`
+- Fuente de verdad: `Producto/databasepanol/migrations/v25/V25..V52` + `migrations/README.md`
 
 ## Rol de PostgreSQL
 
