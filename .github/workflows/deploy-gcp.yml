@@ -509,14 +509,14 @@ jobs:
             "gcloud iam service-accounts describe panol-runtime-staging-perf@${GCP_PROJECT_ID}.iam.gserviceaccount.com --project=${GCP_PROJECT_ID}"
 
           import_if_present \
-            'module.secret_manager.google_secret_manager_secret.this["DB_CLOUDSQL_PASSWORD"]' \
-            "projects/${GCP_PROJECT_ID}/secrets/DB_CLOUDSQL_PASSWORD" \
-            "gcloud secrets describe DB_CLOUDSQL_PASSWORD --project=${GCP_PROJECT_ID}"
-
-          import_if_present \
             'module.secret_manager.google_secret_manager_secret.this["APP_AUTH_JWT_SECRET"]' \
             "projects/${GCP_PROJECT_ID}/secrets/APP_AUTH_JWT_SECRET" \
             "gcloud secrets describe APP_AUTH_JWT_SECRET --project=${GCP_PROJECT_ID}"
+
+          import_if_present \
+            'module.secret_manager.google_secret_manager_secret.this["DB_CLOUDSQL_PASSWORD"]' \
+            "projects/${GCP_PROJECT_ID}/secrets/DB_CLOUDSQL_PASSWORD" \
+            "gcloud secrets describe DB_CLOUDSQL_PASSWORD --project=${GCP_PROJECT_ID}"
 
       - name: Bootstrap infra (registry + secrets + IAM + Cloud SQL)
         working-directory: infra/terraform/environments/staging-perf
