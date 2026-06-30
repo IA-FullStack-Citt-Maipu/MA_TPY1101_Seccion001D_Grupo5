@@ -934,16 +934,46 @@ textarea {
 
 .field-label-with-help {
   display: inline-flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
+  margin-bottom: 8px;
+  vertical-align: middle;
+  max-width: 100%;
+}
+
+.field-label-with-help label {
+  margin-bottom: 0;
+  line-height: 1.15;
+}
+
+.field-label-with-help .help-tooltip {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.inventory-catalog-filters .field-label-with-help {
+  align-items: flex-start;
+  min-height: 14px;
+}
+
+.inventory-catalog-filters .field-label-with-help label {
+  display: inline-flex;
+  align-items: flex-start;
+  line-height: 1;
+}
+
+.inventory-catalog-filters .field-label-with-help .help-tooltip {
+  align-self: flex-start;
+  margin-top: -3px;
 }
 
 .field-help-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
   width: 18px;
   height: 18px;
+  flex-shrink: 0;
+  padding: 0;
   border-radius: 999px;
   border: 1px solid rgba(12, 47, 117, 0.18);
   background: rgba(12, 47, 117, 0.08);
@@ -951,6 +981,7 @@ textarea {
   font-size: 11px;
   font-weight: 700;
   line-height: 1;
+  text-align: center;
   cursor: help;
   user-select: none;
 }
@@ -959,7 +990,9 @@ textarea {
   position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   vertical-align: middle;
+  line-height: 1;
 }
 
 .help-tooltip__bubble {
@@ -991,22 +1024,26 @@ textarea {
 }
 
 .help-tooltip--inline {
-  align-self: flex-start;
+  position: relative;
+  align-self: center;
   display: inline-flex;
-  flex-direction: column;
-  align-items: flex-end;
+  align-items: center;
+  justify-content: center;
 }
 
 .help-tooltip--inline .help-tooltip__bubble {
-  position: static;
-  width: min(280px, calc(100vw - 72px));
-  max-width: min(280px, calc(100vw - 72px));
-  margin-top: 8px;
-  opacity: 1;
-  visibility: visible;
-  transform: none;
-  pointer-events: auto;
-  display: none;
+  top: 50%;
+  right: calc(100% + 12px);
+  left: auto;
+  width: min(280px, calc(100vw - 88px));
+  max-width: min(280px, calc(100vw - 88px));
+  margin-top: 0;
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(8px, -50%);
+  pointer-events: none;
+  display: block;
+  z-index: 80;
 }
 
 .help-tooltip:hover .help-tooltip__bubble,
@@ -1018,7 +1055,9 @@ textarea {
 
 .help-tooltip--inline:hover .help-tooltip__bubble,
 .help-tooltip--inline:focus-within .help-tooltip__bubble {
-  display: block;
+  opacity: 1;
+  visibility: visible;
+  transform: translate(0, -50%);
 }
 
 .inventory-movement-context {
@@ -5245,21 +5284,29 @@ a:focus-visible {
   width: max(100%, 280px);
   max-width: min(360px, calc(100vw - 40px));
   max-height: 260px;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: #ffffff;
   box-shadow: 0 10px 24px rgba(12, 47, 117, 0.12);
-  padding: 8px;
+  padding: 8px 10px 8px 8px;
   box-sizing: border-box;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.inventory-multiselect__menu--with-tooltips {
+  max-height: none;
+  overflow: visible;
+  padding-right: 8px;
 }
 
 .inventory-multiselect__option {
   position: relative;
   display: block;
   border-radius: 8px;
-  padding: 10px 12px 10px 38px;
+  padding: 10px 16px 10px 38px;
   width: 100%;
   min-height: 44px;
   cursor: pointer;
@@ -5290,11 +5337,13 @@ a:focus-visible {
 }
 
 .inventory-multiselect__option-label--with-help {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: nowrap;
+  padding-right: 4px;
 }
 
 .inventory-multiselect__option-label--with-help > span:first-child {
@@ -5302,12 +5351,28 @@ a:focus-visible {
   flex: 1 1 auto;
 }
 
-.inventory-multiselect__option-label--with-help .help-tooltip {
-  flex: 0 0 auto;
+.inventory-multiselect__option-label--with-help .help-tooltip--inline {
+  position: static;
+  align-self: center;
+  justify-self: end;
 }
 
-.inventory-multiselect__option-label--with-help .help-tooltip__bubble {
-  flex-basis: 100%;
+.inventory-multiselect__option-label--with-help .help-tooltip--inline .help-tooltip__bubble {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 34px;
+  right: 8px;
+  bottom: auto;
+  width: auto;
+  max-width: none;
+  margin-top: 0;
+  transform: translateY(-2px);
+  z-index: 90;
+}
+
+.inventory-multiselect__option-label--with-help .help-tooltip--inline:hover .help-tooltip__bubble,
+.inventory-multiselect__option-label--with-help .help-tooltip--inline:focus-within .help-tooltip__bubble {
+  transform: translateY(0);
 }
 
 .inventory-multiselect__option input {
@@ -10331,6 +10396,35 @@ a:focus-visible {
 
 .movements-compact-table td:nth-child(4) {
   min-width: 140px;
+}
+
+@media (max-width: 1480px) {
+  .detail-header {
+    align-items: flex-start;
+  }
+
+  .detail-header .content-header__actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .implement-detail-layout--inspired {
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 16px;
+  }
+
+  .implement-hero-detail {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .implement-detail-layout--inspired .meta-rows {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .implement-detail-layout--inspired .meta-rows p {
+    grid-template-columns: 16px 132px minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 1360px) {

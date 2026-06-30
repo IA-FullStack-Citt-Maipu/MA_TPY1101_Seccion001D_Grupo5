@@ -1,4 +1,4 @@
-﻿import { AlertTriangle, ArrowUpDown, Boxes, RefreshCcw, ShieldCheck, Wrench } from "lucide-react";
+import { AlertTriangle, ArrowUpDown, Boxes, ShieldCheck, Wrench } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getErrorMessage } from "../services/apiClient";
 import { fetchImplements } from "../services/implementService";
@@ -55,9 +55,9 @@ function toLowStockRow(row: ImplementSummary): LowStockRow | null {
   return {
     implementUuid: row.uuid,
     implementName: row.name,
-    categoryName: row.category?.name ?? "Sin categoria",
-    locationName: row.location?.name ?? "Sin ubicacion",
-    itemType: "catalogo",
+    categoryName: row.category?.name ?? "Sin categoría",
+    locationName: row.location?.name ?? "Sin ubicación",
+    itemType: "Catálogo",
     totalStock,
     minStock,
     available,
@@ -76,22 +76,22 @@ function statusClass(status: LowStockRow["stockStatus"]): string {
 }
 
 function statusLabel(status: LowStockRow["stockStatus"]): string {
-  if (status === "out_of_stock") return "out_of_stock";
-  if (status === "low_stock") return "low_stock";
-  return "ok";
+  if (status === "out_of_stock") return "Sin stock";
+  if (status === "low_stock") return "Stock bajo";
+  return "Stock normal";
 }
 
 function movementLabel(action: string): string {
   const labels: Record<string, string> = {
     stock_in: "Ingreso de stock",
     stock_out: "Salida de stock",
-    loan_delivery: "Entrega de prestamo",
-    loan_return: "Devolucion de prestamo",
-    damage_report: "Reporte de dano",
+    loan_delivery: "Entrega de préstamo",
+    loan_return: "Devolución de préstamo",
+    damage_report: "Reporte de daño",
     manual_adjustment: "Ajuste manual",
     consumption: "Consumo",
     discard: "Descarte",
-    loss: "Perdida",
+    loss: "Pérdida",
   };
   return labels[action] ?? action;
 }
@@ -225,9 +225,6 @@ export function InventoryHealthDashboardPage({ embedded = false }: { embedded?: 
         </div>
         <div className="stock-health-header__actions">
           <a href="#/inventory/implementos" className="stock-health-link-btn">Ver implementos</a>
-          <button type="button" className="stock-health-link-btn stock-health-link-btn--primary" onClick={() => window.location.reload()}>
-            <RefreshCcw size={14} /> Actualizar
-          </button>
         </div>
       </section>
 
@@ -235,12 +232,12 @@ export function InventoryHealthDashboardPage({ embedded = false }: { embedded?: 
 
       <section className="stock-health-kpi-grid">
         <article className="stock-health-kpi stock-health-kpi--critical">
-          <span>Out of stock</span>
+          <span>Sin stock</span>
           <strong>{outOfStockCount}</strong>
           <AlertTriangle size={18} />
         </article>
         <article className="stock-health-kpi stock-health-kpi--warning">
-          <span>Low stock</span>
+          <span>Stock bajo</span>
           <strong>{lowStockCount}</strong>
           <ArrowUpDown size={18} />
         </article>
@@ -259,8 +256,8 @@ export function InventoryHealthDashboardPage({ embedded = false }: { embedded?: 
       <section className="stock-health-layout">
         <article className="stock-health-table-card">
           <header>
-            <h2>Alertas criticas de stock</h2>
-            <span>v_low_stock</span>
+            <h2>Alertas críticas de stock</h2>
+            <span>Implementos con alerta</span>
           </header>
 
           {loading ? <p className="stock-health-loading">Cargando alertas...</p> : null}
@@ -270,10 +267,10 @@ export function InventoryHealthDashboardPage({ embedded = false }: { embedded?: 
               <thead>
                 <tr>
                   <th>Implemento</th>
-                  <th>Categoria</th>
+                  <th>Categoría</th>
                   <th>Disponible</th>
                   <th>Estado</th>
-                  <th>Ubicacion</th>
+                  <th>Ubicación</th>
                 </tr>
               </thead>
               <tbody>
@@ -332,7 +329,7 @@ export function InventoryHealthDashboardPage({ embedded = false }: { embedded?: 
               <small>{individualSummary.maintenance}</small>
             </div>
             <div className="stock-health-bar-group">
-              <p>Danados / bloqueados</p>
+              <p>Dañados / bloqueados</p>
               <div><span style={{ width: `${percentage(individualSummary.damaged + individualSummary.blocked, individualSummary.total)}%` }} /></div>
               <small>{individualSummary.damaged + individualSummary.blocked}</small>
             </div>
@@ -344,7 +341,7 @@ export function InventoryHealthDashboardPage({ embedded = false }: { embedded?: 
           <article className="stock-health-activity-card">
             <header>
               <h2>Actividad reciente</h2>
-              <span>/api/v2/implements/movements</span>
+              <span>Últimos movimientos</span>
             </header>
             {activityRows.length === 0 ? (
               <p className="stock-health-empty">Sin movimientos recientes.</p>
@@ -355,9 +352,9 @@ export function InventoryHealthDashboardPage({ embedded = false }: { embedded?: 
                   return (
                     <div key={movement.uuid} className={statusGroupClass(state)}>
                       <strong>{movementLabel(movement.action)}</strong>
-                      <p>{movement.notes ?? "Sin observacion"}</p>
+                      <p>{movement.notes ?? "Sin observación"}</p>
                       <small>
-                        {formatDateTime(movement.timestamp)} · qty {movement.quantity}
+                        {formatDateTime(movement.timestamp)} · cant. {movement.quantity}
                       </small>
                     </div>
                   );
@@ -376,4 +373,3 @@ export function InventoryHealthDashboardPage({ embedded = false }: { embedded?: 
 
   return content;
 }
-

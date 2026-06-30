@@ -506,7 +506,7 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
                 <ChevronDown size={16} />
               </button>
               {isTypeMenuOpen ? (
-                <div className="inventory-multiselect__menu" role="listbox" aria-multiselectable="true">
+                <div className="inventory-multiselect__menu inventory-multiselect__menu--with-tooltips" role="listbox" aria-multiselectable="true">
                   {ITEM_TYPE_FILTER_OPTIONS.map((itemType) => {
                     const checked = selectedItemTypes.includes(itemType);
                     return (
@@ -557,7 +557,7 @@ export function InventoryItemsPage({ embedded = false }: { embedded?: boolean })
                 <ChevronDown size={16} />
               </button>
               {isStatusMenuOpen ? (
-                <div className="inventory-multiselect__menu" role="listbox" aria-multiselectable="true">
+                <div className="inventory-multiselect__menu inventory-multiselect__menu--with-tooltips" role="listbox" aria-multiselectable="true">
                   {STOCK_FILTER_OPTIONS.map((status) => {
                     const checked = selectedStockStatuses.includes(status);
                     return (

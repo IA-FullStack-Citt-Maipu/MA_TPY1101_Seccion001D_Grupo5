@@ -1272,7 +1272,6 @@ export function InventoryItemDetailPage({
                                       </option>
                                     ))}
                                   </select>
-                                  <p className="field-hint">{getStatusHelpMessage(adjustStatus)}</p>
                                 </div>
 
                                 <div>
@@ -1294,7 +1293,6 @@ export function InventoryItemDetailPage({
                                       </option>
                                     ))}
                                   </select>
-                                  <p className="field-hint">{getConditionHelp(adjustCondition)}</p>
                                 </div>
 
                                 <div>
@@ -1317,7 +1315,6 @@ export function InventoryItemDetailPage({
                                       </option>
                                     ))}
                                   </select>
-                                  <p className="field-hint">{getLocationSelectionHelp()}</p>
                                 </div>
 
                                 <div>
@@ -1336,7 +1333,6 @@ export function InventoryItemDetailPage({
                                     onChange={(event) => setAdjustRemainingLifeRaw(event.target.value)}
                                     placeholder="Ej. 38 o -13"
                                   />
-                                  <p className="field-hint">{getRemainingLifeHelp()}</p>
                                 </div>
 
                                 <div className="stock-adjust-entry-card__field stock-adjust-entry-card__field--full">
@@ -1355,7 +1351,6 @@ export function InventoryItemDetailPage({
                                     <option value="false">No</option>
                                     <option value="true">Si</option>
                                   </select>
-                                  <p className="field-hint">{getAssetCodeReprintHelp(adjustAssetCodeReprintRequired)}</p>
                                 </div>
                               </div>
                             </div>
@@ -1388,7 +1383,6 @@ export function InventoryItemDetailPage({
                                         placeholder={`Ej: ACT-${index + 1}`}
                                       />
                                     </div>
-                                    <p className="field-hint">Cada activo del lote necesita su propio codigo de activo.</p>
                                   </div>
 
                                   <div>
@@ -1410,7 +1404,6 @@ export function InventoryItemDetailPage({
                                         </option>
                                       ))}
                                     </select>
-                                    <p className="field-hint">{getStatusHelpMessage(entry.status)}</p>
                                   </div>
 
                                   <div>
@@ -1432,7 +1425,6 @@ export function InventoryItemDetailPage({
                                         </option>
                                       ))}
                                     </select>
-                                    <p className="field-hint">{getConditionHelp(entry.condition)}</p>
                                   </div>
 
                                   <div>
@@ -1455,7 +1447,6 @@ export function InventoryItemDetailPage({
                                         </option>
                                       ))}
                                     </select>
-                                    <p className="field-hint">{getLocationSelectionHelp()}</p>
                                   </div>
 
                                   <div>
@@ -1474,7 +1465,6 @@ export function InventoryItemDetailPage({
                                       onChange={(event) => updateAdjustIndividualEntry(index, "remainingLifeRaw", event.target.value)}
                                       placeholder="Ej. 38 o -13"
                                     />
-                                    <p className="field-hint">{getRemainingLifeHelp()}</p>
                                   </div>
 
                                   <div className="stock-adjust-entry-card__field stock-adjust-entry-card__field--full">
@@ -1493,7 +1483,6 @@ export function InventoryItemDetailPage({
                                       <option value="false">No</option>
                                       <option value="true">Si</option>
                                     </select>
-                                    <p className="field-hint">{getAssetCodeReprintHelp(entry.assetCodeReprintRequired)}</p>
                                   </div>
                                 </div>
                               </article>
@@ -1637,7 +1626,6 @@ export function InventoryItemDetailPage({
                 </option>
               ))}
             </select>
-            <p className="field-hint">{getMovementHelpMessage(movementType, implement.item_type)}</p>
 
             {implement.item_type === "individual" ? (
               <>
@@ -1738,7 +1726,6 @@ export function InventoryItemDetailPage({
             <select id="individual-status" value={individualStatus} onChange={(e) => setIndividualStatus(e.target.value as IndividualItem["status"])}>
               {INDIVIDUAL_STATUS_OPTIONS.map((status) => (<option key={status} value={status}>{statusLabel(status)}</option>))}
             </select>
-            <p className="field-hint">{getStatusHelpMessage(individualStatus)}</p>
 
             <div className="field-label-with-help">
               <label htmlFor="individual-condition">Condición</label>
@@ -1750,7 +1737,6 @@ export function InventoryItemDetailPage({
             <select id="individual-condition" value={individualCondition} onChange={(e) => setIndividualCondition(e.target.value as IndividualItem["condition"])}>
               {INDIVIDUAL_CONDITION_OPTIONS.map((condition) => (<option key={condition} value={condition}>{conditionLabel(condition)}</option>))}
             </select>
-            <p className="field-hint">{getConditionHelp(individualCondition)}</p>
 
             <div className="field-label-with-help">
               <label htmlFor="individual-location">Ubicación actual</label>

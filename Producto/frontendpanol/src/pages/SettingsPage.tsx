@@ -458,14 +458,13 @@ export function SettingsPage({
             </div>
             <div>
               <h2>Preferencias visuales</h2>
-              <p>Activa o desactiva el modo oscuro y guarda la preferencia localmente.</p>
+              <p>Activa o desactiva el modo oscuro.</p>
             </div>
           </div>
 
           <div className="settings-theme-row">
             <div className="settings-theme-copy">
               <strong>Modo oscuro</strong>
-              <span>La preferencia queda guardada en este navegador usando localStorage.</span>
             </div>
 
             <button
@@ -546,11 +545,7 @@ export function SettingsPage({
                           <strong>{formatSessionTimestamp(session.createdAt)}</strong>
                         </span>
                         <span>
-                          Acceso actual
-                          <strong>{formatSessionTimestamp(session.accessExpiresAt)}</strong>
-                        </span>
-                        <span>
-                          {session.persistentLogin ? "Recordarme hasta" : "Sesion hasta"}
+                          Sesion hasta
                           <strong>{formatSessionTimestamp(session.sessionExpiresAt)}</strong>
                         </span>
                       </div>
