@@ -29,11 +29,21 @@ interface FieldErrors {
 const ITEM_TYPE_OPTIONS: Array<{ value: ItemType; label: string }> = [
   { value: "consumable", label: "Consumible" },
   { value: "reusable", label: "Reutilizable" },
-  { value: "individual", label: "Individual" },
+  { value: "individual", label: "Activo" },
 ];
 
 function keepOnlyDigits(value: string, maxLength: number): string {
   return value.replace(/\D/g, "").slice(0, maxLength);
+}
+
+function formatCurrencyInput(value: string): string {
+  if (value.trim().length === 0) {
+    return "";
+  }
+
+  return `$ ${new Intl.NumberFormat("es-CL", {
+    maximumFractionDigits: 0,
+  }).format(Number(value))}`;
 }
 
 function mapApiErrorToFields(message: string): FieldErrors {
@@ -160,7 +170,7 @@ export function InventoryImplementCreatePage({
     setImgUrl(detail.img_url ?? "");
     setMinStockRaw(detail.min_stock == null ? "" : String(detail.min_stock));
     setCostCenter(detail.cost_center ?? "");
-    setNetValueRaw(detail.net_value == null ? "" : String(detail.net_value));
+    setNetValueRaw(detail.net_value == null ? "" : String(Math.trunc(Number(detail.net_value))));
     setObservations(detail.observations ?? "");
   }
 
@@ -545,14 +555,13 @@ export function InventoryImplementCreatePage({
                 <label htmlFor="implement-create-net-value">Valor neto</label>
                 <input
                   id="implement-create-net-value"
-                  value={netValueRaw}
+                  value={formatCurrencyInput(netValueRaw)}
                   onChange={(event) => {
                     setNetValueRaw(keepOnlyDigits(event.target.value, 9));
                     setFieldErrors((current) => ({ ...current, netValue: undefined }));
                   }}
-                  placeholder="Ej. 116734"
+                  placeholder="Ej. $ 116.734"
                   inputMode="numeric"
-                  maxLength={9}
                   disabled={saving || loadingImplement}
                 />
                 {fieldErrors.netValue ? <p className="field-error">{fieldErrors.netValue}</p> : null}

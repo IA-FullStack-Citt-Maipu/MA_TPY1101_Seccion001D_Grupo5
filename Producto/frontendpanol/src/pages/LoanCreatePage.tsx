@@ -340,10 +340,10 @@ function isLowStock(implement: ImplementSummary): boolean {
 
 function normalizeLoanStatusLabel(status: LoanStatus): string {
   const labels: Record<LoanStatus, string> = {
-    pending: "Pendiente",
+    pending: "Reservado",
     approved: "Reservado",
     prepared: "Preparado",
-    delivered: "Entregado",
+    delivered: "En uso",
     completed: "Finalizado",
     rejected: "Rechazado",
     cancelled: "Cancelado",

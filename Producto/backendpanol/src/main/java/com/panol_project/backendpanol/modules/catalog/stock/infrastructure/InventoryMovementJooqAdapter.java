@@ -106,12 +106,18 @@ public class InventoryMovementJooqAdapter implements InventoryMovementRepository
                 .where(IMPLEMENT.UUID.eq(implementUuid))
                 .orderBy(INVENTORY_MOVEMENT.CREATED_AT.desc())
                 .limit(10)
-                .fetch(this::toDomain);
+                .fetch()
+                .map(this::toDomain);
     }
 
     @Override
     public List<InventoryMovement> findAllByOrderByTimestampDesc() {
-        return dsl.select(
+        return findByOrderByTimestampDesc(0);
+    }
+
+    @Override
+    public List<InventoryMovement> findByOrderByTimestampDesc(int limit) {
+        var baseQuery = dsl.select(
                         INVENTORY_MOVEMENT.ID,
                         IMPLEMENT.UUID,
                         INVENTORY_MOVEMENT.MOVEMENT_TYPE,
@@ -124,8 +130,18 @@ public class InventoryMovementJooqAdapter implements InventoryMovementRepository
                 .from(INVENTORY_MOVEMENT)
                 .join(IMPLEMENT).on(IMPLEMENT.ID.eq(INVENTORY_MOVEMENT.IMPLEMENT_ID))
                 .leftJoin(USER).on(USER.ID.eq(INVENTORY_MOVEMENT.ACTOR_USER_ID))
-                .orderBy(INVENTORY_MOVEMENT.CREATED_AT.desc())
-                .fetch(this::toDomain);
+                .orderBy(INVENTORY_MOVEMENT.CREATED_AT.desc());
+
+        if (limit > 0) {
+            return baseQuery
+                    .limit(limit)
+                    .fetch()
+                    .map(this::toDomain);
+        }
+
+        return baseQuery
+                .fetch()
+                .map(this::toDomain);
     }
 
     private InventoryMovement toDomain(

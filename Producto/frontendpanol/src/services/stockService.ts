@@ -1,5 +1,6 @@
 import { apiClient } from "./apiClient";
 import type {
+  IndividualStatusSummary,
   IndividualUpdatePayload,
   StockDetail,
   StockEntryPayload,
@@ -8,6 +9,11 @@ import type {
 
 export async function fetchImplementStock(implementUuid: string): Promise<StockDetail> {
   const response = await apiClient.get<StockDetail>(`/api/v2/implements/${implementUuid}/stock`);
+  return response.data;
+}
+
+export async function fetchInventoryDashboardIndividualSummary(): Promise<IndividualStatusSummary> {
+  const response = await apiClient.get<IndividualStatusSummary>("/api/v2/inventory/dashboard/individual-summary");
   return response.data;
 }
 

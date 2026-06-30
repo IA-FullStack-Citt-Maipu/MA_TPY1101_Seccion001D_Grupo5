@@ -37,9 +37,35 @@ export interface StockDetail {
   individuals: IndividualItem[];
 }
 
+export interface IndividualStatusSummary {
+  available: number;
+  loaned: number;
+  maintenance: number;
+  damaged: number;
+  blocked: number;
+  retired: number;
+  total: number;
+}
+
+export interface StockEntryIndividualPayload {
+  asset_code: string;
+  status?: IndividualItem["status"];
+  condition?: IndividualItem["condition"];
+  current_location_uuid?: string | null;
+  remaining_life?: number | null;
+  asset_code_reprint_required?: boolean;
+}
+
 export interface StockEntryPayload {
   quantity: number;
   asset_codes?: string[];
+  status?: IndividualItem["status"];
+  condition?: IndividualItem["condition"];
+  notes?: string | null;
+  current_location_uuid?: string | null;
+  remaining_life?: number | null;
+  asset_code_reprint_required?: boolean;
+  individual_entries?: StockEntryIndividualPayload[];
 }
 
 export interface StockMovementPayload {

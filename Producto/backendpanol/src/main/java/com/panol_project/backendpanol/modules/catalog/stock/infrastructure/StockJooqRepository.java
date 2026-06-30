@@ -8,7 +8,9 @@ import static com.panol_project.backendpanol.jooq.tables.Stock.STOCK;
 import com.panol_project.backendpanol.jooq.enums.IndividualConditionEnum;
 import com.panol_project.backendpanol.jooq.enums.IndividualStatusEnum;
 import com.panol_project.backendpanol.jooq.enums.ItemTypeEnum;
+import com.panol_project.backendpanol.modules.catalog.stock.domain.IndividualEntryDraft;
 import com.panol_project.backendpanol.modules.catalog.stock.domain.IndividualItem;
+import com.panol_project.backendpanol.modules.catalog.stock.domain.IndividualStatusSummary;
 import com.panol_project.backendpanol.modules.catalog.stock.domain.StockCounters;
 import com.panol_project.backendpanol.modules.catalog.stock.domain.StockItemType;
 import com.panol_project.backendpanol.modules.catalog.stock.domain.StockRepository;
@@ -75,6 +77,46 @@ public class StockJooqRepository implements StockRepository {
                         record.get(STOCK.LOANED),
                         record.get(STOCK.DAMAGED)
                 ));
+    }
+
+    @Override
+    public IndividualStatusSummary summarizeActiveIndividuals() {
+        Field<Integer> availableCount = countByStatus(IndividualStatusEnum.available, "available_count");
+        Field<Integer> loanedCount = countByStatus(IndividualStatusEnum.loaned, "loaned_count");
+        Field<Integer> maintenanceCount = countByStatus(IndividualStatusEnum.maintenance, "maintenance_count");
+        Field<Integer> damagedCount = countByStatus(IndividualStatusEnum.damaged, "damaged_count");
+        Field<Integer> blockedCount = countByStatus(IndividualStatusEnum.blocked, "blocked_count");
+        Field<Integer> retiredCount = countByStatus(IndividualStatusEnum.retired, "retired_count");
+
+        var record = dsl.select(
+                        availableCount,
+                        loanedCount,
+                        maintenanceCount,
+                        damagedCount,
+                        blockedCount,
+                        retiredCount,
+                        DSL.count().cast(Integer.class).as("total_count")
+                )
+                .from(INDIVIDUAL)
+                .join(IMPLEMENT).on(IMPLEMENT.ID.eq(INDIVIDUAL.IMPLEMENT_ID))
+                .where(INDIVIDUAL.ACTIVE.isTrue()
+                        .and(IMPLEMENT.ACTIVE.isTrue())
+                        .and(IMPLEMENT.ITEM_TYPE.eq(ItemTypeEnum.individual)))
+                .fetchOne();
+
+        if (record == null) {
+            return new IndividualStatusSummary(0, 0, 0, 0, 0, 0, 0);
+        }
+
+        return new IndividualStatusSummary(
+                safe(record.get(availableCount)),
+                safe(record.get(loanedCount)),
+                safe(record.get(maintenanceCount)),
+                safe(record.get(damagedCount)),
+                safe(record.get(blockedCount)),
+                safe(record.get(retiredCount)),
+                safe(record.get("total_count", Integer.class))
+        );
     }
 
     @Override
@@ -156,8 +198,8 @@ public class StockJooqRepository implements StockRepository {
     }
 
     @Override
-    public void createIndividuals(UUID implementUuid, UUID locationUuid, List<String> assetCodes) {
-        if (assetCodes == null || assetCodes.isEmpty()) {
+    public void createIndividuals(UUID implementUuid, List<IndividualEntryDraft> individualEntries) {
+        if (individualEntries == null || individualEntries.isEmpty()) {
             return;
         }
 
@@ -165,8 +207,6 @@ public class StockJooqRepository implements StockRepository {
         if (implementId == null) {
             return;
         }
-        Long locationId = findLocationIdByUuid(locationUuid);
-
         var now = OffsetDateTime.now();
         var insert = dsl.insertInto(
                 INDIVIDUAL,
@@ -175,20 +215,29 @@ public class StockJooqRepository implements StockRepository {
                 INDIVIDUAL.STATUS,
                 INDIVIDUAL.CONDITION,
                 INDIVIDUAL.CURRENT_LOCATION_ID,
+                INDIVIDUAL.REMAINING_LIFE,
                 INDIVIDUAL.ASSET_CODE_REPRINT_REQUIRED,
                 INDIVIDUAL.ACTIVE,
                 INDIVIDUAL.CREATED_AT,
                 INDIVIDUAL.UPDATED_AT
         );
 
-        for (String code : assetCodes) {
+        for (IndividualEntryDraft entry : individualEntries) {
+            Long locationId = findLocationIdByUuid(entry.currentLocationUuid());
+            IndividualStatusEnum status = entry.status() == null
+                    ? IndividualStatusEnum.available
+                    : IndividualStatusEnum.lookupLiteral(entry.status());
+            IndividualConditionEnum condition = entry.condition() == null
+                    ? IndividualConditionEnum.good
+                    : IndividualConditionEnum.lookupLiteral(entry.condition());
             insert = insert.values(
                     implementId,
-                    code,
-                    IndividualStatusEnum.available,
-                    IndividualConditionEnum.good,
+                    entry.assetCode(),
+                    status,
+                    condition,
                     locationId,
-                    false,
+                    entry.remainingLife(),
+                    Boolean.TRUE.equals(entry.assetCodeReprintRequired()),
                     true,
                     now,
                     now
@@ -301,5 +350,16 @@ public class StockJooqRepository implements StockRepository {
         return itemType == null
                 ? null
                 : StockItemType.fromLiteral(itemType.getLiteral()).orElse(null);
+    }
+
+    private Field<Integer> countByStatus(IndividualStatusEnum status, String alias) {
+        return DSL.coalesce(
+                DSL.sum(DSL.when(INDIVIDUAL.STATUS.eq(status), DSL.inline(1)).otherwise(DSL.inline(0))).cast(Integer.class),
+                DSL.inline(0)
+        ).as(alias);
+    }
+
+    private int safe(Integer value) {
+        return value == null ? 0 : value;
     }
 }

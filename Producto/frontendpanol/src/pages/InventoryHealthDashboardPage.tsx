@@ -3,8 +3,9 @@ import { useEffect, useMemo, useState } from "react";
 import { getErrorMessage } from "../services/apiClient";
 import { fetchImplements } from "../services/implementService";
 import { fetchInventoryMovements } from "../services/movementService";
-import { fetchImplementStock } from "../services/stockService";
+import { fetchInventoryDashboardIndividualSummary } from "../services/stockService";
 import type { ImplementSummary, InventoryMovementDetail } from "../types/implement";
+import type { IndividualStatusSummary } from "../types/stock";
 
 interface LowStockRow {
   implementUuid: string;
@@ -22,17 +23,7 @@ interface LowStockRow {
   stockStatus: "out_of_stock" | "low_stock" | "ok";
 }
 
-interface IndividualSummary {
-  available: number;
-  loaned: number;
-  maintenance: number;
-  damaged: number;
-  blocked: number;
-  retired: number;
-  total: number;
-}
-
-const EMPTY_INDIVIDUAL_SUMMARY: IndividualSummary = {
+const EMPTY_INDIVIDUAL_SUMMARY: IndividualStatusSummary = {
   available: 0,
   loaned: 0,
   maintenance: 0,
@@ -92,10 +83,10 @@ function statusLabel(status: LowStockRow["stockStatus"]): string {
 
 function movementLabel(action: string): string {
   const labels: Record<string, string> = {
-    stock_in: "Entrada de stock",
+    stock_in: "Ingreso de stock",
     stock_out: "Salida de stock",
     loan_delivery: "Entrega de prestamo",
-    loan_return: "Retorno de prestamo",
+    loan_return: "Devolucion de prestamo",
     damage_report: "Reporte de dano",
     manual_adjustment: "Ajuste manual",
     consumption: "Consumo",
@@ -143,7 +134,7 @@ export function InventoryHealthDashboardPage({ embedded = false }: { embedded?: 
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<LowStockRow[]>([]);
   const [movements, setMovements] = useState<InventoryMovementDetail[]>([]);
-  const [individualSummary, setIndividualSummary] = useState<IndividualSummary>(EMPTY_INDIVIDUAL_SUMMARY);
+  const [individualSummary, setIndividualSummary] = useState<IndividualStatusSummary>(EMPTY_INDIVIDUAL_SUMMARY);
 
   useEffect(() => {
     let cancelled = false;
@@ -152,10 +143,17 @@ export function InventoryHealthDashboardPage({ embedded = false }: { embedded?: 
       setLoading(true);
       setError(null);
       try {
-        const [implementsRows, movementRows] = await Promise.all([
+        const [implementsResult, movementsResult, summaryResult] = await Promise.allSettled([
           fetchImplements(),
-          fetchInventoryMovements().catch(() => []),
+          fetchInventoryMovements(8),
+          fetchInventoryDashboardIndividualSummary(),
         ]);
+
+        if (implementsResult.status !== "fulfilled") {
+          throw implementsResult.reason;
+        }
+
+        const implementsRows = implementsResult.value;
         if (cancelled) return;
 
         const lowStockRows = implementsRows
@@ -175,43 +173,14 @@ export function InventoryHealthDashboardPage({ embedded = false }: { embedded?: 
 
         setRows(lowStockRows);
 
-        const sortedMovements = [...movementRows].sort((left, right) => {
-          const leftDate = new Date(left.timestamp).getTime();
-          const rightDate = new Date(right.timestamp).getTime();
-          return rightDate - leftDate;
-        });
-        setMovements(sortedMovements);
+        if (movementsResult.status === "fulfilled") {
+          setMovements(movementsResult.value);
+        } else {
+          setMovements([]);
+        }
 
-        const individualUuids = implementsRows.map((entry) => entry.uuid).slice(0, 20);
-
-        if (individualUuids.length > 0) {
-          const details = await Promise.all(
-            individualUuids.map(async (implementUuid) => {
-              try {
-                return await fetchImplementStock(implementUuid);
-              } catch {
-                return null;
-              }
-            }),
-          );
-          if (cancelled) return;
-
-          const summary = details.reduce<IndividualSummary>((acc, detail) => {
-            if (!detail) return acc;
-            if (detail.item_type !== "individual") return acc;
-            detail.individuals.forEach((individual) => {
-              acc.total += 1;
-              if (individual.status === "available") acc.available += 1;
-              if (individual.status === "loaned") acc.loaned += 1;
-              if (individual.status === "maintenance") acc.maintenance += 1;
-              if (individual.status === "damaged") acc.damaged += 1;
-              if (individual.status === "blocked") acc.blocked += 1;
-              if (individual.status === "retired") acc.retired += 1;
-            });
-            return acc;
-          }, { ...EMPTY_INDIVIDUAL_SUMMARY });
-
-          setIndividualSummary(summary);
+        if (summaryResult.status === "fulfilled") {
+          setIndividualSummary(summaryResult.value);
         } else {
           setIndividualSummary(EMPTY_INDIVIDUAL_SUMMARY);
         }
@@ -344,8 +313,8 @@ export function InventoryHealthDashboardPage({ embedded = false }: { embedded?: 
         <aside className="stock-health-side">
           <article className="stock-health-summary-card">
             <header>
-              <h2>Resumen individuales</h2>
-              <span>v_individual_status_summary</span>
+              <h2>Resumen de activos</h2>
+              <span>Estado operativo por activo</span>
             </header>
             <div className="stock-health-bar-group">
               <p>Disponibles</p>

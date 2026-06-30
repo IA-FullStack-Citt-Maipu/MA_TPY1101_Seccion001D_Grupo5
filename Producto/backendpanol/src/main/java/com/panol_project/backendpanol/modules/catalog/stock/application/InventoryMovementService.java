@@ -59,7 +59,16 @@ public class InventoryMovementService implements InventoryMovementQueryContract 
         return repository.findAllByOrderByTimestampDesc();
     }
 
+    @Transactional(readOnly = true)
+    public List<InventoryMovement> obtenerMovimientosRecientes(int limit) {
+        if (limit <= 0) {
+            return repository.findAllByOrderByTimestampDesc();
+        }
+        return repository.findByOrderByTimestampDesc(limit);
+    }
+
     @Override
+    @Transactional(readOnly = true)
     public List<InventoryMovementView> obtenerUltimosMovimientosPorImplemento(UUID implementUuid) {
         return repository.findTop10ByImplementUuidOrderByTimestampDesc(implementUuid)
                 .stream()

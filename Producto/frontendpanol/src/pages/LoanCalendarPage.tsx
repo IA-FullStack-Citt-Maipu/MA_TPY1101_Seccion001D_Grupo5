@@ -130,7 +130,7 @@ function sortLoansByScheduledAt(left: LoanSummary, right: LoanSummary): number {
 
 function normalizeStatus(status: LoanSummary["status"]): string {
   const labels: Record<LoanSummary["status"], string> = {
-    pending: "Pendiente",
+    pending: "Reservado",
     approved: "Reservado",
     prepared: "Preparado",
     delivered: "En uso",
@@ -144,8 +144,7 @@ function normalizeStatus(status: LoanSummary["status"]): string {
 }
 
 function statusChipClass(status: LoanSummary["status"]): string {
-  if (status === "pending") return "loan-calendar-chip loan-calendar-chip--pending";
-  if (status === "approved" || status === "prepared") return "loan-calendar-chip loan-calendar-chip--approved";
+  if (status === "pending" || status === "approved" || status === "prepared") return "loan-calendar-chip loan-calendar-chip--approved";
   if (status === "delivered") return "loan-calendar-chip loan-calendar-chip--delivered";
   if (status === "overdue") return "loan-calendar-chip loan-calendar-chip--danger";
   if (status === "cancelled" || status === "rejected" || status === "expired") return "loan-calendar-chip loan-calendar-chip--danger";
@@ -153,8 +152,7 @@ function statusChipClass(status: LoanSummary["status"]): string {
 }
 
 function statusBadgeClass(status: LoanSummary["status"]): string {
-  if (status === "pending") return "loan-calendar-status loan-calendar-status--pending";
-  if (status === "approved" || status === "prepared") return "loan-calendar-status loan-calendar-status--approved";
+  if (status === "pending" || status === "approved" || status === "prepared") return "loan-calendar-status loan-calendar-status--approved";
   if (status === "delivered") return "loan-calendar-status loan-calendar-status--delivered";
   if (status === "overdue") return "loan-calendar-status loan-calendar-status--danger";
   if (status === "cancelled" || status === "rejected" || status === "expired") return "loan-calendar-status loan-calendar-status--danger";

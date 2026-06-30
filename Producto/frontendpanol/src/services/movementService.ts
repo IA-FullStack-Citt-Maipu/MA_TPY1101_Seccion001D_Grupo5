@@ -29,7 +29,11 @@ export async function registerManualMovement(
   return response.data;
 }
 
-export async function fetchInventoryMovements(): Promise<InventoryMovementDetail[]> {
-  const response = await apiClient.get<InventoryMovementDetail[]>("/api/v2/implements/movements");
+export async function fetchInventoryMovements(limit?: number): Promise<InventoryMovementDetail[]> {
+  const response = await apiClient.get<InventoryMovementDetail[]>("/api/v2/implements/movements", {
+    params: {
+      limit: limit && limit > 0 ? limit : undefined,
+    },
+  });
   return response.data;
 }

@@ -10,12 +10,15 @@ import {
   registerManualMovement,
   type ManualMovementType,
 } from "../services/movementService";
+import { fetchImplementStock } from "../services/stockService";
 import type { ImplementSummary, InventoryMovementDetail } from "../types/implement";
+import type { IndividualItem, StockDetail } from "../types/stock";
 import { getSessionUserRole } from "../utils/auth";
 import { Button } from "../components/ui/Button";
 import { Select } from "../components/ui/Select";
 import { Input } from "../components/ui/Input";
 import { Badge } from "../components/ui/Badge";
+import { HelpTooltip } from "../components/ui/HelpTooltip";
 import { Table } from "../components/ui/Table";
 
 const ACTION_LABELS: Record<string, string> = {
@@ -43,6 +46,80 @@ const MANUAL_MOVEMENT_ACTION_OPTIONS: Array<{ value: ManualMovementType; label: 
 ];
 
 const PAGE_SIZE = 10;
+
+const ITEM_TYPE_LABELS: Record<NonNullable<ImplementSummary["item_type"]>, string> = {
+  consumable: "Consumible",
+  reusable: "Reutilizable",
+  individual: "Activo",
+};
+
+function getItemTypeLabel(itemType?: ImplementSummary["item_type"] | null): string {
+  if (!itemType) {
+    return "Sin tipo";
+  }
+  return ITEM_TYPE_LABELS[itemType] ?? itemType;
+}
+
+function getItemTypeHelp(itemType?: ImplementSummary["item_type"] | null): string {
+  if (itemType === "consumable") {
+    return "Consumible: stock de uso unico que normalmente se gasta o consume.";
+  }
+  if (itemType === "reusable") {
+    return "Reutilizable: se presta por cantidad y luego puede volver al stock.";
+  }
+  if (itemType === "individual") {
+    return "Activo: cada unidad tiene codigo propio y trazabilidad por activo.";
+  }
+  return "Tipo operativo del implemento seleccionado.";
+}
+
+function getMovementHelp(action: ManualMovementType, itemType?: ImplementSummary["item_type"] | null): string {
+  const actionLabel = ACTION_LABELS[action] ?? action;
+  if (action === "loan_return" && itemType === "consumable") {
+    return `${actionLabel}: no aplica a consumibles, porque se consumen al entregar y no vuelven a stock.`;
+  }
+  if (action === "loan_return" && itemType === "individual") {
+    return `${actionLabel}: permite revisar los activos actualmente en prestamo para registrar la devolucion manual.`;
+  }
+  if (action === "loan_return" && itemType === "reusable") {
+    return `${actionLabel}: usa la cantidad que efectivamente vuelve desde el estado prestado.`;
+  }
+  if (action === "loan_return") {
+    return `${actionLabel}: registra una devolucion manual del implemento seleccionado.`;
+  }
+  return `${actionLabel}: define el tipo de movimiento que deseas registrar para el implemento seleccionado.`;
+}
+
+function getStatusHelp(status: IndividualItem["status"]): string {
+  if (status === "loaned") {
+    return "Prestado: la unidad ya fue entregada y aun no vuelve al stock disponible.";
+  }
+  if (status === "available") {
+    return "Disponible: la unidad esta lista para uso o para un nuevo prestamo.";
+  }
+  if (status === "damaged") {
+    return "Danado: la unidad requiere revision y no deberia usarse normalmente.";
+  }
+  if (status === "maintenance") {
+    return "Mantencion: la unidad esta en revision o intervencion tecnica.";
+  }
+  if (status === "blocked") {
+    return "Bloqueado: la unidad existe, pero no esta habilitada operativamente.";
+  }
+  if (status === "retired") {
+    return "Retirado: la unidad ya no forma parte del stock operativo.";
+  }
+  return "Estado operativo actual de la unidad.";
+}
+
+function getAvailableManualMovementActionOptions(
+  itemType?: ImplementSummary["item_type"] | null,
+): Array<{ value: ManualMovementType; label: string }> {
+  if (itemType === "consumable") {
+    return MANUAL_MOVEMENT_ACTION_OPTIONS.filter((option) => option.value !== "loan_return");
+  }
+  return MANUAL_MOVEMENT_ACTION_OPTIONS;
+}
 
 function readInitialImplementRouteFilter(): { implementUuid: string; implementName: string } {
   if (typeof window === "undefined") {
@@ -116,6 +193,10 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
   const [isManualMovementModalOpen, setIsManualMovementModalOpen] = useState(false);
   const [isManualImplementMenuOpen, setIsManualImplementMenuOpen] = useState(false);
   const [manualImplementSearch, setManualImplementSearch] = useState("");
+  const [manualStockDetail, setManualStockDetail] = useState<StockDetail | null>(null);
+  const [manualStockLoading, setManualStockLoading] = useState(false);
+  const [manualStockError, setManualStockError] = useState<string | null>(null);
+  const [manualSelectedLoanedIndividuals, setManualSelectedLoanedIndividuals] = useState<string[]>([]);
   const manualImplementMenuRef = useRef<HTMLDivElement | null>(null);
   const manualImplementSearchInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -130,6 +211,10 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
     setMovementError(null);
     setManualImplementSearch("");
     setIsManualImplementMenuOpen(false);
+    setManualStockDetail(null);
+    setManualStockLoading(false);
+    setManualStockError(null);
+    setManualSelectedLoanedIndividuals([]);
   }, []);
 
   const closeManualMovementModal = useCallback(() => {
@@ -267,6 +352,38 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
     return implementByUuid.get(manualImplementUuid) ?? null;
   }, [implementByUuid, manualImplementUuid]);
 
+  const selectedManualItemType = selectedManualImplement?.item_type ?? null;
+  const availableManualMovementOptions = useMemo(
+    () => getAvailableManualMovementActionOptions(selectedManualItemType),
+    [selectedManualItemType],
+  );
+
+  const selectedManualLoanedIndividuals = useMemo(
+    () => (manualStockDetail?.individuals ?? []).filter((item) => item.status === "loaned"),
+    [manualStockDetail],
+  );
+
+  const selectedManualLoanedCount = manualStockDetail?.stock.loaned ?? selectedManualImplement?.stock?.loaned ?? 0;
+
+  const usesLoanedIndividualSelection =
+    action === "loan_return" && selectedManualItemType === "individual" && selectedManualImplement != null;
+
+  const showsLoanedContext =
+    action === "loan_return" &&
+    selectedManualImplement != null &&
+    (selectedManualItemType === "individual" || selectedManualItemType === "reusable");
+
+  useEffect(() => {
+    if (!selectedManualImplement) {
+      return;
+    }
+    if (availableManualMovementOptions.some((option) => option.value === action)) {
+      return;
+    }
+    const fallbackAction = selectedManualItemType === "consumable" ? "consumption" : availableManualMovementOptions[0]?.value ?? "stock_in";
+    setAction(fallbackAction);
+  }, [action, availableManualMovementOptions, selectedManualImplement, selectedManualItemType]);
+
   const filteredManualImplements = useMemo(() => {
     const query = manualImplementSearch.trim().toLowerCase();
     if (!query) {
@@ -275,6 +392,63 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
 
     return implementsList.filter((item) => getImplementSearchText(item).includes(query));
   }, [implementsList, manualImplementSearch]);
+
+  useEffect(() => {
+    if (!isManualMovementModalOpen || !manualImplementUuid) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadManualImplementStock() {
+      setManualStockLoading(true);
+      setManualStockError(null);
+      try {
+        const detail = await fetchImplementStock(manualImplementUuid);
+        if (!cancelled) {
+          setManualStockDetail(detail);
+        }
+      } catch (requestError) {
+        if (!cancelled) {
+          setManualStockDetail(null);
+          setManualStockError(getErrorMessage(requestError, "No se pudo cargar el stock operativo del implemento."));
+        }
+      } finally {
+        if (!cancelled) {
+          setManualStockLoading(false);
+        }
+      }
+    }
+
+    void loadManualImplementStock();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isManualMovementModalOpen, manualImplementUuid]);
+
+  useEffect(() => {
+    setManualSelectedLoanedIndividuals((current) => {
+      if (!usesLoanedIndividualSelection) {
+        return [];
+      }
+      const validIds = new Set(selectedManualLoanedIndividuals.map((item) => item.uuid));
+      return current.filter((uuid) => validIds.has(uuid));
+    });
+  }, [selectedManualLoanedIndividuals, usesLoanedIndividualSelection]);
+
+  useEffect(() => {
+    if (
+      action === "loan_return" &&
+      selectedManualItemType === "reusable" &&
+      selectedManualLoanedCount > 0
+    ) {
+      const currentQuantity = Number(quantity);
+      if (Number.isFinite(currentQuantity) && currentQuantity > selectedManualLoanedCount) {
+        setQuantity(String(selectedManualLoanedCount));
+      }
+    }
+  }, [action, quantity, selectedManualItemType, selectedManualLoanedCount]);
 
   const filteredMovements = useMemo(() => {
     const implementQuery = implementNameFilter.trim().toLowerCase();
@@ -363,6 +537,15 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
     setMovementError(null);
     setManualImplementSearch("");
     setIsManualImplementMenuOpen(false);
+    setManualSelectedLoanedIndividuals([]);
+  }
+
+  function toggleManualLoanedIndividual(individualUuid: string) {
+    setManualSelectedLoanedIndividuals((current) =>
+      current.includes(individualUuid)
+        ? current.filter((uuid) => uuid !== individualUuid)
+        : [...current, individualUuid],
+    );
   }
 
   async function submitMovement() {
@@ -372,10 +555,33 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
       return;
     }
 
-    const qty = Number(quantity);
-    if (!Number.isFinite(qty) || qty <= 0 || !Number.isInteger(qty)) {
-      setMovementError("La cantidad debe ser un entero positivo.");
-      return;
+    let qty = Number(quantity);
+    if (usesLoanedIndividualSelection) {
+      if (selectedManualLoanedIndividuals.length === 0) {
+        setMovementError("No hay activos en prestamo disponibles para registrar la devolucion.");
+        return;
+      }
+      if (manualSelectedLoanedIndividuals.length === 0) {
+        setMovementError("Debes seleccionar al menos un activo prestado para registrar la devolucion.");
+        return;
+      }
+      qty = manualSelectedLoanedIndividuals.length;
+    } else {
+      if (!Number.isFinite(qty) || qty <= 0 || !Number.isInteger(qty)) {
+        setMovementError("La cantidad debe ser un entero positivo.");
+        return;
+      }
+    }
+
+    if (action === "loan_return" && selectedManualItemType === "reusable") {
+      if (selectedManualLoanedCount <= 0) {
+        setMovementError("Este implemento reutilizable no tiene unidades actualmente en prestamo.");
+        return;
+      }
+      if (qty > selectedManualLoanedCount) {
+        setMovementError(`Solo hay ${selectedManualLoanedCount} unidad(es) reutilizable(s) en prestamo para devolver.`);
+        return;
+      }
     }
 
     setSaving(true);
@@ -624,7 +830,13 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
               <div className="modal-form-section">
                 <div className="stock-actions-grid inventory-movement-modal__grid">
                   <div className="modal-field modal-field--full">
-                    <label htmlFor="manual-movement-implement-trigger">Implemento</label>
+                    <div className="field-label-with-help">
+                      <label htmlFor="manual-movement-implement-trigger">Implemento</label>
+                      <HelpTooltip
+                        text="Selecciona primero el implemento. Eso habilita la accion, la cantidad y el contexto del movimiento."
+                        ariaLabel="Ayuda sobre la seleccion del implemento"
+                      />
+                    </div>
                     <div ref={manualImplementMenuRef} className="inventory-multiselect inventory-implement-picker">
                       <button
                         id="manual-movement-implement-trigger"
@@ -691,45 +903,172 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
                         </div>
                       ) : null}
                     </div>
+                    {!selectedManualImplement ? (
+                      <p className="field-hint inventory-movement-modal__field-hint">
+                        Selecciona un implemento para habilitar el resto del formulario.
+                      </p>
+                    ) : (
+                      <div className="inventory-movement-context__chips">
+                        <span
+                          className="inventory-movement-context__chip"
+                          title={getItemTypeHelp(selectedManualItemType)}
+                        >
+                          Tipo: {getItemTypeLabel(selectedManualItemType)}
+                        </span>
+                        {selectedManualItemType === "individual" || selectedManualItemType === "reusable" ? (
+                          <span
+                            className="inventory-movement-context__chip"
+                            title={getStatusHelp("loaned")}
+                          >
+                            En prestamo: {selectedManualLoanedCount}
+                          </span>
+                        ) : null}
+                      </div>
+                    )}
                   </div>
 
                   <div className="modal-field">
-                    <label htmlFor="manual-movement-action">Accion</label>
+                    <div className="field-label-with-help">
+                      <label htmlFor="manual-movement-action">Accion</label>
+                      <HelpTooltip
+                        text={getMovementHelp(action, selectedManualItemType)}
+                        ariaLabel="Ayuda sobre el tipo de movimiento"
+                      />
+                    </div>
                     <Select
                       id="manual-movement-action"
                       value={action}
                       onChange={(event) => setAction(event.target.value as ManualMovementType)}
-                      disabled={saving}
+                      disabled={!selectedManualImplement || saving}
                     >
-                      {MANUAL_MOVEMENT_ACTION_OPTIONS.map((option) => (
+                      {availableManualMovementOptions.map((option) => (
                         <option key={option.value} value={option.value}>
                           {option.label}
                         </option>
                       ))}
                     </Select>
+                    <p className="field-hint inventory-movement-modal__field-hint">
+                      {selectedManualImplement
+                        ? getMovementHelp(action, selectedManualItemType)
+                        : "Primero selecciona el implemento para habilitar la accion."}
+                    </p>
                   </div>
 
                   <div className="modal-field">
-                    <label htmlFor="manual-movement-quantity">Cantidad</label>
+                    <div className="field-label-with-help">
+                      <label htmlFor="manual-movement-quantity">Cantidad</label>
+                      <HelpTooltip
+                        text={
+                          usesLoanedIndividualSelection
+                            ? "La cantidad se calcula segun los activos prestados que selecciones."
+                            : "Cantidad de unidades involucradas en el movimiento manual."
+                        }
+                        ariaLabel="Ayuda sobre la cantidad"
+                      />
+                    </div>
                     <Input
                       id="manual-movement-quantity"
-                      value={quantity}
+                      value={usesLoanedIndividualSelection ? String(manualSelectedLoanedIndividuals.length) : quantity}
                       onChange={(event) => setQuantity(event.target.value)}
                       type="number"
                       min={1}
-                      disabled={saving}
+                      max={action === "loan_return" && selectedManualItemType === "reusable" ? selectedManualLoanedCount : undefined}
+                      disabled={!selectedManualImplement || saving || usesLoanedIndividualSelection}
                     />
+                    {action === "loan_return" && selectedManualItemType === "reusable" ? (
+                      <p className="field-hint inventory-movement-modal__field-hint">
+                        Reutilizables actualmente en prestamo: {selectedManualLoanedCount}.
+                      </p>
+                    ) : null}
                   </div>
 
+                  {showsLoanedContext ? (
+                    <div className="modal-field modal-field--full">
+                      <div className="inventory-movement-context">
+                        <div className="inventory-movement-context__header">
+                          <div>
+                            <strong>
+                              {selectedManualItemType === "individual"
+                                ? "Activos actualmente en prestamo"
+                                : "Stock reutilizable actualmente en prestamo"}
+                            </strong>
+                            <span>
+                              {selectedManualItemType === "individual"
+                                ? "Selecciona los activos que estan regresando desde prestamo."
+                                : "Usa la cantidad prestada actual como referencia para la devolucion."}
+                            </span>
+                          </div>
+                          <span
+                            className="inventory-movement-context__chip"
+                            title={getStatusHelp("loaned")}
+                          >
+                            Estado: Prestado
+                          </span>
+                        </div>
+
+                        {manualStockLoading ? <p className="field-hint">Cargando stock del implemento...</p> : null}
+                        {!manualStockLoading && manualStockError ? <p className="field-error">{manualStockError}</p> : null}
+
+                        {!manualStockLoading && !manualStockError && selectedManualItemType === "individual" ? (
+                          selectedManualLoanedIndividuals.length === 0 ? (
+                            <p className="field-hint">No hay activos en prestamo para este implemento.</p>
+                          ) : (
+                            <>
+                              <div className="inventory-movement-context__list">
+                                {selectedManualLoanedIndividuals.map((individual) => {
+                                  const checked = manualSelectedLoanedIndividuals.includes(individual.uuid);
+                                  return (
+                                    <label
+                                      key={individual.uuid}
+                                      className={`inventory-movement-context__list-item${checked ? " is-selected" : ""}`}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        onChange={() => toggleManualLoanedIndividual(individual.uuid)}
+                                        disabled={saving}
+                                      />
+                                      <div>
+                                        <strong>{individual.asset_code}</strong>
+                                        <small title={getStatusHelp(individual.status)}>
+                                          Estado actual: {individual.status === "loaned" ? "Prestado" : individual.status}
+                                        </small>
+                                      </div>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                              <p className="field-hint inventory-movement-modal__field-hint">
+                                Activos seleccionados para devolucion: {manualSelectedLoanedIndividuals.length}
+                              </p>
+                            </>
+                          )
+                        ) : null}
+
+                        {!manualStockLoading && !manualStockError && selectedManualItemType === "reusable" ? (
+                          <p className="field-hint inventory-movement-modal__field-hint">
+                            Este implemento reutilizable tiene {selectedManualLoanedCount} unidad(es) en prestamo.
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+
                   <div className="modal-field modal-field--full">
-                    <label htmlFor="manual-movement-notes">Notas</label>
+                    <div className="field-label-with-help">
+                      <label htmlFor="manual-movement-notes">Notas</label>
+                      <HelpTooltip
+                        text="Contexto opcional del ajuste manual para que el historial quede mas claro."
+                        ariaLabel="Ayuda sobre las notas"
+                      />
+                    </div>
                     <textarea
                       id="manual-movement-notes"
                       className="inventory-movement-modal__notes"
                       value={notes}
                       onChange={(event) => setNotes(event.target.value)}
                       placeholder="Opcional"
-                      disabled={saving}
+                      disabled={!selectedManualImplement || saving}
                     />
                   </div>
                 </div>
@@ -739,7 +1078,7 @@ export function InventoryMovesPage({ embedded = false }: { embedded?: boolean })
                 <Button variant="ghost" onClick={closeManualMovementModal} disabled={saving}>
                   Cancelar
                 </Button>
-                <Button onClick={() => void submitMovement()} disabled={saving}>
+                <Button onClick={() => void submitMovement()} disabled={saving || !selectedManualImplement}>
                   {saving ? "Guardando..." : "Registrar movimiento"}
                 </Button>
               </div>

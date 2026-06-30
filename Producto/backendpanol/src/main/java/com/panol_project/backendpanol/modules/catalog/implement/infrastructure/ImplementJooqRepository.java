@@ -34,6 +34,7 @@ import org.springframework.stereotype.Repository;
 public class ImplementJooqRepository implements ImplementRepository {
 
     private final DSLContext dsl;
+    private static final String INDIVIDUAL_ASSET_CODES_ALIAS = "individual_asset_codes";
 
     private static final Field<UUID> CATEGORY_UUID = DSL.field(DSL.name("category", "uuid"), UUID.class);
     private static final Field<UUID> LOCATION_UUID = DSL.field(DSL.name("location", "uuid"), UUID.class);
@@ -45,7 +46,11 @@ public class ImplementJooqRepository implements ImplementRepository {
                     "), array[]::text[])",
             String[].class,
             IMPLEMENT.ID
-    ).as("individual_asset_codes");
+    ).as(INDIVIDUAL_ASSET_CODES_ALIAS);
+    private static final Field<String[]> EMPTY_INDIVIDUAL_ASSET_CODES = DSL.field(
+            "array[]::text[]",
+            String[].class
+    ).as(INDIVIDUAL_ASSET_CODES_ALIAS);
 
     public ImplementJooqRepository(DSLContext dsl) {
         this.dsl = dsl;
@@ -83,7 +88,7 @@ public class ImplementJooqRepository implements ImplementRepository {
                         IMPLEMENT.NAME,
                         IMPLEMENT.DESCRIPTION,
                         IMPLEMENT.BARCODE,
-                        INDIVIDUAL_ASSET_CODES,
+                        EMPTY_INDIVIDUAL_ASSET_CODES,
                         IMPLEMENT.IMG_URL,
                         IMPLEMENT.ACTIVE,
                         IMPLEMENT.ITEM_TYPE,
@@ -198,7 +203,7 @@ public class ImplementJooqRepository implements ImplementRepository {
                         IMPLEMENT.NAME,
                         IMPLEMENT.DESCRIPTION,
                         IMPLEMENT.BARCODE,
-                        INDIVIDUAL_ASSET_CODES,
+                        EMPTY_INDIVIDUAL_ASSET_CODES,
                         IMPLEMENT.IMG_URL,
                         IMPLEMENT.ACTIVE,
                         IMPLEMENT.ITEM_TYPE,
@@ -397,7 +402,7 @@ public class ImplementJooqRepository implements ImplementRepository {
         Integer available = availableOverride == null
                 ? record.get(STOCK.AVAILABLE)
                 : record.get(availableOverride);
-        String[] individualAssetCodes = record.get(INDIVIDUAL_ASSET_CODES);
+        String[] individualAssetCodes = record.get(INDIVIDUAL_ASSET_CODES_ALIAS, String[].class);
 
         return new ImplementSummary(
                 record.get(IMPLEMENT.UUID),

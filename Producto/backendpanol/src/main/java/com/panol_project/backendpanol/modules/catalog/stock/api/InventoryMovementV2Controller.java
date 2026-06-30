@@ -30,8 +30,10 @@ public class InventoryMovementV2Controller {
     }
 
     @GetMapping("/movements")
-    public List<InventoryMovementV2Response> listarMovimientos() {
-        List<InventoryMovement> movements = service.obtenerTodosMovimientos();
+    public List<InventoryMovementV2Response> listarMovimientos(@RequestParam(required = false) Integer limit) {
+        List<InventoryMovement> movements = limit == null
+                ? service.obtenerTodosMovimientos()
+                : service.obtenerMovimientosRecientes(limit);
         return movements.stream().map(m -> new InventoryMovementV2Response(
                 m.getId(),
                 m.getImplementUuid(),

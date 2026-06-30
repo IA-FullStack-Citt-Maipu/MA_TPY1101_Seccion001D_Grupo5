@@ -7,6 +7,7 @@ import com.panol_project.backendpanol.modules.catalog.stock.api.dto.StockDetailV
 import com.panol_project.backendpanol.modules.catalog.stock.api.dto.StockEntryRequest;
 import com.panol_project.backendpanol.modules.catalog.stock.api.dto.StockMovementV2Request;
 import com.panol_project.backendpanol.modules.catalog.stock.application.StockService;
+import com.panol_project.backendpanol.modules.catalog.stock.domain.IndividualEntryDraft;
 import com.panol_project.backendpanol.modules.catalog.stock.domain.StockDetail;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -32,7 +33,25 @@ public class StockV2Controller {
         return toV2Response(stockService.addEntry(
                 implementUuid,
                 request.quantity(),
-                request.assetCodes()
+                request.assetCodes(),
+                request.status(),
+                request.condition(),
+                request.notes(),
+                request.currentLocationUuid(),
+                request.remainingLife(),
+                request.assetCodeReprintRequired(),
+                request.individualEntries() == null
+                        ? java.util.List.of()
+                        : request.individualEntries().stream()
+                                .map(item -> new IndividualEntryDraft(
+                                        item.assetCode(),
+                                        item.status(),
+                                        item.condition(),
+                                        item.currentLocationUuid(),
+                                        item.remainingLife(),
+                                        item.assetCodeReprintRequired()
+                                ))
+                                .toList()
         ));
     }
 
